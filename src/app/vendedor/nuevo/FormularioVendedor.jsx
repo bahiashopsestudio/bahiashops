@@ -14,12 +14,20 @@ export default function FormularioVendedor({ userId }) {
   const [instagram, setInstagram] = useState('')
   const [plataformaSitio, setPlataformaSitio] = useState('')
   const [sitioWeb, setSitioWeb] = useState('')
+  const [redSecundariaTipo, setRedSecundariaTipo] = useState('')
+  const [redSecundariaUrl, setRedSecundariaUrl] = useState('')
+  const [whatsapp, setWhatsapp] = useState('')
+  const [usarOtroEmail, setUsarOtroEmail] = useState(false)
+  const [emailContacto, setEmailContacto] = useState('')
 
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState(null)
 
   const tienePlataforma =
     plataformaSitio !== '' && plataformaSitio !== 'no_tengo'
+
+  const tieneRedSecundaria =
+    redSecundariaTipo !== '' && redSecundariaTipo !== 'no_tengo'
 
   function generarSlug(texto) {
     return texto
@@ -29,6 +37,12 @@ export default function FormularioVendedor({ userId }) {
       .replace(/[^a-z0-9\s-]/g, '')
       .trim()
       .replace(/\s+/g, '-')
+  }
+
+  function armarTelefonoCompleto(numero) {
+    if (!numero) return null
+    const soloDigitos = numero.replace(/\D/g, '')
+    return '+549' + soloDigitos
   }
 
   async function handleSubmit(e) {
@@ -49,11 +63,15 @@ export default function FormularioVendedor({ userId }) {
         instagram: instagram,
         plataforma_sitio: plataformaSitio || null,
         sitio_web: tienePlataforma ? sitioWeb : null,
+        red_social_secundaria_tipo: redSecundariaTipo || null,
+        red_social_secundaria_url: tieneRedSecundaria ? redSecundariaUrl : null,
+        telefono_contacto: armarTelefonoCompleto(whatsapp),
+        email_contacto: usarOtroEmail ? emailContacto : null,
       })
 
     if (errorInsert) {
       if (errorInsert.code === '23505') {
-        setError('Ya tenés un emprendimiento creado con esta cuenta. Por ahora, cada usuario puede tener uno solo.')
+        setError('Ya tenés un emprendimiento creado con esta cuenta. Por ahora cada usuario puede tener uno solo.')
       } else {
         setError(errorInsert.message)
       }
@@ -142,6 +160,85 @@ export default function FormularioVendedor({ userId }) {
             placeholder="https://maraestudio.com.ar"
             value={sitioWeb}
             onChange={(e) => setSitioWeb(e.target.value)}
+            style={{ padding: '0.5rem', border: '1px solid #ccc', borderRadius: 4 }}
+          />
+        </label>
+      )}
+
+      <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+        <span>Otra red social</span>
+        <select
+          value={redSecundariaTipo}
+          onChange={(e) => setRedSecundariaTipo(e.target.value)}
+          style={{ padding: '0.5rem', border: '1px solid #ccc', borderRadius: 4, background: 'white' }}
+        >
+          <option value="">Elegí una opción</option>
+          <option value="no_tengo">No tengo otra red</option>
+          <option value="facebook">Facebook</option>
+          <option value="tiktok">TikTok</option>
+          <option value="otro">Otro</option>
+        </select>
+      </label>
+
+      {tieneRedSecundaria && (
+        <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+          <span>URL o usuario *</span>
+          <input
+            type="text"
+            required
+            placeholder="https://facebook.com/maraestudio"
+            value={redSecundariaUrl}
+            onChange={(e) => setRedSecundariaUrl(e.target.value)}
+            style={{ padding: '0.5rem', border: '1px solid #ccc', borderRadius: 4 }}
+          />
+        </label>
+      )}
+
+      <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+        <span>
+          WhatsApp <small style={{ color: '#666' }}>(recomendado, te facilita mucho que te contacten)</small>
+        </span>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'stretch' }}>
+          <span style={{
+            padding: '0.5rem 0.75rem',
+            border: '1px solid #ccc',
+            borderRadius: 4,
+            background: '#f5f5f5',
+            color: '#666',
+            display: 'flex',
+            alignItems: 'center',
+            fontSize: '0.95rem',
+          }}>
+            +54 9
+          </span>
+          <input
+            type="tel"
+            placeholder="291 555 1234 (sin 0 y sin 15)"
+            value={whatsapp}
+            onChange={(e) => setWhatsapp(e.target.value.replace(/\D/g, ''))}
+            style={{ padding: '0.5rem', border: '1px solid #ccc', borderRadius: 4, flex: 1 }}
+          />
+        </div>
+      </label>
+
+      <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+        <input
+          type="checkbox"
+          checked={usarOtroEmail}
+          onChange={(e) => setUsarOtroEmail(e.target.checked)}
+        />
+        <span>Usar otro email para contacto público</span>
+      </label>
+
+      {usarOtroEmail && (
+        <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+          <span>Email de contacto *</span>
+          <input
+            type="email"
+            required
+            placeholder="contacto@maraestudio.com.ar"
+            value={emailContacto}
+            onChange={(e) => setEmailContacto(e.target.value)}
             style={{ padding: '0.5rem', border: '1px solid #ccc', borderRadius: 4 }}
           />
         </label>
