@@ -1,15 +1,25 @@
-export default function Home() {
+import { createClient } from '@/lib/supabase/server'
+import LogoutButton from '@/components/LogoutButton'
+
+export default async function Home() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-8 bg-white">
-      <h1 className="text-5xl font-bold text-gray-900 mb-4">
-        Bahía Shops
-      </h1>
-      <p className="text-xl text-gray-600 mb-2">
-        A un click.
-      </p>
-      <p className="text-sm text-gray-400">
-        🚧 En construcción
-      </p>
+    <main style={{ padding: '2rem', textAlign: 'center' }}>
+      <h1 style={{ fontSize: '2rem' }}>Bahía Shops</h1>
+      {user ? (
+        <>
+          <p style={{ marginTop: '1rem' }}>
+            Hola, <strong>{user.email}</strong> 👋
+          </p>
+          <LogoutButton />
+        </>
+      ) : (
+        <p style={{ marginTop: '1rem' }}>
+          <a href="/login">Iniciá sesión</a>
+        </p>
+      )}
     </main>
-  );
+  )
 }
