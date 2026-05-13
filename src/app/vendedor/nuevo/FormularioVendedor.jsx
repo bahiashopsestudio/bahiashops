@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
@@ -20,8 +20,40 @@ export default function FormularioVendedor({ userId }) {
   const [usarOtroEmail, setUsarOtroEmail] = useState(false)
   const [emailContacto, setEmailContacto] = useState('')
 
+  const [recibePublico, setRecibePublico] = useState(null)
+  const [localidadId, setLocalidadId] = useState('')
+  const [direccion, setDireccion] = useState('')
+  const [barrioId, setBarrioId] = useState('')
+
+  const [localidades, setLocalidades] = useState([])
+  const [barrios, setBarrios] = useState([])
+
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState(null)
+
+  useEffect(() => {
+    async function cargarUbicaciones() {
+      const { data: locs } = await supabase
+        .from('localidades')
+        .select('id, nombre')
+        .order('nombre')
+
+      const { data: brs } = await supabase
+        .from('barrios')
+        .select('id, nombre, localidad_id')
+        .order('nombre')
+
+      if (locs) setLocalidades(locs)
+      if (brs) setBarrios(brs)
+    }
+    cargarUbicaciones()
+  }, [])
+
+  const barriosDeLaLocalidad = localidadId
+    ? barrios.filter((b) => b.localidad_id === Number(localidadId))
+    : []
+
+  const tieneBarrios = barriosDeLaLocalidad.length > 0
 
   const tienePlataforma =
     plataformaSitio !== '' && plataformaSitio !== 'no_tengo'
@@ -67,6 +99,10 @@ export default function FormularioVendedor({ userId }) {
         red_social_secundaria_url: tieneRedSecundaria ? redSecundariaUrl : null,
         telefono_contacto: armarTelefonoCompleto(whatsapp),
         email_contacto: usarOtroEmail ? emailContacto : null,
+        recibe_publico: recibePublico,
+        localidad_id: localidadId ? Number(localidadId) : null,
+        direccion: recibePublico ? direccion : null,
+        barrio_id: barrioId ? Number(barrioId) : null,
       })
 
     if (errorInsert) {
@@ -243,6 +279,84 @@ export default function FormularioVendedor({ userId }) {
           />
         </label>
       )}
+
+      <fieldset style={{ border: '1px solid #ddd', borderRadius: 4, padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <legend style={{ padding: '0 0.5rem', fontWeight: 600 }}>Atención al público</legend>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          <span>¿Recibís gente en tu local, taller o showroom? *</span>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+            <input
+              type="radio"
+              name="recibe_publico"
+              checked={recibePublico === true}
+              onChange={() => setRecibePublico(true)}
+              required
+            />
+            <span>Sí, recibo gente</span>
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+            <input
+              type="radio"
+              name="recibe_publico"
+              checked={recibePublico === false}
+              onChange={() => setRecibePublico(false)}
+            />
+            <span>No, vendo desde casa o solo despacho</span>
+          </label>
+        </div>
+
+        {recibePublico !== null && (
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+            <span>Localidad *</span>
+            <select
+              value={localidadId}
+              onChange={(e) => {
+                setLocalidadId(e.target.value)
+                setBarrioId('')
+              }}
+              required
+              style={{ padding: '0.5rem', border: '1px solid #ccc', borderRadius: 4, background: 'white' }}
+            >
+              <option value="">Elegí una localidad</option>
+              {localidades.map((l) => (
+                <option key={l.id} value={l.id}>{l.nombre}</option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        {recibePublico === true && (
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+            <span>Dirección *</span>
+            <input
+              type="text"
+              required
+              placeholder="Ej: Donado 1234"
+              value={direccion}
+              onChange={(e) => setDireccion(e.target.value)}
+              style={{ padding: '0.5rem', border: '1px solid #ccc', borderRadius: 4 }}
+            />
+          </label>
+        )}
+
+        {localidadId && tieneBarrios && (
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+            <span>Barrio *</span>
+            <select
+              value={barrioId}
+              onChange={(e) => setBarrioId(e.target.value)}
+              required
+              style={{ padding: '0.5rem', border: '1px solid #ccc', borderRadius: 4, background: 'white' }}
+            >
+              <option value="">Elegí un barrio</option>
+              {barriosDeLaLocalidad.map((b) => (
+                <option key={b.id} value={b.id}>{b.nombre}</option>
+              ))}
+            </select>
+          </label>
+        )}
+      </fieldset>
 
       {error && (
         <div style={{ padding: '0.75rem', background: '#fee', border: '1px solid #fcc', borderRadius: 4, color: '#900' }}>
