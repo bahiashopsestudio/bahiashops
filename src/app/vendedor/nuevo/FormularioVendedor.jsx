@@ -2,7 +2,15 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import { createClient } from '@/lib/supabase/client'
+
+// El mapa se carga solo en el navegador (ssr: false) porque Leaflet
+// necesita "window", que no existe cuando Next.js dibuja en el servidor.
+const MapaUbicacion = dynamic(() => import('./MapaUbicacion'), {
+  ssr: false,
+  loading: () => <p style={{ color: '#666' }}>Cargando mapa...</p>,
+})
 
 export default function FormularioVendedor({ userId }) {
   const router = useRouter()
@@ -24,6 +32,12 @@ export default function FormularioVendedor({ userId }) {
   const [localidadId, setLocalidadId] = useState('')
   const [direccion, setDireccion] = useState('')
   const [barrioId, setBarrioId] = useState('')
+
+  // Nuevos: ubicación del pin + manejo de la discrepancia
+  const [latitud, setLatitud] = useState(null)
+  const [longitud, setLongitud] = useState(null)
+  const [barrioAuto, setBarrioAuto] = useState(false)
+  const [sugerenciaBarrio, setSugerenciaBarrio] = useState(null)
 
   const [localidades, setLocalidades] = useState([])
   const [barrios, setBarrios] = useState([])
@@ -60,6 +74,38 @@ export default function FormularioVendedor({ userId }) {
 
   const tieneRedSecundaria =
     redSecundariaTipo !== '' && redSecundariaTipo !== 'no_tengo'
+
+  // Nombre del barrio elegido en el dropdown (para el cartel de discrepancia)
+  const nombreBarrioElegido = barrios.find((b) => b.id === Number(barrioId))?.nombre
+
+  // El mapa nos reporta una ubicación (del centrado o del arrastre del pin)
+  function manejarUbicacion({ lat, lng, barrioDetectado, evaluar }) {
+    setLatitud(lat)
+    setLongitud(lng)
+
+    if (!evaluar || !barrioDetectado) return
+
+    if (!barrioId) {
+      // No había barrio elegido: adoptamos el detectado
+      setBarrioId(String(barrioDetectado.id))
+      setBarrioAuto(true)
+    } else if (Number(barrioId) !== barrioDetectado.id) {
+      // Hay discrepancia: mostramos el cartel para que decida
+      setSugerenciaBarrio(barrioDetectado)
+    }
+    // Si coincide, no hacemos nada
+  }
+
+  function aceptarSugerencia() {
+    setBarrioId(String(sugerenciaBarrio.id))
+    setBarrioAuto(true)
+    setSugerenciaBarrio(null)
+  }
+
+  function rechazarSugerencia() {
+    setSugerenciaBarrio(null)
+    setBarrioAuto(false)
+  }
 
   function generarSlug(texto) {
     return texto
@@ -103,6 +149,9 @@ export default function FormularioVendedor({ userId }) {
         localidad_id: localidadId ? Number(localidadId) : null,
         direccion: recibePublico ? direccion : null,
         barrio_id: barrioId ? Number(barrioId) : null,
+        latitud: recibePublico ? latitud : null,
+        longitud: recibePublico ? longitud : null,
+        barrio_detectado_automaticamente: barrioAuto,
       })
 
     if (errorInsert) {
@@ -314,6 +363,7 @@ export default function FormularioVendedor({ userId }) {
               onChange={(e) => {
                 setLocalidadId(e.target.value)
                 setBarrioId('')
+                setSugerenciaBarrio(null)
               }}
               required
               style={{ padding: '0.5rem', border: '1px solid #ccc', borderRadius: 4, background: 'white' }}
@@ -345,7 +395,11 @@ export default function FormularioVendedor({ userId }) {
             <span>Barrio *</span>
             <select
               value={barrioId}
-              onChange={(e) => setBarrioId(e.target.value)}
+              onChange={(e) => {
+                setBarrioId(e.target.value)
+                setBarrioAuto(false)
+                setSugerenciaBarrio(null)
+              }}
               required
               style={{ padding: '0.5rem', border: '1px solid #ccc', borderRadius: 4, background: 'white' }}
             >
@@ -355,6 +409,42 @@ export default function FormularioVendedor({ userId }) {
               ))}
             </select>
           </label>
+        )}
+
+        {recibePublico === true && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <span style={{ fontSize: '0.9rem', color: '#666' }}>
+              Marcá la ubicación exacta de tu local: elegí el barrio arriba y arrastrá el pin hasta tu puerta.
+            </span>
+            <MapaUbicacion
+              barrioObjetivoId={barrioId}
+              onUbicacionChange={manejarUbicacion}
+            />
+            {latitud && longitud && (
+              <span style={{ fontSize: '0.85rem', color: '#888', fontFamily: 'monospace' }}>
+                📍 {latitud.toFixed(6)}, {longitud.toFixed(6)}
+              </span>
+            )}
+          </div>
+        )}
+
+        {sugerenciaBarrio && (
+          <div style={{ padding: '0.75rem', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 4 }}>
+            <p style={{ margin: '0 0 0.5rem' }}>
+              Pineaste en <strong>{sugerenciaBarrio.nombre}</strong>, pero tenés elegido{' '}
+              <strong>{nombreBarrioElegido}</strong>. ¿Querés cambiar a {sugerenciaBarrio.nombre}?
+            </p>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button type="button" onClick={aceptarSugerencia}
+                style={{ padding: '0.4rem 0.8rem', background: '#2563eb', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
+                Sí, cambiar a {sugerenciaBarrio.nombre}
+              </button>
+              <button type="button" onClick={rechazarSugerencia}
+                style={{ padding: '0.4rem 0.8rem', background: 'white', color: '#333', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer' }}>
+                No, dejar {nombreBarrioElegido}
+              </button>
+            </div>
+          </div>
         )}
       </fieldset>
 
