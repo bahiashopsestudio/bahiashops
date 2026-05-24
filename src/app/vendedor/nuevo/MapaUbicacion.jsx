@@ -6,7 +6,6 @@ import L from 'leaflet'
 import { createClient } from '@/lib/supabase/client'
 import 'leaflet/dist/leaflet.css'
 
-// Centro aproximado de Bahía Blanca (Plaza Rivadavia)
 const CENTRO_BB = [-38.7183, -62.2663]
 
 // Arreglo del ícono del pin (si no, viene roto en Next.js)
@@ -18,23 +17,21 @@ const iconoPin = L.icon({
   iconAnchor: [12, 41],
 })
 
-// Componente interno: cuando cambia el barrio elegido en el dropdown,
-// centra el mapa en ese barrio y avisa al padre dónde está su centro
-// (para poner el pin ahí). Usa useMap() para controlar el mapa por dentro.
-function CentrarEnBarrio({ geojsonObjetivo, onCentrar }) {
+// Componente interno: cuando el formulario manda una posición nueva
+// (resultado de buscar la dirección), mueve el mapa ahí y avisa al padre.
+// El "nonce" hace que reaccione aunque la coordenada se repita.
+function IrAPosicion({ posicion, onLlegar }) {
   const map = useMap()
   useEffect(() => {
-    if (!geojsonObjetivo) return
-    const capa = L.geoJSON(geojsonObjetivo)
-    const bounds = capa.getBounds()
-    map.fitBounds(bounds, { padding: [20, 20] })
-    onCentrar(bounds.getCenter())
+    if (!posicion) return
+    map.setView([posicion.lat, posicion.lng], posicion.zoom || 16)
+    onLlegar(posicion.lat, posicion.lng)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [geojsonObjetivo])
+  }, [posicion?.nonce])
   return null
 }
 
-export default function MapaUbicacion({ barrioObjetivoId, onUbicacionChange }) {
+export default function MapaUbicacion({ posicionBuscada, onUbicacionChange }) {
   const supabase = createClient()
   const [barrios, setBarrios] = useState([])
   const [posicionPin, setPosicionPin] = useState(null)
@@ -61,23 +58,26 @@ export default function MapaUbicacion({ barrioObjetivoId, onUbicacionChange }) {
     return data && data.length > 0 ? data[0] : null
   }
 
-  // Cuando el dropdown elige un barrio, lo buscamos para centrarnos en él
-  const barrioObjetivo = barrios.find((b) => b.id === Number(barrioObjetivoId))
+  // Pone el pin, detecta el barrio y le reporta todo al formulario
+  async function procesarPosicion(lat, lng) {
+    setPosicionPin([lat, lng])
+    const detectado = await detectarBarrio(lat, lng)
+    setBarrioResaltado(detectado ? detectado.id : null)
+    onUbicacionChange({ lat, lng, barrioDetectado: detectado })
+  }
 
   const estiloNormal = { color: '#94a3b8', weight: 1, fillColor: '#cbd5e1', fillOpacity: 0.08 }
   const estiloActivo = { color: '#2563eb', weight: 2, fillColor: '#3b82f6', fillOpacity: 0.4 }
 
   return (
-    <MapContainer center={CENTRO_BB} zoom={12} style={{ height: '400px', width: '100%', borderRadius: 8 }}>
+    <MapContainer center={CENTRO_BB} zoom={12} style={{ height: '350px', width: '100%', borderRadius: 8 }}>
       <TileLayer
         attribution='&copy; OpenStreetMap &copy; CARTO'
         url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
       />
 
       {barrios.map((barrio) => {
-        const resaltar = barrioResaltado
-          ? barrioResaltado === barrio.id
-          : Number(barrioObjetivoId) === barrio.id
+        const resaltar = barrioResaltado === barrio.id
         return (
           <GeoJSON
             key={barrio.id + (resaltar ? '-on' : '')}
@@ -87,16 +87,7 @@ export default function MapaUbicacion({ barrioObjetivoId, onUbicacionChange }) {
         )
       })}
 
-      <CentrarEnBarrio
-        geojsonObjetivo={barrioObjetivo?.geojson}
-        onCentrar={(centro) => {
-          const lat = centro.lat
-          const lng = centro.lng
-          setPosicionPin([lat, lng])
-          setBarrioResaltado(null)
-          onUbicacionChange({ lat, lng, barrioDetectado: null, evaluar: false })
-        }}
-      />
+      <IrAPosicion posicion={posicionBuscada} onLlegar={procesarPosicion} />
 
       {posicionPin && (
         <Marker
@@ -106,10 +97,7 @@ export default function MapaUbicacion({ barrioObjetivoId, onUbicacionChange }) {
           eventHandlers={{
             dragend: async (e) => {
               const { lat, lng } = e.target.getLatLng()
-              setPosicionPin([lat, lng])
-              const detectado = await detectarBarrio(lat, lng)
-              setBarrioResaltado(detectado ? detectado.id : null)
-              onUbicacionChange({ lat, lng, barrioDetectado: detectado, evaluar: true })
+              await procesarPosicion(lat, lng)
             },
           }}
         />
