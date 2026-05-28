@@ -77,6 +77,7 @@ export default function FormularioVendedor({ userId }) {
   const barriosDeLaLocalidad = localidadId
     ? barrios.filter((b) => b.localidad_id === Number(localidadId))
     : []
+  const localidadTieneBarrios = barriosDeLaLocalidad.length > 0
 
   const tienePlataforma =
     plataformaSitio !== '' && plataformaSitio !== 'no_tengo'
@@ -423,7 +424,7 @@ export default function FormularioVendedor({ userId }) {
         )}
 
         {/* Dirección + buscador: para ambos casos. La diferencia es qué se guarda. */}
-        {recibePublico !== null && localidadId && (
+        {recibePublico !== null && localidadId && localidadTieneBarrios && (
           <>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
               <span>Dirección *</span>
