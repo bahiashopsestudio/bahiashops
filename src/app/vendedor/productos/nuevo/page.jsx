@@ -71,6 +71,7 @@ export default function NuevoProductoPage() {
     marca: '',
     precio: '',
     precio_anterior: '',
+    tiempo_preparacion: '',
   });
 
   const [subcategorias, setSubcategorias] = useState([]);
@@ -188,6 +189,49 @@ export default function NuevoProductoPage() {
     setValores((prev) => prev.filter((_, i) => i !== index));
   }
 
+  function guardarProducto() {
+    if (!datos.nombre.trim()) {
+      alert('Poné un nombre al producto.');
+      return;
+    }
+    if (!datos.descripcion.trim()) {
+      alert('Escribí una descripción.');
+      return;
+    }
+    if (!datos.precio) {
+      alert('El precio es obligatorio.');
+      return;
+    }
+    if (fotos.length === 0) {
+      alert('Subí al menos una foto.');
+      return;
+    }
+    const tieneNombre = nombrePropiedad.trim() !== '';
+    const tieneValores = valores.length > 0;
+    if (tieneNombre !== tieneValores) {
+      alert('Si cargás variantes, completá el nombre (ej: Talle) y al menos una opción.');
+      return;
+    }
+
+    const producto = {
+      nombre: datos.nombre.trim(),
+      descripcion: datos.descripcion.trim(),
+      subcategoria_id: datos.subcategoria_id || null,
+      marca: datos.marca.trim() || null,
+      precio: Number(datos.precio),
+      precio_anterior: datos.precio_anterior ? Number(datos.precio_anterior) : null,
+      tiempo_preparacion: datos.tiempo_preparacion || null,
+      categoria_id: categoriaVendedor,
+      tiene_variantes: tieneNombre && tieneValores,
+      propiedad_1_nombre: tieneNombre ? nombrePropiedad.trim() : null,
+      variantes: tieneValores ? valores : [],
+      cantidad_fotos: fotos.length,
+    };
+
+    console.log('Producto a guardar:', producto);
+    alert('Datos validados correctamente. Mirá la consola (F12) para ver el paquete.');
+  }
+
   return (
     <main style={{ padding: '2rem', maxWidth: '800px', width: '100%', margin: '0 auto' }}>
       <h1>Nuevo producto</h1>
@@ -299,6 +343,26 @@ export default function NuevoProductoPage() {
         </div>
 
         <div style={{ marginTop: '1rem' }}>
+          <label htmlFor="tiempo_preparacion" style={{ display: 'block', marginBottom: '0.25rem' }}>
+            Tiempo de preparación
+          </label>
+          <select
+            id="tiempo_preparacion"
+            value={datos.tiempo_preparacion}
+            onChange={(e) => actualizarCampo('tiempo_preparacion', e.target.value)}
+            style={{ width: '100%', padding: '0.5rem' }}
+          >
+            <option value="">Elegí una opción</option>
+            <option value="inmediata">Entrega inmediata (lo tengo hecho, sale ya)</option>
+            <option value="durante_el_dia">Durante el día</option>
+            <option value="manana">Mañana</option>
+            <option value="2_a_4_dias">2 a 4 días</option>
+            <option value="1_a_2_semanas">1 a 2 semanas</option>
+            <option value="mas_2_semanas">Más de 2 semanas / a coordinar</option>
+          </select>
+        </div>
+
+        <div style={{ marginTop: '1rem' }}>
           <label style={{ display: 'block', marginBottom: '0.25rem' }}>
             Fotos * (hasta 5, arrastrá para ordenar — la primera es la principal)
           </label>
@@ -391,6 +455,14 @@ export default function NuevoProductoPage() {
           </div>
         </div>
       </section>
+
+      <button
+        type="button"
+        onClick={guardarProducto}
+        style={{ marginTop: '1.5rem', padding: '0.75rem 1.5rem', fontSize: '1rem', cursor: 'pointer', background: '#222', color: 'white', border: 'none', borderRadius: '8px' }}
+      >
+        Guardar producto
+      </button>
     </main>
   );
 }
