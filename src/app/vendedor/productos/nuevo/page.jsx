@@ -77,6 +77,9 @@ export default function NuevoProductoPage() {
   const [categoriaVendedor, setCategoriaVendedor] = useState(null);
   const [fotos, setFotos] = useState([]);
   const [comprimiendo, setComprimiendo] = useState(false);
+  const [nombrePropiedad, setNombrePropiedad] = useState('');
+  const [valores, setValores] = useState([]);
+  const [valorNuevo, setValorNuevo] = useState('');
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -168,6 +171,21 @@ export default function NuevoProductoPage() {
       const hasta = prev.findIndex((f) => f.preview === over.id);
       return arrayMove(prev, desde, hasta);
     });
+  }
+
+  function agregarValor() {
+    const limpio = valorNuevo.trim();
+    if (!limpio) return;
+    if (valores.some((v) => v.toLowerCase() === limpio.toLowerCase())) {
+      setValorNuevo('');
+      return;
+    }
+    setValores((prev) => [...prev, limpio]);
+    setValorNuevo('');
+  }
+
+  function quitarValor(index) {
+    setValores((prev) => prev.filter((_, i) => i !== index));
   }
 
   return (
@@ -307,6 +325,70 @@ export default function NuevoProductoPage() {
           <p style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.4rem' }}>
             {comprimiendo ? 'Procesando imágenes...' : `${fotos.length} de 5 fotos`}
           </p>
+        </div>
+
+        {/* VARIANTES (opcional) */}
+        <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid #eee' }}>
+          <h3 style={{ margin: 0, fontSize: '1rem' }}>Variantes (opcional)</h3>
+          <p style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.25rem', marginBottom: '0.75rem' }}>
+            Si tu producto viene en distintas opciones (talles, sabores, tamaños), cargalas acá. Si no, dejá esto en blanco.
+          </p>
+
+          <label htmlFor="nombrePropiedad" style={{ display: 'block', marginBottom: '0.25rem' }}>
+            ¿Qué varía?
+          </label>
+          <input
+            id="nombrePropiedad"
+            type="text"
+            value={nombrePropiedad}
+            onChange={(e) => setNombrePropiedad(e.target.value)}
+            placeholder="Ej: Talle"
+            style={{ width: '100%', padding: '0.5rem' }}
+          />
+
+          <label style={{ display: 'block', marginTop: '1rem', marginBottom: '0.25rem' }}>
+            Opciones {nombrePropiedad && `de ${nombrePropiedad}`}
+          </label>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <input
+              type="text"
+              value={valorNuevo}
+              onChange={(e) => setValorNuevo(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  agregarValor();
+                }
+              }}
+              placeholder="Ej: M (Enter para agregar)"
+              style={{ flex: 1, padding: '0.5rem' }}
+            />
+            <button
+              type="button"
+              onClick={agregarValor}
+              style={{ padding: '0.5rem 1rem', cursor: 'pointer' }}
+            >
+              Agregar
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.75rem' }}>
+            {valores.map((valor, index) => (
+              <span
+                key={valor}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', background: '#f0f0f0', padding: '0.3rem 0.6rem', borderRadius: '999px', fontSize: '0.9rem' }}
+              >
+                {valor}
+                <button
+                  type="button"
+                  onClick={() => quitarValor(index)}
+                  style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#888', fontSize: '1rem', lineHeight: 1, padding: 0 }}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
         </div>
       </section>
     </main>
