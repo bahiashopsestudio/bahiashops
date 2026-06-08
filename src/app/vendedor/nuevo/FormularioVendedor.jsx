@@ -57,6 +57,8 @@ export default function FormularioVendedor({ userId }) {
 
   const [localidades, setLocalidades] = useState([])
   const [barrios, setBarrios] = useState([])
+  const [categorias, setCategorias] = useState([])
+  const [categoriaId, setCategoriaId] = useState('')
 
   // Disponibilidad y despacho
   const [horarios, setHorarios] = useState(HORARIOS_INICIALES)
@@ -90,8 +92,14 @@ export default function FormularioVendedor({ userId }) {
         .select('id, nombre, localidad_id')
         .order('nombre')
 
+      const { data: cats } = await supabase
+        .from('categorias')
+        .select('id, nombre')
+        .order('nombre')
+
       if (locs) setLocalidades(locs)
       if (brs) setBarrios(brs)
+      if (cats) setCategorias(cats)
     }
     cargarUbicaciones()
   }, [])
@@ -209,6 +217,7 @@ export default function FormularioVendedor({ userId }) {
       .from('vendedores')
       .insert({
         usuario_id: userId,
+        categoria_id: categoriaId ? Number(categoriaId) : null,
         nombre_negocio: nombreNegocio,
         slug: slug,
         descripcion_corta: descripcionCorta,
@@ -286,6 +295,22 @@ export default function FormularioVendedor({ userId }) {
               onChange={(e) => setNombreNegocio(e.target.value)}
               style={inputStyle}
             />
+          </label>
+
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+            <span>Categoría / rubro *</span>
+            <small style={{ color: '#666' }}>El rubro principal de tu emprendimiento. Tus productos van a quedar dentro de esta categoría.</small>
+            <select
+              required
+              value={categoriaId}
+              onChange={(e) => setCategoriaId(e.target.value)}
+              style={selectStyle}
+            >
+              <option value="">Elegí tu rubro</option>
+              {categorias.map((c) => (
+                <option key={c.id} value={c.id}>{c.nombre}</option>
+              ))}
+            </select>
           </label>
 
           <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>

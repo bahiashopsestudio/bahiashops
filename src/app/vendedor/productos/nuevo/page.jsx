@@ -19,6 +19,7 @@ import {
   sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useRouter } from 'next/navigation';
 
 // Una miniatura arrastrable
 function SortableFoto({ foto, index, onQuitar }) {
@@ -63,6 +64,7 @@ function SortableFoto({ foto, index, onQuitar }) {
 
 export default function NuevoProductoPage() {
   const supabase = createClient();
+  const router = useRouter();
 
   const [datos, setDatos] = useState({
     nombre: '',
@@ -76,11 +78,13 @@ export default function NuevoProductoPage() {
 
   const [subcategorias, setSubcategorias] = useState([]);
   const [categoriaVendedor, setCategoriaVendedor] = useState(null);
+  const [vendedorId, setVendedorId] = useState(null);
   const [fotos, setFotos] = useState([]);
   const [comprimiendo, setComprimiendo] = useState(false);
   const [nombrePropiedad, setNombrePropiedad] = useState('');
   const [valores, setValores] = useState([]);
   const [valorNuevo, setValorNuevo] = useState('');
+  const [guardandoProducto, setGuardandoProducto] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -88,21 +92,23 @@ export default function NuevoProductoPage() {
   );
 
   useEffect(() => {
-    async function cargarCategoriaVendedor() {
+    async function cargarVendedor() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       const { data, error } = await supabase
         .from('vendedores')
-        .select('categoria_id')
+        .select('id, categoria_id')
         .eq('usuario_id', user.id)
         .single();
       if (error) {
-        console.error('Error cargando categoría del vendedor:', error);
+        console.error('Error cargando el vendedor:', error);
       } else {
+        setVendedorId(data.id);
         setCategoriaVendedor(data.categoria_id);
+        console.log('Vendedor logueado → id:', data.id, '· categoria_id:', data.categoria_id);
       }
     }
-    cargarCategoriaVendedor();
+    cargarVendedor();
   }, []);
 
   useEffect(() => {
@@ -189,47 +195,120 @@ export default function NuevoProductoPage() {
     setValores((prev) => prev.filter((_, i) => i !== index));
   }
 
-  function guardarProducto() {
-    if (!datos.nombre.trim()) {
-      alert('Poné un nombre al producto.');
-      return;
-    }
-    if (!datos.descripcion.trim()) {
-      alert('Escribí una descripción.');
-      return;
-    }
-    if (!datos.precio) {
-      alert('El precio es obligatorio.');
-      return;
-    }
-    if (fotos.length === 0) {
-      alert('Subí al menos una foto.');
-      return;
-    }
+  async function guardarProducto() {
+    // 1. Validaciones
+    if (!datos.nombre.trim()) { alert('Poné un nombre al producto.'); return; }
+    if (!datos.descripcion.trim()) { alert('Escribí una descripción.'); return; }
+    if (!datos.precio) { alert('El precio es obligatorio.'); return; }
+    if (fotos.length === 0) { alert('Subí al menos una foto.'); return; }
+    if (!vendedorId) { alert('No se pudo identificar tu cuenta de vendedor. Recargá la página.'); return; }
+
     const tieneNombre = nombrePropiedad.trim() !== '';
     const tieneValores = valores.length > 0;
     if (tieneNombre !== tieneValores) {
       alert('Si cargás variantes, completá el nombre (ej: Talle) y al menos una opción.');
       return;
     }
+    // El precio anterior, si existe, tiene que ser mayor al precio actual
+    if (datos.precio_anterior && Number(datos.precio_anterior) <= Number(datos.precio)) {
+      alert('El precio anterior tiene que ser mayor al precio actual (es el precio "de antes").');
+      return;
+    }
 
-    const producto = {
-      nombre: datos.nombre.trim(),
-      descripcion: datos.descripcion.trim(),
-      subcategoria_id: datos.subcategoria_id || null,
-      marca: datos.marca.trim() || null,
-      precio: Number(datos.precio),
-      precio_anterior: datos.precio_anterior ? Number(datos.precio_anterior) : null,
-      tiempo_preparacion: datos.tiempo_preparacion || null,
-      categoria_id: categoriaVendedor,
-      tiene_variantes: tieneNombre && tieneValores,
-      propiedad_1_nombre: tieneNombre ? nombrePropiedad.trim() : null,
-      variantes: tieneValores ? valores : [],
-      cantidad_fotos: fotos.length,
-    };
+    setGuardandoProducto(true);
 
-    console.log('Producto a guardar:', producto);
-    alert('Datos validados correctamente. Mirá la consola (F12) para ver el paquete.');
+    try {
+      // 2. Subir las fotos al Storage
+      const urls = [];
+      for (let i = 0; i < fotos.length; i++) {
+        const foto = fotos[i];
+        const nombreArchivo = `${vendedorId}/${Date.now()}-${i}.webp`;
+        const { error: errorUpload } = await supabase
+          .storage
+          .from('productos')
+          .upload(nombreArchivo, foto.file);
+
+        if (errorUpload) {
+          throw new Error('Error al subir una foto: ' + errorUpload.message);
+        }
+
+        const { data: dataUrl } = supabase
+          .storage
+          .from('productos')
+          .getPublicUrl(nombreArchivo);
+
+        urls.push(dataUrl.publicUrl);
+      }
+
+      // 3. Insertar el producto
+      const { data: productoCreado, error: errorProducto } = await supabase
+        .from('productos')
+        .insert({
+          vendedor_id: vendedorId,
+          categoria_id: categoriaVendedor,
+          subcategoria_id: datos.subcategoria_id ? Number(datos.subcategoria_id) : null,
+          nombre: datos.nombre.trim(),
+          descripcion: datos.descripcion.trim(),
+          marca: datos.marca.trim() || null,
+          precio: Number(datos.precio),
+          precio_anterior: datos.precio_anterior ? Number(datos.precio_anterior) : null,
+          tiempo_preparacion: datos.tiempo_preparacion || null,
+          estado: 'en_revision',
+          tiene_variantes: tieneNombre && tieneValores,
+          propiedad_1_nombre: tieneNombre ? nombrePropiedad.trim() : null,
+        })
+        .select()
+        .single();
+
+      if (errorProducto) {
+        throw new Error('Error al guardar el producto: ' + errorProducto.message);
+      }
+
+      const productoId = productoCreado.id;
+
+      // 4. Guardar las fotos en producto_media
+      const mediaItems = urls.map((url, index) => ({
+        producto_id: productoId,
+        url: url,
+        tipo: 'foto',
+        orden: index,
+        es_principal: index === 0,
+      }));
+
+      const { error: errorMedia } = await supabase
+        .from('producto_media')
+        .insert(mediaItems);
+
+      if (errorMedia) {
+        throw new Error('El producto se guardó pero hubo un error con las fotos: ' + errorMedia.message);
+      }
+
+      // 5. Guardar las variantes (si hay)
+      if (tieneNombre && tieneValores) {
+        const variantesItems = valores.map((valor) => ({
+          producto_id: productoId,
+          propiedad_1_valor: valor,
+        }));
+
+        const { error: errorVariantes } = await supabase
+          .from('producto_variantes')
+          .insert(variantesItems);
+
+        if (errorVariantes) {
+          throw new Error('El producto se guardó pero hubo un error con las variantes: ' + errorVariantes.message);
+        }
+      }
+
+      // 6. Todo salió bien
+      alert('¡Producto guardado! Queda en revisión hasta que lo apruebes.');
+      router.push('/vendedor/productos');
+
+    } catch (err) {
+      console.error(err);
+      alert(err.message || 'Hubo un error al guardar. Probá de nuevo.');
+    } finally {
+      setGuardandoProducto(false);
+    }
   }
 
   return (
@@ -459,9 +538,10 @@ export default function NuevoProductoPage() {
       <button
         type="button"
         onClick={guardarProducto}
-        style={{ marginTop: '1.5rem', padding: '0.75rem 1.5rem', fontSize: '1rem', cursor: 'pointer', background: '#222', color: 'white', border: 'none', borderRadius: '8px' }}
+        disabled={guardandoProducto}
+        style={{ marginTop: '1.5rem', padding: '0.75rem 1.5rem', fontSize: '1rem', cursor: guardandoProducto ? 'not-allowed' : 'pointer', background: guardandoProducto ? '#999' : '#222', color: 'white', border: 'none', borderRadius: '8px' }}
       >
-        Guardar producto
+        {guardandoProducto ? 'Guardando...' : 'Guardar producto'}
       </button>
     </main>
   );
