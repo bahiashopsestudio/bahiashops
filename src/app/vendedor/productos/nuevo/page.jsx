@@ -20,6 +20,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useRouter } from 'next/navigation';
+import VistaProducto from '@/components/VistaProducto';
 
 // Una miniatura arrastrable
 function SortableFoto({ foto, index, onQuitar }) {
@@ -78,6 +79,8 @@ export default function NuevoProductoPage() {
 
   const [subcategorias, setSubcategorias] = useState([]);
   const [categoriaVendedor, setCategoriaVendedor] = useState(null);
+  const [categoria, setCategoria] = useState(null);
+  const [nombreNegocio, setNombreNegocio] = useState('');
   const [vendedorId, setVendedorId] = useState(null);
   const [fotos, setFotos] = useState([]);
   const [comprimiendo, setComprimiendo] = useState(false);
@@ -85,6 +88,7 @@ export default function NuevoProductoPage() {
   const [valores, setValores] = useState([]);
   const [valorNuevo, setValorNuevo] = useState('');
   const [guardandoProducto, setGuardandoProducto] = useState(false);
+  const [mostrarPrevia, setMostrarPrevia] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -97,7 +101,7 @@ export default function NuevoProductoPage() {
       if (!user) return;
       const { data, error } = await supabase
         .from('vendedores')
-        .select('id, categoria_id')
+        .select('id, categoria_id, nombre_negocio')
         .eq('usuario_id', user.id)
         .single();
       if (error) {
@@ -105,6 +109,7 @@ export default function NuevoProductoPage() {
       } else {
         setVendedorId(data.id);
         setCategoriaVendedor(data.categoria_id);
+        setNombreNegocio(data.nombre_negocio || '');
         console.log('Vendedor logueado → id:', data.id, '· categoria_id:', data.categoria_id);
       }
     }
@@ -114,6 +119,7 @@ export default function NuevoProductoPage() {
   useEffect(() => {
     if (!categoriaVendedor) {
       setSubcategorias([]);
+      setCategoria(null);
       return;
     }
     async function cargarSubcategorias() {
@@ -129,8 +135,31 @@ export default function NuevoProductoPage() {
         setSubcategorias(data);
       }
     }
+    async function cargarCategoria() {
+      const { data } = await supabase
+        .from('categorias')
+        .select('nombre, slug')
+        .eq('id', categoriaVendedor)
+        .single();
+      if (data) setCategoria(data);
+    }
     cargarSubcategorias();
+    cargarCategoria();
   }, [categoriaVendedor]);
+
+  // Cerrar la previa con Escape y bloquear el scroll del fondo mientras está abierta
+  useEffect(() => {
+    if (!mostrarPrevia) return;
+    function alPresionarTecla(e) {
+      if (e.key === 'Escape') setMostrarPrevia(false);
+    }
+    document.addEventListener('keydown', alPresionarTecla);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', alPresionarTecla);
+      document.body.style.overflow = '';
+    };
+  }, [mostrarPrevia]);
 
   function actualizarCampo(campo, valor) {
     setDatos({ ...datos, [campo]: valor });
@@ -193,6 +222,18 @@ export default function NuevoProductoPage() {
 
   function quitarValor(index) {
     setValores((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function abrirPrevia() {
+    if (!datos.nombre.trim()) {
+      alert('Cargá al menos el nombre del producto para previsualizar.');
+      return;
+    }
+    if (fotos.length === 0) {
+      alert('Subí al menos una foto para previsualizar.');
+      return;
+    }
+    setMostrarPrevia(true);
   }
 
   async function guardarProducto() {
@@ -310,6 +351,20 @@ export default function NuevoProductoPage() {
       setGuardandoProducto(false);
     }
   }
+
+  // Traducimos el estado del formulario al formato que entiende VistaProducto
+  const productoParaPrevia = {
+    nombre: datos.nombre,
+    descripcion: datos.descripcion,
+    precio: datos.precio,
+    precio_anterior: datos.precio_anterior,
+    marca: datos.marca,
+    propiedad_1_nombre: nombrePropiedad.trim() || null,
+    tiempo_preparacion: datos.tiempo_preparacion || null,
+  };
+  const fotosParaPrevia = fotos.map((f) => ({ url: f.preview }));
+  const variantesParaPrevia = valores.map((v) => ({ propiedad_1_valor: v }));
+  const vendedorParaPrevia = nombreNegocio ? { nombre_negocio: nombreNegocio } : null;
 
   return (
     <main style={{ padding: '2rem', maxWidth: '800px', width: '100%', margin: '0 auto' }}>
@@ -535,14 +590,78 @@ export default function NuevoProductoPage() {
         </div>
       </section>
 
-      <button
-        type="button"
-        onClick={guardarProducto}
-        disabled={guardandoProducto}
-        style={{ marginTop: '1.5rem', padding: '0.75rem 1.5rem', fontSize: '1rem', cursor: guardandoProducto ? 'not-allowed' : 'pointer', background: guardandoProducto ? '#999' : '#222', color: 'white', border: 'none', borderRadius: '8px' }}
-      >
-        {guardandoProducto ? 'Guardando...' : 'Guardar producto'}
-      </button>
+      {/* Botones: previsualizar y guardar */}
+      <div style={{ marginTop: '1.5rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          onClick={abrirPrevia}
+          disabled={guardandoProducto}
+          style={{ padding: '0.75rem 1.5rem', fontSize: '1rem', cursor: 'pointer', background: 'white', color: '#222', border: '1px solid #222', borderRadius: '8px' }}
+        >
+          Previsualizar
+        </button>
+        <button
+          type="button"
+          onClick={guardarProducto}
+          disabled={guardandoProducto}
+          style={{ padding: '0.75rem 1.5rem', fontSize: '1rem', cursor: guardandoProducto ? 'not-allowed' : 'pointer', background: guardandoProducto ? '#999' : '#222', color: 'white', border: 'none', borderRadius: '8px' }}
+        >
+          {guardandoProducto ? 'Guardando...' : 'Guardar producto'}
+        </button>
+      </div>
+
+      {/* MODAL DE PREVISUALIZACIÓN */}
+      {mostrarPrevia && (
+        <div
+          onClick={() => setMostrarPrevia(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '2rem 1rem', overflowY: 'auto', zIndex: 1000 }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: 'white', borderRadius: '12px', maxWidth: '760px', width: '100%', margin: 'auto', overflow: 'hidden' }}
+          >
+            {/* Encabezado */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '1rem 1.5rem', borderBottom: '1px solid #eee' }}>
+              <div>
+                <p style={{ fontWeight: 600, margin: 0 }}>Previsualización</p>
+                <p style={{ fontSize: '0.85rem', color: '#666', margin: '2px 0 0' }}>Así lo va a ver el comprador</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMostrarPrevia(false)}
+                aria-label="Cerrar"
+                style={{ width: '32px', height: '32px', border: '1px solid #ddd', borderRadius: '8px', background: 'white', cursor: 'pointer', fontSize: '1.2rem', lineHeight: 1 }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Cuerpo: el mismo VistaProducto que la página real */}
+            <div style={{ padding: '1.5rem' }}>
+              <VistaProducto
+                producto={productoParaPrevia}
+                fotos={fotosParaPrevia}
+                variantes={variantesParaPrevia}
+                vendedor={vendedorParaPrevia}
+                categoria={categoria}
+                modoPrevia
+              />
+            </div>
+
+            {/* Pie */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', padding: '1rem 1.5rem', borderTop: '1px solid #eee', background: '#fafafa' }}>
+              <span style={{ fontSize: '0.8rem', color: '#888' }}>Todavía no se guardó nada</span>
+              <button
+                type="button"
+                onClick={() => setMostrarPrevia(false)}
+                style={{ padding: '0.5rem 1rem', border: '1px solid #ccc', borderRadius: '8px', background: 'white', cursor: 'pointer' }}
+              >
+                Cerrar y seguir editando
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
