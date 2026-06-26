@@ -21,6 +21,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { useRouter } from 'next/navigation';
 import VistaProducto from '@/components/VistaProducto';
+import { revisarPublicacion, ETIQUETAS_MODERACION } from '@/lib/moderacion';
 
 // Una miniatura arrastrable
 function SortableFoto({ foto, index, onQuitar }) {
@@ -89,6 +90,9 @@ export default function NuevoProductoPage() {
   const [valorNuevo, setValorNuevo] = useState('');
   const [guardandoProducto, setGuardandoProducto] = useState(false);
   const [mostrarPrevia, setMostrarPrevia] = useState(false);
+  // Resultado de moderación EN VIVO. Solo guardamos acá cuando hay bloqueo (rojo);
+  // si está limpio o solo tiene avisos, queda en null y no se muestra nada.
+  const [bloqueoModeracion, setBloqueoModeracion] = useState(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -146,6 +150,18 @@ export default function NuevoProductoPage() {
     cargarSubcategorias();
     cargarCategoria();
   }, [categoriaVendedor]);
+
+  // Moderación EN VIVO: cada vez que cambia el texto, esperamos 1 segundo a que
+  // el vendedor deje de tipear y recién ahí revisamos. Así el cartel no parpadea
+  // letra por letra. Solo nos quedamos con los bloqueos (rojo).
+  useEffect(() => {
+    const id = setTimeout(() => {
+      const texto = `${datos.nombre} ${datos.descripcion} ${datos.marca}`;
+      const resultado = revisarPublicacion(texto);
+      setBloqueoModeracion(resultado.nivel === 'bloqueo' ? resultado : null);
+    }, 1000);
+    return () => clearTimeout(id);
+  }, [datos.nombre, datos.descripcion, datos.marca]);
 
   // Cerrar la previa con Escape y bloquear el scroll del fondo mientras está abierta
   useEffect(() => {
@@ -256,6 +272,15 @@ export default function NuevoProductoPage() {
       return;
     }
 
+    // 1.b. Moderación. El botón ya está deshabilitado si hay bloqueo, pero revisamos
+    // de nuevo por las dudas, y de paso sacamos los avisos para guardarlos.
+    const textoARevisar = `${datos.nombre} ${datos.descripcion} ${datos.marca}`;
+    const moderacion = revisarPublicacion(textoARevisar);
+    if (moderacion.nivel === 'bloqueo') {
+      setBloqueoModeracion(moderacion);
+      return;
+    }
+
     setGuardandoProducto(true);
 
     try {
@@ -297,6 +322,8 @@ export default function NuevoProductoPage() {
           estado: 'en_revision',
           tiene_variantes: tieneNombre && tieneValores,
           propiedad_1_nombre: tieneNombre ? nombrePropiedad.trim() : null,
+          // Avisos de moderación (puede ser []). El panel los lee para mostrar el cartelito.
+          moderacion_avisos: moderacion.avisos,
         })
         .select()
         .single();
@@ -352,6 +379,9 @@ export default function NuevoProductoPage() {
     }
   }
 
+  // El botón Guardar se apaga mientras se está guardando O mientras hay un bloqueo activo.
+  const guardarDeshabilitado = guardandoProducto || bloqueoModeracion !== null;
+
   // Traducimos el estado del formulario al formato que entiende VistaProducto
   const productoParaPrevia = {
     nombre: datos.nombre,
@@ -399,6 +429,32 @@ export default function NuevoProductoPage() {
             rows={4}
             style={{ width: '100%', padding: '0.5rem' }}
           />
+
+          {/* CARTEL DE MODERACIÓN EN VIVO: justo debajo del campo de texto,
+              donde el vendedor escribe. Aparece solo cuando hay un bloqueo activo
+              (contacto, precio evadido o lenguaje ofensivo). */}
+          {bloqueoModeracion && (
+            <div
+              role="alert"
+              style={{ marginTop: '0.75rem', padding: '0.85rem 1rem', background: '#fdecea', border: '1px solid #f5b1aa', borderRadius: '8px', color: '#7a1f17' }}
+            >
+              <p style={{ margin: 0, fontWeight: 600, fontSize: '0.92rem' }}>No vas a poder publicar con esto</p>
+              <p style={{ margin: '0.35rem 0 0.6rem', fontSize: '0.85rem' }}>
+                En Bahía Shops el contacto con el comprador se desbloquea recién después de la compra.
+                Sacá esto de tu publicación:
+              </p>
+              <ul style={{ margin: 0, paddingLeft: '1.2rem', fontSize: '0.85rem' }}>
+                {bloqueoModeracion.bloqueos.map((b, i) => (
+                  <li key={i} style={{ marginBottom: '0.2rem' }}>
+                    {ETIQUETAS_MODERACION[b.tipo] || b.tipo}
+                    {b.tipo !== 'lenguaje_ofensivo' && (
+                      <span style={{ color: '#a3392f' }}> — “{b.texto}”</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
 
         {subcategorias.length > 0 && (
@@ -603,8 +659,8 @@ export default function NuevoProductoPage() {
         <button
           type="button"
           onClick={guardarProducto}
-          disabled={guardandoProducto}
-          style={{ padding: '0.75rem 1.5rem', fontSize: '1rem', cursor: guardandoProducto ? 'not-allowed' : 'pointer', background: guardandoProducto ? '#999' : '#222', color: 'white', border: 'none', borderRadius: '8px' }}
+          disabled={guardarDeshabilitado}
+          style={{ padding: '0.75rem 1.5rem', fontSize: '1rem', cursor: guardarDeshabilitado ? 'not-allowed' : 'pointer', background: guardarDeshabilitado ? '#999' : '#222', color: 'white', border: 'none', borderRadius: '8px' }}
         >
           {guardandoProducto ? 'Guardando...' : 'Guardar producto'}
         </button>
