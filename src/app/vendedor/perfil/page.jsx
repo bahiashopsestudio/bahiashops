@@ -1,0 +1,294 @@
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import { createClient } from '@/lib/supabase/client';
+import Cropper from 'react-easy-crop';
+
+// --- Utilidades de recorte ---
+
+// Carga una imagen desde una URL y devuelve el elemento <img> ya listo
+function crearImagen(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.addEventListener('load', () => resolve(img));
+    img.addEventListener('error', (err) => reject(err));
+    img.src = url;
+  });
+}
+
+// Toma la imagen original + el área recortada y la "dibuja" en un lienzo
+// del tamaño de salida que queramos. Devuelve un archivo WEBP liviano.
+async function recortarImagen(src, areaPixels, anchoSalida, altoSalida) {
+  const imagen = await crearImagen(src);
+  const canvas = document.createElement('canvas');
+  canvas.width = anchoSalida;
+  canvas.height = altoSalida;
+  const ctx = canvas.getContext('2d');
+
+  ctx.drawImage(
+    imagen,
+    areaPixels.x, areaPixels.y, areaPixels.width, areaPixels.height, // recorte del original
+    0, 0, anchoSalida, altoSalida // destino en el lienzo
+  );
+
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), 'image/webp', 0.9);
+  });
+}
+
+// Configuración de cada tipo de imagen
+const CONFIG = {
+  logo: { aspect: 1, anchoSalida: 600, altoSalida: 600, minLado: 400, etiqueta: 'logo' },
+  portada: { aspect: 16 / 9, anchoSalida: 1600, altoSalida: 900, minLado: 0, etiqueta: 'portada' },
+};
+
+const TIPOS_VALIDOS = ['image/jpeg', 'image/png', 'image/webp'];
+const MAX_BYTES = 3 * 1024 * 1024; // 3 MB
+
+export default function PerfilVendedorPage() {
+  const supabase = createClient();
+
+  const [vendedorId, setVendedorId] = useState(null);
+  const [nombreNegocio, setNombreNegocio] = useState('');
+  const [logoUrl, setLogoUrl] = useState(null);
+  const [portadaUrl, setPortadaUrl] = useState(null);
+  const [cargando, setCargando] = useState(true);
+
+  // Estado del recorte
+  const [recorte, setRecorte] = useState(null); // { src, destino } | null
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [areaPixels, setAreaPixels] = useState(null);
+  const [subiendo, setSubiendo] = useState(false);
+
+  useEffect(() => {
+    async function cargarVendedor() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setCargando(false); return; }
+      const { data, error } = await supabase
+        .from('vendedores')
+        .select('id, nombre_negocio, logo_url, portada_url')
+        .eq('usuario_id', user.id)
+        .single();
+      if (error) {
+        console.error('Error cargando el vendedor:', error);
+      } else if (data) {
+        setVendedorId(data.id);
+        setNombreNegocio(data.nombre_negocio || '');
+        setLogoUrl(data.logo_url);
+        setPortadaUrl(data.portada_url);
+      }
+      setCargando(false);
+    }
+    cargarVendedor();
+  }, []);
+
+  const alCompletarRecorte = useCallback((_, pixels) => {
+    setAreaPixels(pixels);
+  }, []);
+
+  // Cuando la persona elige un archivo: validamos y abrimos el recorte
+  async function elegirArchivo(e, destino) {
+    const archivo = e.target.files?.[0];
+    e.target.value = ''; // permite volver a elegir el mismo archivo si quiere
+    if (!archivo) return;
+
+    if (!TIPOS_VALIDOS.includes(archivo.type)) {
+      alert('La imagen tiene que ser JPG, PNG o WEBP.');
+      return;
+    }
+    if (archivo.size > MAX_BYTES) {
+      alert('La imagen no puede pesar más de 3 MB.');
+      return;
+    }
+
+    const src = URL.createObjectURL(archivo);
+
+    // Para el logo, exigimos un mínimo de 400×400 px
+    if (CONFIG[destino].minLado > 0) {
+      const img = await crearImagen(src);
+      if (img.naturalWidth < CONFIG[destino].minLado || img.naturalHeight < CONFIG[destino].minLado) {
+        URL.revokeObjectURL(src);
+        alert(`El logo tiene que ser de al menos ${CONFIG[destino].minLado}×${CONFIG[destino].minLado} px. Subí una imagen más grande.`);
+        return;
+      }
+    }
+
+    setCrop({ x: 0, y: 0 });
+    setZoom(1);
+    setAreaPixels(null);
+    setRecorte({ src, destino });
+  }
+
+  function cerrarRecorte() {
+    if (recorte?.src) URL.revokeObjectURL(recorte.src);
+    setRecorte(null);
+  }
+
+  async function recortarYSubir() {
+    if (!recorte || !areaPixels || !vendedorId) return;
+    const config = CONFIG[recorte.destino];
+    setSubiendo(true);
+
+    try {
+      // 1. Generamos la imagen recortada (WEBP liviano)
+      const blob = await recortarImagen(recorte.src, areaPixels, config.anchoSalida, config.altoSalida);
+
+      // 2. La subimos a su bucket, en la carpeta del vendedor.
+      //    Nombre fijo + upsert: cada nueva subida reemplaza a la anterior,
+      //    así no se acumulan archivos viejos.
+      const bucket = recorte.destino === 'logo' ? 'logos' : 'portadas';
+      const ruta = `${vendedorId}/${config.etiqueta}.webp`;
+
+      const { error: errorUpload } = await supabase
+        .storage
+        .from(bucket)
+        .upload(ruta, blob, { upsert: true, contentType: 'image/webp' });
+
+      if (errorUpload) throw new Error('No se pudo subir la imagen: ' + errorUpload.message);
+
+      // 3. Armamos la URL pública. Le agregamos ?v=<momento> para "romper la caché":
+      //    como el nombre del archivo es siempre el mismo, sin esto el navegador
+      //    seguiría mostrando la imagen vieja.
+      const { data: dataUrl } = supabase.storage.from(bucket).getPublicUrl(ruta);
+      const urlFinal = `${dataUrl.publicUrl}?v=${Date.now()}`;
+
+      // 4. Guardamos la URL en la fila del vendedor
+      const columna = recorte.destino === 'logo' ? 'logo_url' : 'portada_url';
+      const { error: errorUpdate } = await supabase
+        .from('vendedores')
+        .update({ [columna]: urlFinal })
+        .eq('id', vendedorId);
+
+      if (errorUpdate) throw new Error('La imagen se subió pero no se pudo guardar: ' + errorUpdate.message);
+
+      // 5. Reflejamos el cambio en pantalla
+      if (recorte.destino === 'logo') setLogoUrl(urlFinal);
+      else setPortadaUrl(urlFinal);
+
+      cerrarRecorte();
+    } catch (err) {
+      console.error(err);
+      alert(err.message || 'Hubo un error. Probá de nuevo.');
+    } finally {
+      setSubiendo(false);
+    }
+  }
+
+  if (cargando) {
+    return <main style={{ padding: '2rem', textAlign: 'center' }}>Cargando...</main>;
+  }
+
+  if (!vendedorId) {
+    return <main style={{ padding: '2rem', textAlign: 'center' }}>No encontramos tu cuenta de vendedor.</main>;
+  }
+
+  return (
+    <main style={{ padding: '2rem', maxWidth: '700px', width: '100%', margin: '0 auto' }}>
+      <h1>Mi negocio</h1>
+      <p style={{ color: '#666', marginTop: '0.25rem' }}>{nombreNegocio}</p>
+
+      <section style={{ marginTop: '2rem', padding: '1.5rem', border: '1px solid #ddd', borderRadius: '8px' }}>
+        <h2 style={{ fontSize: '1.1rem' }}>Identidad visual</h2>
+
+        {/* PORTADA + LOGO superpuesto */}
+        <div style={{ position: 'relative', marginTop: '1rem' }}>
+          <div style={{ aspectRatio: '16 / 9', maxHeight: '240px', background: '#f5f5f5', borderRadius: '8px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#aaa' }}>
+            {portadaUrl ? (
+              <img src={portadaUrl} alt="Portada" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              <span style={{ fontSize: '0.9rem' }}>Sin portada (opcional)</span>
+            )}
+          </div>
+
+          <div style={{ position: 'absolute', left: '20px', bottom: '-28px', width: '96px', height: '96px', borderRadius: '8px', overflow: 'hidden', background: '#eee', boxShadow: '0 0 0 4px white', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#aaa' }}>
+            {logoUrl ? (
+              <img src={logoUrl} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              <span style={{ fontSize: '0.7rem' }}>Sin logo</span>
+            )}
+          </div>
+        </div>
+
+        {/* Botones de cambio */}
+        <div style={{ paddingTop: '44px', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <label style={{ padding: '0.6rem 1.2rem', border: '1px solid #222', borderRadius: '8px', cursor: 'pointer', fontSize: '0.95rem' }}>
+            {logoUrl ? 'Cambiar logo' : 'Subir logo *'}
+            <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => elegirArchivo(e, 'logo')} style={{ display: 'none' }} />
+          </label>
+          <label style={{ padding: '0.6rem 1.2rem', border: '1px solid #222', borderRadius: '8px', cursor: 'pointer', fontSize: '0.95rem' }}>
+            {portadaUrl ? 'Cambiar portada' : 'Subir portada'}
+            <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => elegirArchivo(e, 'portada')} style={{ display: 'none' }} />
+          </label>
+        </div>
+
+        <div style={{ marginTop: '1rem', fontSize: '0.8rem', color: '#666', lineHeight: 1.7 }}>
+          <div>Logo: obligatorio · cuadrado · mínimo 400×400 px</div>
+          <div>Portada: opcional · panorámica 16:9</div>
+          <div>JPG, PNG o WEBP · hasta 3 MB</div>
+        </div>
+      </section>
+
+      {/* MODAL DE RECORTE */}
+      {recorte && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', zIndex: 1000 }}>
+          <div style={{ background: 'white', borderRadius: '12px', width: '100%', maxWidth: '520px', overflow: 'hidden' }}>
+            <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid #eee' }}>
+              <p style={{ fontWeight: 600, margin: 0 }}>
+                Recortá tu {CONFIG[recorte.destino].etiqueta}
+              </p>
+              <p style={{ fontSize: '0.85rem', color: '#666', margin: '2px 0 0' }}>
+                Arrastrá para mover y usá el zoom para ajustar
+              </p>
+            </div>
+
+            {/* Área de recorte (react-easy-crop necesita un contenedor con alto definido) */}
+            <div style={{ position: 'relative', width: '100%', height: '320px', background: '#333' }}>
+              <Cropper
+                image={recorte.src}
+                crop={crop}
+                zoom={zoom}
+                aspect={CONFIG[recorte.destino].aspect}
+                onCropChange={setCrop}
+                onZoomChange={setZoom}
+                onCropComplete={alCompletarRecorte}
+              />
+            </div>
+
+            <div style={{ padding: '1rem 1.5rem' }}>
+              <label style={{ fontSize: '0.85rem', color: '#666', display: 'block', marginBottom: '0.4rem' }}>Zoom</label>
+              <input
+                type="range"
+                min={1}
+                max={3}
+                step={0.05}
+                value={zoom}
+                onChange={(e) => setZoom(Number(e.target.value))}
+                style={{ width: '100%' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', padding: '1rem 1.5rem', borderTop: '1px solid #eee', background: '#fafafa' }}>
+              <button
+                type="button"
+                onClick={cerrarRecorte}
+                disabled={subiendo}
+                style={{ padding: '0.6rem 1.2rem', border: '1px solid #ccc', borderRadius: '8px', background: 'white', cursor: 'pointer' }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={recortarYSubir}
+                disabled={subiendo || !areaPixels}
+                style={{ padding: '0.6rem 1.2rem', border: 'none', borderRadius: '8px', background: subiendo ? '#999' : '#222', color: 'white', cursor: subiendo ? 'not-allowed' : 'pointer' }}
+              >
+                {subiendo ? 'Subiendo...' : 'Recortar y subir'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </main>
+  );
+}
