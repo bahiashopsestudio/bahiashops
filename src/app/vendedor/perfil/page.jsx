@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { useRouter } from 'next/navigation';
 import Cropper from 'react-easy-crop';
 
 // --- Utilidades de recorte ---
 
-// Carga una imagen desde una URL y devuelve el elemento <img> ya listo
 function crearImagen(url) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -16,8 +16,6 @@ function crearImagen(url) {
   });
 }
 
-// Toma la imagen original + el área recortada y la "dibuja" en un lienzo
-// del tamaño de salida que queramos. Devuelve un archivo WEBP liviano.
 async function recortarImagen(src, areaPixels, anchoSalida, altoSalida) {
   const imagen = await crearImagen(src);
   const canvas = document.createElement('canvas');
@@ -27,8 +25,8 @@ async function recortarImagen(src, areaPixels, anchoSalida, altoSalida) {
 
   ctx.drawImage(
     imagen,
-    areaPixels.x, areaPixels.y, areaPixels.width, areaPixels.height, // recorte del original
-    0, 0, anchoSalida, altoSalida // destino en el lienzo
+    areaPixels.x, areaPixels.y, areaPixels.width, areaPixels.height,
+    0, 0, anchoSalida, altoSalida
   );
 
   return new Promise((resolve) => {
@@ -36,7 +34,6 @@ async function recortarImagen(src, areaPixels, anchoSalida, altoSalida) {
   });
 }
 
-// Configuración de cada tipo de imagen
 const CONFIG = {
   logo: { aspect: 1, anchoSalida: 600, altoSalida: 600, minLado: 400, etiqueta: 'logo' },
   portada: { aspect: 16 / 9, anchoSalida: 1600, altoSalida: 900, minLado: 0, etiqueta: 'portada' },
@@ -47,6 +44,7 @@ const MAX_BYTES = 3 * 1024 * 1024; // 3 MB
 
 export default function PerfilVendedorPage() {
   const supabase = createClient();
+  const router = useRouter();
 
   const [vendedorId, setVendedorId] = useState(null);
   const [nombreNegocio, setNombreNegocio] = useState('');
@@ -54,8 +52,7 @@ export default function PerfilVendedorPage() {
   const [portadaUrl, setPortadaUrl] = useState(null);
   const [cargando, setCargando] = useState(true);
 
-  // Estado del recorte
-  const [recorte, setRecorte] = useState(null); // { src, destino } | null
+  const [recorte, setRecorte] = useState(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [areaPixels, setAreaPixels] = useState(null);
@@ -87,10 +84,9 @@ export default function PerfilVendedorPage() {
     setAreaPixels(pixels);
   }, []);
 
-  // Cuando la persona elige un archivo: validamos y abrimos el recorte
   async function elegirArchivo(e, destino) {
     const archivo = e.target.files?.[0];
-    e.target.value = ''; // permite volver a elegir el mismo archivo si quiere
+    e.target.value = '';
     if (!archivo) return;
 
     if (!TIPOS_VALIDOS.includes(archivo.type)) {
@@ -104,7 +100,6 @@ export default function PerfilVendedorPage() {
 
     const src = URL.createObjectURL(archivo);
 
-    // Para el logo, exigimos un mínimo de 400×400 px
     if (CONFIG[destino].minLado > 0) {
       const img = await crearImagen(src);
       if (img.naturalWidth < CONFIG[destino].minLado || img.naturalHeight < CONFIG[destino].minLado) {
@@ -131,12 +126,8 @@ export default function PerfilVendedorPage() {
     setSubiendo(true);
 
     try {
-      // 1. Generamos la imagen recortada (WEBP liviano)
       const blob = await recortarImagen(recorte.src, areaPixels, config.anchoSalida, config.altoSalida);
 
-      // 2. La subimos a su bucket, en la carpeta del vendedor.
-      //    Nombre fijo + upsert: cada nueva subida reemplaza a la anterior,
-      //    así no se acumulan archivos viejos.
       const bucket = recorte.destino === 'logo' ? 'logos' : 'portadas';
       const ruta = `${vendedorId}/${config.etiqueta}.webp`;
 
@@ -147,13 +138,9 @@ export default function PerfilVendedorPage() {
 
       if (errorUpload) throw new Error('No se pudo subir la imagen: ' + errorUpload.message);
 
-      // 3. Armamos la URL pública. Le agregamos ?v=<momento> para "romper la caché":
-      //    como el nombre del archivo es siempre el mismo, sin esto el navegador
-      //    seguiría mostrando la imagen vieja.
       const { data: dataUrl } = supabase.storage.from(bucket).getPublicUrl(ruta);
       const urlFinal = `${dataUrl.publicUrl}?v=${Date.now()}`;
 
-      // 4. Guardamos la URL en la fila del vendedor
       const columna = recorte.destino === 'logo' ? 'logo_url' : 'portada_url';
       const { error: errorUpdate } = await supabase
         .from('vendedores')
@@ -162,7 +149,6 @@ export default function PerfilVendedorPage() {
 
       if (errorUpdate) throw new Error('La imagen se subió pero no se pudo guardar: ' + errorUpdate.message);
 
-      // 5. Reflejamos el cambio en pantalla
       if (recorte.destino === 'logo') setLogoUrl(urlFinal);
       else setPortadaUrl(urlFinal);
 
@@ -191,7 +177,6 @@ export default function PerfilVendedorPage() {
       <section style={{ marginTop: '2rem', padding: '1.5rem', border: '1px solid #ddd', borderRadius: '8px' }}>
         <h2 style={{ fontSize: '1.1rem' }}>Identidad visual</h2>
 
-        {/* PORTADA + LOGO superpuesto */}
         <div style={{ position: 'relative', marginTop: '1rem' }}>
           <div style={{ aspectRatio: '16 / 9', maxHeight: '240px', background: '#f5f5f5', borderRadius: '8px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#aaa' }}>
             {portadaUrl ? (
@@ -210,7 +195,6 @@ export default function PerfilVendedorPage() {
           </div>
         </div>
 
-        {/* Botones de cambio */}
         <div style={{ paddingTop: '44px', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
           <label style={{ padding: '0.6rem 1.2rem', border: '1px solid #222', borderRadius: '8px', cursor: 'pointer', fontSize: '0.95rem' }}>
             {logoUrl ? 'Cambiar logo' : 'Subir logo *'}
@@ -229,6 +213,17 @@ export default function PerfilVendedorPage() {
         </div>
       </section>
 
+      {/* Botón de cierre: vuelve a Mis productos (ya está todo guardado) */}
+      <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end' }}>
+        <button
+          type="button"
+          onClick={() => router.push('/vendedor/productos')}
+          style={{ padding: '0.75rem 1.5rem', fontSize: '1rem', background: '#222', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
+        >
+          Guardar
+        </button>
+      </div>
+
       {/* MODAL DE RECORTE */}
       {recorte && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', zIndex: 1000 }}>
@@ -242,7 +237,6 @@ export default function PerfilVendedorPage() {
               </p>
             </div>
 
-            {/* Área de recorte (react-easy-crop necesita un contenedor con alto definido) */}
             <div style={{ position: 'relative', width: '100%', height: '320px', background: '#333' }}>
               <Cropper
                 image={recorte.src}
