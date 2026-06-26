@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import VistaProducto from '@/components/VistaProducto';
+import { ETIQUETAS_MODERACION } from '@/lib/moderacion';
 
 // ┌────────────────────────────────────────────────────────────┐
 // │ MOTIVOS DE RECHAZO                                          │
@@ -58,7 +59,7 @@ export default function ModeracionPage() {
       .from('productos')
       .select(`
         id, nombre, descripcion, precio, precio_anterior, marca,
-        propiedad_1_nombre, tiempo_preparacion, categoria_id,
+        propiedad_1_nombre, tiempo_preparacion, categoria_id, moderacion_avisos,
         vendedores ( nombre_negocio ),
         producto_media ( url, orden ),
         producto_variantes ( propiedad_1_valor ),
@@ -201,8 +202,22 @@ export default function ModeracionPage() {
           {productos.map((p) => {
             const foto = p.producto_media?.[0]?.url;
             const enAccion = procesando === p.id;
+            // Avisos de moderación: puede venir null, [], o con cosas adentro.
+            const avisos = Array.isArray(p.moderacion_avisos) ? p.moderacion_avisos : [];
+            // Juntamos las etiquetas únicas, sin repetir (ej: dos "animales" → uno solo).
+            const etiquetasAviso = [...new Set(avisos.map((a) => ETIQUETAS_MODERACION[a.tipo] || a.tipo))];
             return (
               <div key={p.id} style={{ border: '1px solid #ddd', borderRadius: '10px', padding: '1rem' }}>
+                {/* Cartelito ámbar: solo si el filtro automático marcó algo dudoso */}
+                {etiquetasAviso.length > 0 && (
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '0.85rem', padding: '0.55rem 0.8rem', background: '#fff8e1', border: '1px solid #f5d98b', borderRadius: '8px', color: '#7a5b00', fontSize: '0.82rem' }}>
+                    <span aria-hidden="true" style={{ lineHeight: 1.2 }}>⚠</span>
+                    <span>
+                      <strong>Revisar con cuidado:</strong> {etiquetasAviso.join(' · ')}
+                    </span>
+                  </div>
+                )}
+
                 <div style={{ display: 'flex', gap: '1rem' }}>
                   {/* Miniatura */}
                   <div style={{ width: '90px', height: '90px', flexShrink: 0, borderRadius: '8px', overflow: 'hidden', background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#aaa' }}>
