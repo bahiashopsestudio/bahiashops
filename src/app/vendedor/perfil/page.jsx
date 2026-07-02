@@ -50,6 +50,7 @@ export default function PerfilVendedorPage() {
   const [nombreNegocio, setNombreNegocio] = useState('');
   const [logoUrl, setLogoUrl] = useState(null);
   const [portadaUrl, setPortadaUrl] = useState(null);
+  const [mpConectado, setMpConectado] = useState(false);
   const [cargando, setCargando] = useState(true);
 
   const [recorte, setRecorte] = useState(null);
@@ -64,7 +65,7 @@ export default function PerfilVendedorPage() {
       if (!user) { setCargando(false); return; }
       const { data, error } = await supabase
         .from('vendedores')
-        .select('id, nombre_negocio, logo_url, portada_url')
+        .select('id, nombre_negocio, logo_url, portada_url, mercadopago_conectado')
         .eq('usuario_id', user.id)
         .single();
       if (error) {
@@ -74,6 +75,7 @@ export default function PerfilVendedorPage() {
         setNombreNegocio(data.nombre_negocio || '');
         setLogoUrl(data.logo_url);
         setPortadaUrl(data.portada_url);
+        setMpConectado(data.mercadopago_conectado || false);
       }
       setCargando(false);
     }
@@ -211,6 +213,33 @@ export default function PerfilVendedorPage() {
           <div>Portada: opcional · panorámica 16:9</div>
           <div>JPG, PNG o WEBP · hasta 3 MB</div>
         </div>
+      </section>
+
+      {/* SECCIÓN COBROS: conexión con MercadoPago */}
+      <section style={{ marginTop: '1.5rem', padding: '1.5rem', border: '1px solid #ddd', borderRadius: '8px' }}>
+        <h2 style={{ fontSize: '1.1rem' }}>Cobros</h2>
+
+        {mpConectado ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: '#e9f7ef', borderRadius: '8px', padding: '0.9rem 1rem', marginTop: '0.75rem' }}>
+            <span style={{ fontSize: '1.4rem' }}>✓</span>
+            <div>
+              <div style={{ fontWeight: 600, color: '#1e7e46' }}>MercadoPago conectado</div>
+              <div style={{ fontSize: '0.85rem', color: '#1e7e46' }}>Vas a recibir el dinero de tus ventas en tu cuenta.</div>
+            </div>
+          </div>
+        ) : (
+          <>
+            <p style={{ fontSize: '0.9rem', color: '#666', margin: '0.5rem 0 1rem', lineHeight: 1.6 }}>
+              Conectá tu cuenta de MercadoPago para recibir el dinero de tus ventas.
+            </p>
+            
+              href="/api/mercadopago/oauth/start"
+              style={{ display: 'inline-block', padding: '0.75rem 1.5rem', fontSize: '1rem', background: '#009ee3', color: 'white', border: 'none', borderRadius: '8px', textDecoration: 'none' }}
+            >
+              Conectar con MercadoPago
+            </a>
+          </>
+        )}
       </section>
 
       {/* Botón de cierre: vuelve a Mis productos (ya está todo guardado) */}
