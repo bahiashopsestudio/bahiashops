@@ -233,7 +233,7 @@ export default function PerfilVendedorPage() {
               Conectá tu cuenta de MercadoPago para recibir el dinero de tus ventas.
             </p>
             
-              href="/api/mercadopago/oauth/start"
+              <a href="/api/mercadopago/oauth/start"
               style={{ display: 'inline-block', padding: '0.75rem 1.5rem', fontSize: '1rem', background: '#009ee3', color: 'white', border: 'none', borderRadius: '8px', textDecoration: 'none' }}
             >
               Conectar con MercadoPago
