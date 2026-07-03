@@ -3,9 +3,11 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { useCarrito } from '@/context/CarritoContext';
 
 export default function PaginaProducto() {
   const supabase = createClient();
+  const { agregar } = useCarrito();
   const params = useParams();
   const productoId = params.id;
 
@@ -199,15 +201,39 @@ export default function PaginaProducto() {
             </div>
           )}
 
-          {/* Botón de comprar (sin función por ahora) */}
+          {/* Botón de agregar al carrito */}
           <button
             type="button"
-            onClick={() => alert('El carrito todavía no está listo — lo armamos próximamente.')}
+            onClick={() => {
+              // Si hay variantes y no eligió ninguna, se lo pedimos.
+              if (variantes.length > 0 && producto.propiedad_1_nombre && !varianteElegida) {
+                alert(`Elegí ${producto.propiedad_1_nombre.toLowerCase()} antes de agregar.`);
+                return;
+              }
+
+              // Armamos el producto para la canasta.
+              const itemParaCarrito = {
+                productoId: producto.id,
+                nombre: producto.nombre,
+                precio: Number(producto.precio),
+                foto: fotos.length > 0 ? fotos[0].url : null,
+                variante: varianteElegida || null,
+                cantidad: 1,
+              };
+
+              const vendedorParaCarrito = {
+                id: producto.vendedor_id,
+                nombre: vendedor ? vendedor.nombre_negocio : 'Local',
+              };
+
+              agregar(itemParaCarrito, vendedorParaCarrito);
+              alert('¡Agregado al carrito!');
+            }}
             style={{ width: '100%', padding: '0.9rem', fontSize: '1.05rem', background: '#222', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
           >
-            Comprar
+            Agregar al carrito
           </button>
-
+          
           {/* Tiempo de preparación */}
           {producto.tiempo_preparacion && (
             <p style={{ marginTop: '1rem', fontSize: '0.9rem', color: '#555' }}>
