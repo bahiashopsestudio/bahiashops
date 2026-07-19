@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useCarrito } from '@/context/CarritoContext';
+import VolverAtras from '@/components/VolverAtras';
+import BotonFavorito from '@/components/BotonFavorito';
 
 export default function PaginaProducto() {
   const supabase = createClient();
@@ -83,7 +85,12 @@ export default function PaginaProducto() {
   }
 
   if (noEncontrado) {
-    return <main style={{ padding: '2rem', textAlign: 'center' }}>No encontramos este producto.</main>;
+    return (
+      <main style={{ padding: '2rem', textAlign: 'center' }}>
+        <VolverAtras href="/" texto="Inicio" />
+        <p>No encontramos este producto.</p>
+      </main>
+    );
   }
 
   const hayOferta = producto.precio_anterior && Number(producto.precio_anterior) > Number(producto.precio);
@@ -91,11 +98,13 @@ export default function PaginaProducto() {
   return (
     <main style={{ padding: '2rem', maxWidth: '1000px', width: '100%', margin: '0 auto' }}>
 
+      <VolverAtras href="/" texto="Inicio" />
+
       {/* Dos columnas: fotos | info */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem' }}>
 
         {/* COLUMNA IZQUIERDA: galería */}
-        <div style={{ flex: '1 1 360px', minWidth: '300px' }}>
+        <div style={{ flex: '1 1 360px', minWidth: '300px', position: 'relative' }}>
           {fotos.length > 0 ? (
             <>
               <img
@@ -103,6 +112,13 @@ export default function PaginaProducto() {
                 alt={producto.nombre}
                 style={{ width: '100%', borderRadius: '8px', border: '1px solid #eee', aspectRatio: '1 / 1', objectFit: 'cover' }}
               />
+              {/* Corazón sobre la foto principal */}
+              <div style={{ position: 'absolute', top: '12px', right: '12px' }}>
+                <BotonFavorito
+                  productoId={producto.id}
+                  className="w-10 h-10 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center text-gray-500 shadow-sm"
+                />
+              </div>
               {fotos.length > 1 && (
                 <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
                   {fotos.map((foto, index) => (
@@ -145,7 +161,9 @@ export default function PaginaProducto() {
 
           {vendedor && (
             <p style={{ fontSize: '0.9rem', color: '#666', margin: '0 0 0.5rem' }}>
-              {vendedor.nombre_negocio}
+              <a href={`/tienda/${vendedor.slug}`} style={{ color: '#666', textDecoration: 'underline' }}>
+                {vendedor.nombre_negocio}
+              </a>
             </p>
           )}
 
@@ -205,13 +223,11 @@ export default function PaginaProducto() {
           <button
             type="button"
             onClick={() => {
-              // Si hay variantes y no eligió ninguna, se lo pedimos.
               if (variantes.length > 0 && producto.propiedad_1_nombre && !varianteElegida) {
                 alert(`Elegí ${producto.propiedad_1_nombre.toLowerCase()} antes de agregar.`);
                 return;
               }
 
-              // Armamos el producto para la canasta.
               const itemParaCarrito = {
                 productoId: producto.id,
                 nombre: producto.nombre,

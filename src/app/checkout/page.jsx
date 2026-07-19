@@ -6,6 +6,14 @@ import { createClient } from '@/lib/supabase/client';
 import { useCarrito } from '@/context/CarritoContext';
 import FormularioDireccion from '@/components/FormularioDireccion';
 
+// Zonas de correo (misma definición que en el perfil del vendedor)
+const ZONAS_CORREO = [
+  { key: 'correo_1', nombre: 'Zona 1', descripcion: 'Buenos Aires, Córdoba, Entre Ríos, La Pampa, Santa Fe' },
+  { key: 'correo_2', nombre: 'Zona 2', descripcion: 'Mendoza, San Luis, San Juan, Neuquén, Río Negro, La Rioja' },
+  { key: 'correo_3', nombre: 'Zona 3', descripcion: 'Tucumán, Salta, Jujuy, Catamarca, Chaco, Corrientes, Formosa, Misiones, Sgo. del Estero' },
+  { key: 'correo_4', nombre: 'Zona 4', descripcion: 'Chubut, Santa Cruz, Tierra del Fuego' },
+];
+
 function CheckoutContenido() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -27,42 +35,123 @@ function CheckoutContenido() {
   const [cargando, setCargando] = useState(true);
   const [pagando, setPagando] = useState(false);
 
-  // === Métodos de envío (después van a venir de la config del vendedor) ===
-  const metodos = [
-    { id: 'retiro', label: 'Retiro en el local', costo: 0, pideDireccion: false, pideTurno: false },
-    { id: 'cadeteria', label: 'Cadetería', sub: 'Dentro de Bahía Blanca', costo: 1800, pideDireccion: true, pideTurno: true },
-    { id: 'correo', label: 'Envíos a otras localidades', sub: 'Pueblos de la zona', costo: 2500, pideDireccion: true, pideTurno: false },
-    { id: 'acordar', label: 'Acordar con el vendedor', sub: 'Coordinás el envío por WhatsApp', costo: null, pideDireccion: false, pideTurno: false },
-  ];
+  // === Config de envío del vendedor ===
+  const [vendedorBarrioId, setVendedorBarrioId] = useState(null);
+  const [metodosDisponibles, setMetodosDisponibles] = useState([]);
+  const [costosVendedor, setCostosVendedor] = useState({});
 
-  const metodo = metodos.find((m) => m.id === metodoElegido);
-  const costoEnvio = metodo?.costo ?? 0;
+  // === Costo dinámico de cadetería (depende de la zona) ===
+  const [zonaCadeteria, setZonaCadeteria] = useState(null); // 1-4
+  const [costoCadeteria, setCostoCadeteria] = useState(null);
+  const [calculandoZona, setCalculandoZona] = useState(false);
+  const [sinBarrio, setSinBarrio] = useState(false); // dirección sin barrio_id
+
+  // === Correo: zona elegida por el comprador ===
+  const [zonaCorreoElegida, setZonaCorreoElegida] = useState(null);
+
+  // === Calcular costo de envío según método elegido ===
+  function costoEnvioActual() {
+    if (metodoElegido === 'retiro') return 0;
+    if (metodoElegido === 'cadeteria') return costoCadeteria ?? 0;
+    if (metodoElegido === 'correo' && zonaCorreoElegida) {
+      return costosVendedor[zonaCorreoElegida] ?? 0;
+    }
+    if (metodoElegido === 'acordar') return 0;
+    return 0;
+  }
+
+  const costoEnvio = costoEnvioActual();
   const subtotal = subtotalLocal(vendedorId);
   const total = subtotal + costoEnvio;
 
   // === ¿El paso 1 está completo? ===
-  const necesitaDireccion = metodo?.pideDireccion;
-  const paso1Listo = metodoElegido && (!necesitaDireccion || direccionElegida);
+  const metodoPideDir = metodoElegido === 'cadeteria' || metodoElegido === 'correo';
+  const cadeteriaSinCosto = metodoElegido === 'cadeteria' && costoCadeteria === null && !calculandoZona;
+  const correoSinZona = metodoElegido === 'correo' && !zonaCorreoElegida;
+  const paso1Listo = metodoElegido
+    && (!metodoPideDir || direccionElegida)
+    && !cadeteriaSinCosto
+    && !correoSinZona
+    && !sinBarrio;
 
-  // === Cargar las direcciones del comprador ===
+  // === Cargar datos iniciales ===
   useEffect(() => {
     async function cargar() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setCargando(false); return; }
-      const { data } = await supabase
+
+      // Direcciones del comprador
+      const { data: dirs } = await supabase
         .from('direcciones')
         .select('*')
         .eq('usuario_id', user.id)
         .order('creada_en');
-      if (data && data.length > 0) {
-        setDirecciones(data);
-        const principal = data.find((d) => d.es_principal);
-        setDireccionElegida(principal ? principal.id : data[0].id);
+      if (dirs && dirs.length > 0) {
+        setDirecciones(dirs);
+        const principal = dirs.find((d) => d.es_principal);
+        setDireccionElegida(principal ? principal.id : dirs[0].id);
       }
+
+      // Config de envío del vendedor
+      const { data: vendedor } = await supabase
+        .from('vendedores')
+        .select('barrio_id, metodos_entrega_default, costos_envio_zona')
+        .eq('id', vendedorId)
+        .single();
+
+      if (vendedor) {
+        setVendedorBarrioId(vendedor.barrio_id);
+        setMetodosDisponibles(vendedor.metodos_entrega_default || []);
+        setCostosVendedor(vendedor.costos_envio_zona || {});
+      }
+
       setCargando(false);
     }
     cargar();
   }, []);
+
+  // === Calcular zona de cadetería cuando cambia la dirección ===
+  useEffect(() => {
+    async function calcularZona() {
+      if (metodoElegido !== 'cadeteria' || !direccionElegida || !vendedorBarrioId) return;
+
+      const dir = direcciones.find(d => d.id === direccionElegida);
+      if (!dir) return;
+
+      if (!dir.barrio_id) {
+        setSinBarrio(true);
+        setCostoCadeteria(null);
+        setZonaCadeteria(null);
+        return;
+      }
+
+      setSinBarrio(false);
+      setCalculandoZona(true);
+
+      const { data: zona, error } = await supabase.rpc('calcular_zona_envio', {
+        barrio_vendedor_id: vendedorBarrioId,
+        barrio_comprador_id: dir.barrio_id,
+      });
+
+      if (error) {
+        console.error('Error calculando zona:', error);
+        setCostoCadeteria(null);
+        setZonaCadeteria(null);
+      } else {
+        setZonaCadeteria(zona);
+        const costo = costosVendedor[`zona_${zona}`];
+        setCostoCadeteria(costo !== undefined && costo !== null ? costo : null);
+      }
+
+      setCalculandoZona(false);
+    }
+    calcularZona();
+  }, [metodoElegido, direccionElegida, vendedorBarrioId, costosVendedor, direcciones]);
+
+  // Reset zona correo cuando cambia el método
+  useEffect(() => {
+    if (metodoElegido !== 'correo') setZonaCorreoElegida(null);
+  }, [metodoElegido]);
 
   function fmt(n) {
     return Number(n).toLocaleString('es-AR');
@@ -100,7 +189,6 @@ function CheckoutContenido() {
         return;
       }
 
-      // Mandar al comprador a MercadoPago para que pague.
       window.location.href = data.checkout_url;
     } catch (err) {
       alert('Error al conectar con el servidor. Probá de nuevo.');
@@ -127,6 +215,42 @@ function CheckoutContenido() {
     );
   }
 
+  // === Construir métodos de envío desde la config del vendedor ===
+  const metodos = [];
+
+  if (metodosDisponibles.includes('retiro')) {
+    metodos.push({ id: 'retiro', label: 'Retiro en el local', sub: 'Retirás en la dirección del vendedor', costoLabel: 'Gratis', pideDireccion: false, pideTurno: false });
+  }
+
+  if (metodosDisponibles.includes('cadeteria')) {
+    let costoLabel = 'Seleccioná una dirección';
+    if (calculandoZona) costoLabel = 'Calculando...';
+    else if (sinBarrio) costoLabel = 'Dirección sin barrio';
+    else if (costoCadeteria !== null) costoLabel = `$${fmt(costoCadeteria)}`;
+    else if (costoCadeteria === null && zonaCadeteria) costoLabel = 'No disponible en tu zona';
+
+    metodos.push({ id: 'cadeteria', label: 'Cadetería', sub: 'Envío dentro de Bahía Blanca', costoLabel, pideDireccion: true, pideTurno: true });
+  }
+
+  if (metodosDisponibles.includes('correo')) {
+    let costoLabel = 'Elegí tu zona';
+    if (zonaCorreoElegida) {
+      const costo = costosVendedor[zonaCorreoElegida];
+      costoLabel = costo !== null && costo !== undefined ? `$${fmt(costo)}` : 'No disponible';
+    }
+    metodos.push({ id: 'correo', label: 'Envío por correo', sub: 'Otras localidades del país', costoLabel, pideDireccion: true, pideTurno: false });
+  }
+
+  if (metodosDisponibles.includes('acordar')) {
+    metodos.push({ id: 'acordar', label: 'Acordar con el vendedor', sub: 'Coordinás el envío por WhatsApp', costoLabel: 'A coordinar', pideDireccion: false, pideTurno: false });
+  }
+
+  // Si el vendedor no configuró ningún método, mostrar solo "acordar" como fallback
+  if (metodos.length === 0) {
+    metodos.push({ id: 'acordar', label: 'Acordar con el vendedor', sub: 'El vendedor aún no configuró sus envíos', costoLabel: 'A coordinar', pideDireccion: false, pideTurno: false });
+  }
+
+  const metodoActual = metodos.find(m => m.id === metodoElegido);
   const dirElegida = direcciones.find((d) => d.id === direccionElegida);
 
   // === Barra de progreso ===
@@ -153,11 +277,7 @@ function CheckoutContenido() {
               }}>
                 {listo ? '✓' : num}
               </div>
-              <span style={{
-                fontSize: '0.85rem',
-                color: activo ? '#222' : '#999',
-                fontWeight: activo ? 500 : 400,
-              }}>
+              <span style={{ fontSize: '0.85rem', color: activo ? '#222' : '#999', fontWeight: activo ? 500 : 400 }}>
                 {nombre}
               </span>
               {i < pasos.length - 1 && (
@@ -180,39 +300,90 @@ function CheckoutContenido() {
           <div style={{ marginBottom: '1.5rem' }}>
             {metodos.map((m) => {
               const sel = metodoElegido === m.id;
-              const precio = m.costo === null
-                ? 'A coordinar'
-                : (m.costo === 0 ? 'Gratis' : `$${fmt(m.costo)}`);
               return (
-                <div
-                  key={m.id}
-                  onClick={() => setMetodoElegido(m.id)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: '0.75rem',
-                    padding: '0.8rem 1rem', borderRadius: '8px', cursor: 'pointer',
-                    marginBottom: '0.5rem',
-                    border: sel ? '2px solid #009ee3' : '1px solid #ddd',
-                  }}
-                >
-                  <div style={{
-                    width: '18px', height: '18px', borderRadius: '50%',
-                    border: `1.5px solid ${sel ? '#009ee3' : '#bbb'}`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                  }}>
-                    {sel && <div style={{ width: '9px', height: '9px', borderRadius: '50%', background: '#009ee3' }} />}
+                <div key={m.id}>
+                  <div
+                    onClick={() => setMetodoElegido(m.id)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '0.75rem',
+                      padding: '0.8rem 1rem', borderRadius: '8px', cursor: 'pointer',
+                      marginBottom: '0.5rem',
+                      border: sel ? '2px solid #009ee3' : '1px solid #ddd',
+                    }}
+                  >
+                    <div style={{
+                      width: '18px', height: '18px', borderRadius: '50%',
+                      border: `1.5px solid ${sel ? '#009ee3' : '#bbb'}`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                    }}>
+                      {sel && <div style={{ width: '9px', height: '9px', borderRadius: '50%', background: '#009ee3' }} />}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 500 }}>{m.label}</div>
+                      {m.sub && <div style={{ fontSize: '0.8rem', color: '#888' }}>{m.sub}</div>}
+                    </div>
+                    <span style={{ fontSize: '0.85rem', color: m.costoLabel === 'Gratis' ? '#1e7e46' : '#222' }}>
+                      {m.costoLabel}
+                    </span>
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 500 }}>{m.label}</div>
-                    {m.sub && <div style={{ fontSize: '0.8rem', color: '#888' }}>{m.sub}</div>}
-                  </div>
-                  <span style={{ fontSize: '0.85rem', color: m.costo === null ? '#888' : '#222' }}>{precio}</span>
+
+                  {/* Sub-selector de zona correo */}
+                  {sel && m.id === 'correo' && (
+                    <div style={{ marginLeft: '2.5rem', marginBottom: '0.75rem', padding: '0.5rem 0' }}>
+                      <p style={{ fontSize: '0.8rem', color: '#888', margin: '0 0 0.5rem' }}>¿En qué zona estás?</p>
+                      {ZONAS_CORREO.map(zc => {
+                        const costo = costosVendedor[zc.key];
+                        if (costo === null || costo === undefined) return null; // vendedor no envía a esta zona
+                        const selZona = zonaCorreoElegida === zc.key;
+                        return (
+                          <div
+                            key={zc.key}
+                            onClick={() => setZonaCorreoElegida(zc.key)}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: '0.5rem',
+                              padding: '0.5rem 0.75rem', borderRadius: '6px', cursor: 'pointer',
+                              marginBottom: '0.35rem',
+                              background: selZona ? '#e6f0ff' : 'transparent',
+                            }}
+                          >
+                            <div style={{
+                              width: '14px', height: '14px', borderRadius: '50%',
+                              border: `1.5px solid ${selZona ? '#009ee3' : '#ccc'}`,
+                              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                            }}>
+                              {selZona && <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#009ee3' }} />}
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: '0.85rem', fontWeight: 500 }}>{zc.nombre}</div>
+                              <div style={{ fontSize: '0.7rem', color: '#999' }}>{zc.descripcion}</div>
+                            </div>
+                            <span style={{ fontSize: '0.8rem' }}>${fmt(costo)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Aviso si la dirección no tiene barrio (cadetería) */}
+                  {sel && m.id === 'cadeteria' && sinBarrio && (
+                    <div style={{ marginLeft: '2.5rem', marginBottom: '0.75rem', padding: '0.6rem 0.75rem', background: '#fff3d6', borderRadius: '8px', fontSize: '0.8rem', color: '#8a6d00' }}>
+                      Tu dirección no tiene barrio asignado. Agregá una nueva dirección con barrio para que podamos calcular el costo de envío.
+                    </div>
+                  )}
+
+                  {/* Aviso zona no disponible (cadetería) */}
+                  {sel && m.id === 'cadeteria' && !sinBarrio && costoCadeteria === null && zonaCadeteria && (
+                    <div style={{ marginLeft: '2.5rem', marginBottom: '0.75rem', padding: '0.6rem 0.75rem', background: '#fdecea', borderRadius: '8px', fontSize: '0.8rem', color: '#7a1f17' }}>
+                      Este vendedor no hace envíos a tu zona. Probá con otro método de entrega.
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
 
           {/* --- Turno (solo para cadetería) --- */}
-          {metodo?.pideTurno && (
+          {metodoActual?.pideTurno && (
             <div style={{ marginBottom: '1.5rem' }}>
               <label style={{ display: 'block', fontSize: '0.85rem', color: '#666', marginBottom: '0.4rem' }}>
                 ¿Cuándo te queda mejor recibirlo?
@@ -242,7 +413,7 @@ function CheckoutContenido() {
           )}
 
           {/* --- Dirección (solo si el método la pide) --- */}
-          {necesitaDireccion && (
+          {metodoActual?.pideDireccion && (
             <div style={{ marginBottom: '1.5rem' }}>
               <label style={{ display: 'block', fontSize: '0.85rem', color: '#666', marginBottom: '0.5rem' }}>
                 ¿A dónde lo enviamos?
@@ -284,6 +455,11 @@ function CheckoutContenido() {
                             {dir.es_principal && (
                               <span style={{ fontSize: '0.7rem', background: '#e6f0ff', color: '#1a5fb4', padding: '1px 6px', borderRadius: '20px' }}>
                                 Principal
+                              </span>
+                            )}
+                            {!dir.barrio_id && (
+                              <span style={{ fontSize: '0.7rem', background: '#fff3d6', color: '#8a6d00', padding: '1px 6px', borderRadius: '20px' }}>
+                                Sin barrio
                               </span>
                             )}
                           </div>
@@ -370,7 +546,7 @@ function CheckoutContenido() {
           <div style={{ border: '1px solid #ddd', borderRadius: '12px', padding: '1rem 1.25rem', marginBottom: '1rem' }}>
             <div style={{ fontWeight: 600, marginBottom: '0.5rem' }}>🏪 {local.vendedorNombre}</div>
             {local.items.map((item) => (
-              <div key={item.productoId} style={{
+              <div key={item.productoId + (item.variante || '')} style={{
                 display: 'flex', justifyContent: 'space-between',
                 padding: '0.4rem 0', borderTop: '1px solid #eee', fontSize: '0.9rem',
               }}>
@@ -385,8 +561,8 @@ function CheckoutContenido() {
           {/* Entrega */}
           <div style={{ border: '1px solid #ddd', borderRadius: '12px', padding: '1rem 1.25rem', marginBottom: '1rem' }}>
             <div style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Entrega</div>
-            <p style={{ margin: '0 0 0.25rem', fontSize: '0.9rem', color: '#555' }}>{metodo?.label}</p>
-            {metodo?.pideTurno && (
+            <p style={{ margin: '0 0 0.25rem', fontSize: '0.9rem', color: '#555' }}>{metodoActual?.label}</p>
+            {metodoActual?.pideTurno && (
               <p style={{ margin: 0, fontSize: '0.85rem', color: '#888' }}>
                 Preferencia: {turno.toLowerCase()}
               </p>
@@ -408,7 +584,7 @@ function CheckoutContenido() {
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', padding: '0.2rem 0' }}>
               <span style={{ color: '#666' }}>Envío</span>
-              <span>{metodo?.costo === null ? 'A coordinar' : (metodo?.costo === 0 ? 'Gratis' : `$${fmt(costoEnvio)}`)}</span>
+              <span>{metodoElegido === 'acordar' ? 'A coordinar' : (costoEnvio === 0 ? 'Gratis' : `$${fmt(costoEnvio)}`)}</span>
             </div>
             <div style={{
               display: 'flex', justifyContent: 'space-between', fontSize: '1.1rem', fontWeight: 600,
@@ -439,7 +615,6 @@ function CheckoutContenido() {
   );
 }
 
-// Envoltorio necesario para que useSearchParams funcione bien en Next.js
 export default function CheckoutPage() {
   return (
     <Suspense fallback={<main style={{ padding: '2rem', textAlign: 'center' }}>Cargando...</main>}>

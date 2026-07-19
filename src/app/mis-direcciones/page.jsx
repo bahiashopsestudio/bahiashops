@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import FormularioDireccion from '@/components/FormularioDireccion';
+import VolverAtras from '@/components/VolverAtras';
 
 export default function MisDireccionesPage() {
   const supabase = createClient();
@@ -44,6 +45,7 @@ export default function MisDireccionesPage() {
 
   return (
     <main style={{ padding: '2rem', maxWidth: '600px', width: '100%', margin: '0 auto' }}>
+      <VolverAtras href="/perfil" texto="Volver a Mi perfil" />
       <h1>Mis direcciones</h1>
       <p style={{ color: '#666', margin: '0.25rem 0 1.5rem' }}>
         Guardá tus direcciones para usarlas al comprar.

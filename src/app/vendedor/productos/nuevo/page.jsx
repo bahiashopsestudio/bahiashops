@@ -22,6 +22,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useRouter } from 'next/navigation';
 import VistaProducto from '@/components/VistaProducto';
 import { revisarPublicacion, ETIQUETAS_MODERACION } from '@/lib/moderacion';
+import VolverAtras from '@/components/VolverAtras';
 
 // Una miniatura arrastrable
 function SortableFoto({ foto, index, onQuitar }) {
@@ -90,8 +91,6 @@ export default function NuevoProductoPage() {
   const [valorNuevo, setValorNuevo] = useState('');
   const [guardandoProducto, setGuardandoProducto] = useState(false);
   const [mostrarPrevia, setMostrarPrevia] = useState(false);
-  // Resultado de moderación EN VIVO. Solo guardamos acá cuando hay bloqueo (rojo);
-  // si está limpio o solo tiene avisos, queda en null y no se muestra nada.
   const [bloqueoModeracion, setBloqueoModeracion] = useState(null);
 
   const sensors = useSensors(
@@ -114,7 +113,6 @@ export default function NuevoProductoPage() {
         setVendedorId(data.id);
         setCategoriaVendedor(data.categoria_id);
         setNombreNegocio(data.nombre_negocio || '');
-        console.log('Vendedor logueado → id:', data.id, '· categoria_id:', data.categoria_id);
       }
     }
     cargarVendedor();
@@ -151,9 +149,6 @@ export default function NuevoProductoPage() {
     cargarCategoria();
   }, [categoriaVendedor]);
 
-  // Moderación EN VIVO: cada vez que cambia el texto, esperamos 1 segundo a que
-  // el vendedor deje de tipear y recién ahí revisamos. Así el cartel no parpadea
-  // letra por letra. Solo nos quedamos con los bloqueos (rojo).
   useEffect(() => {
     const id = setTimeout(() => {
       const texto = `${datos.nombre} ${datos.descripcion} ${datos.marca}`;
@@ -163,7 +158,6 @@ export default function NuevoProductoPage() {
     return () => clearTimeout(id);
   }, [datos.nombre, datos.descripcion, datos.marca]);
 
-  // Cerrar la previa con Escape y bloquear el scroll del fondo mientras está abierta
   useEffect(() => {
     if (!mostrarPrevia) return;
     function alPresionarTecla(e) {
@@ -253,7 +247,6 @@ export default function NuevoProductoPage() {
   }
 
   async function guardarProducto() {
-    // 1. Validaciones
     if (!datos.nombre.trim()) { alert('Poné un nombre al producto.'); return; }
     if (!datos.descripcion.trim()) { alert('Escribí una descripción.'); return; }
     if (!datos.precio) { alert('El precio es obligatorio.'); return; }
@@ -266,14 +259,11 @@ export default function NuevoProductoPage() {
       alert('Si cargás variantes, completá el nombre (ej: Talle) y al menos una opción.');
       return;
     }
-    // El precio anterior, si existe, tiene que ser mayor al precio actual
     if (datos.precio_anterior && Number(datos.precio_anterior) <= Number(datos.precio)) {
       alert('El precio anterior tiene que ser mayor al precio actual (es el precio "de antes").');
       return;
     }
 
-    // 1.b. Moderación. El botón ya está deshabilitado si hay bloqueo, pero revisamos
-    // de nuevo por las dudas, y de paso sacamos los avisos para guardarlos.
     const textoARevisar = `${datos.nombre} ${datos.descripcion} ${datos.marca}`;
     const moderacion = revisarPublicacion(textoARevisar);
     if (moderacion.nivel === 'bloqueo') {
@@ -284,7 +274,6 @@ export default function NuevoProductoPage() {
     setGuardandoProducto(true);
 
     try {
-      // 2. Subir las fotos al Storage
       const urls = [];
       for (let i = 0; i < fotos.length; i++) {
         const foto = fotos[i];
@@ -306,7 +295,6 @@ export default function NuevoProductoPage() {
         urls.push(dataUrl.publicUrl);
       }
 
-      // 3. Insertar el producto
       const { data: productoCreado, error: errorProducto } = await supabase
         .from('productos')
         .insert({
@@ -322,7 +310,6 @@ export default function NuevoProductoPage() {
           estado: 'en_revision',
           tiene_variantes: tieneNombre && tieneValores,
           propiedad_1_nombre: tieneNombre ? nombrePropiedad.trim() : null,
-          // Avisos de moderación (puede ser []). El panel los lee para mostrar el cartelito.
           moderacion_avisos: moderacion.avisos,
         })
         .select()
@@ -334,7 +321,6 @@ export default function NuevoProductoPage() {
 
       const productoId = productoCreado.id;
 
-      // 4. Guardar las fotos en producto_media
       const mediaItems = urls.map((url, index) => ({
         producto_id: productoId,
         url: url,
@@ -351,7 +337,6 @@ export default function NuevoProductoPage() {
         throw new Error('El producto se guardó pero hubo un error con las fotos: ' + errorMedia.message);
       }
 
-      // 5. Guardar las variantes (si hay)
       if (tieneNombre && tieneValores) {
         const variantesItems = valores.map((valor) => ({
           producto_id: productoId,
@@ -367,7 +352,6 @@ export default function NuevoProductoPage() {
         }
       }
 
-      // 6. Todo salió bien
       alert('¡Producto guardado! Queda en revisión hasta que lo apruebes.');
       router.push('/vendedor/productos');
 
@@ -379,10 +363,8 @@ export default function NuevoProductoPage() {
     }
   }
 
-  // El botón Guardar se apaga mientras se está guardando O mientras hay un bloqueo activo.
   const guardarDeshabilitado = guardandoProducto || bloqueoModeracion !== null;
 
-  // Traducimos el estado del formulario al formato que entiende VistaProducto
   const productoParaPrevia = {
     nombre: datos.nombre,
     descripcion: datos.descripcion,
@@ -398,6 +380,9 @@ export default function NuevoProductoPage() {
 
   return (
     <main style={{ padding: '2rem', maxWidth: '800px', width: '100%', margin: '0 auto' }}>
+
+      <VolverAtras href="/vendedor/productos" texto="Volver a Mis productos" />
+
       <h1>Nuevo producto</h1>
 
       <section style={{ marginTop: '2rem', padding: '1.5rem', border: '1px solid #ddd', borderRadius: '8px' }}>
@@ -430,9 +415,6 @@ export default function NuevoProductoPage() {
             style={{ width: '100%', padding: '0.5rem' }}
           />
 
-          {/* CARTEL DE MODERACIÓN EN VIVO: justo debajo del campo de texto,
-              donde el vendedor escribe. Aparece solo cuando hay un bloqueo activo
-              (contacto, precio evadido o lenguaje ofensivo). */}
           {bloqueoModeracion && (
             <div
               role="alert"
@@ -448,7 +430,7 @@ export default function NuevoProductoPage() {
                   <li key={i} style={{ marginBottom: '0.2rem' }}>
                     {ETIQUETAS_MODERACION[b.tipo] || b.tipo}
                     {b.tipo !== 'lenguaje_ofensivo' && (
-                      <span style={{ color: '#a3392f' }}> — “{b.texto}”</span>
+                      <span style={{ color: '#a3392f' }}> — "{b.texto}"</span>
                     )}
                   </li>
                 ))}
@@ -676,7 +658,6 @@ export default function NuevoProductoPage() {
             onClick={(e) => e.stopPropagation()}
             style={{ background: 'white', borderRadius: '12px', maxWidth: '760px', width: '100%', margin: 'auto', overflow: 'hidden' }}
           >
-            {/* Encabezado */}
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '1rem 1.5rem', borderBottom: '1px solid #eee' }}>
               <div>
                 <p style={{ fontWeight: 600, margin: 0 }}>Previsualización</p>
@@ -692,7 +673,6 @@ export default function NuevoProductoPage() {
               </button>
             </div>
 
-            {/* Cuerpo: el mismo VistaProducto que la página real */}
             <div style={{ padding: '1.5rem' }}>
               <VistaProducto
                 producto={productoParaPrevia}
@@ -704,7 +684,6 @@ export default function NuevoProductoPage() {
               />
             </div>
 
-            {/* Pie */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', padding: '1rem 1.5rem', borderTop: '1px solid #eee', background: '#fafafa' }}>
               <span style={{ fontSize: '0.8rem', color: '#888' }}>Todavía no se guardó nada</span>
               <button

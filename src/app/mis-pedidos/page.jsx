@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
+import VolverAtras from '@/components/VolverAtras';
 
 // Cómo mostramos cada estado (nombre amigable y color).
 // Preparado para los estados de pago Y los de despacho que van a venir.
@@ -13,6 +14,7 @@ const ESTADOS = {
   preparando: { label: 'En preparación',   color: '#1a5fb4', bg: '#e6f0ff' },
   por_salir:  { label: 'Por salir',        color: '#1a5fb4', bg: '#e6f0ff' },
   despachado: { label: 'Despachado',       color: '#1e7e46', bg: '#e9f7ef' },
+  franja:     { label: 'Sale pronto',     color: '#7c3aed', bg: '#f3e8ff' },
 };
 
 function EstadoChip({ estado }) {
@@ -97,6 +99,8 @@ export default function MisPedidosPage() {
   if (pedidos.length === 0) {
     return (
       <main style={{ padding: '2rem', maxWidth: '700px', width: '100%', margin: '0 auto', textAlign: 'center' }}>
+        <VolverAtras href="/perfil" texto="Volver a Mi perfil" />
+
         <h1>Mis pedidos</h1>
         <p style={{ color: '#666', marginTop: '1rem' }}>Todavía no hiciste ninguna compra.</p>
         <button
@@ -112,6 +116,7 @@ export default function MisPedidosPage() {
 
   return (
     <main style={{ padding: '2rem', maxWidth: '700px', width: '100%', margin: '0 auto' }}>
+      <VolverAtras href="/perfil" texto="Volver a Mi perfil" />
       <h1>Mis pedidos</h1>
       <p style={{ color: '#666', margin: '0.25rem 0 1.5rem' }}>
         {pedidos.length} {pedidos.length === 1 ? 'pedido' : 'pedidos'}.

@@ -1,26 +1,77 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Bahia Shops design tokens */
+  --background: #f7f4ee;
+  --foreground: #211f1c;
+  --surface: #ffffff;
+  --surface-soft: #eee8dd;
+  --border-soft: #ded6c8;
+
+  --brand: #7668bd;
+  --brand-strong: #5b4aa3;
+  --brand-soft: #d9d3f3;
+
+  --accent-coral: #e8846b;
+  --accent-mint: #76c6a1;
+  --accent-gold: #e7bd52;
+  --accent-sky: #74a8d8;
+
+  --ink: #211f1c;
+  --ink-muted: #69625a;
+  --ink-soft: #9a9287;
+
+  --radius-sidebar-card: 12px;
+  --radius-hero: 20px;
+  --radius-map-card: 18px;
+  --radius-value-card: 18px;
+  --radius-product-card: 16px;
+  --radius-collection-block: 18px;
+  --radius-menu-card: 18px;
+  --radius-dropdown: 14px;
+  --radius-control: 10px;
+  --radius-pill: 999px;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --color-surface: var(--surface);
+  --color-surface-soft: var(--surface-soft);
+  --color-border-soft: var(--border-soft);
+  --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
+  --color-brand-soft: var(--brand-soft);
+  --color-accent-coral: var(--accent-coral);
+  --color-accent-mint: var(--accent-mint);
+  --color-accent-gold: var(--accent-gold);
+  --color-accent-sky: var(--accent-sky);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-soft: var(--ink-soft);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --radius-sidebar-card: var(--radius-sidebar-card);
+  --radius-hero: var(--radius-hero);
+  --radius-map-card: var(--radius-map-card);
+  --radius-value-card: var(--radius-value-card);
+  --radius-product-card: var(--radius-product-card);
+  --radius-collection-block: var(--radius-collection-block);
+  --radius-menu-card: var(--radius-menu-card);
+  --radius-dropdown: var(--radius-dropdown);
+  --radius-control: var(--radius-control);
+  --radius-pill: var(--radius-pill);
+
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-geist-mono);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-inter), Arial, Helvetica, sans-serif;
+}
+
+::selection {
+  background: var(--brand-soft);
+  color: var(--ink);
 }

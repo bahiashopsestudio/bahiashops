@@ -3,28 +3,27 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
+import VolverAtras from '@/components/VolverAtras';
 
-// Traduce el estado que guardamos en la base a una etiqueta visible + colores.
 function infoEstado(estado) {
-  if (estado === 'en_revision') {
-    return { texto: 'En revisión', fondo: '#fff3d6', color: '#8a6d00', punto: '#e0a800' };
-  }
-  if (estado === 'activo') {
-    return { texto: 'Publicado', fondo: '#e2f5e6', color: '#1e6b34', punto: '#2faa55' };
-  }
-  if (estado === 'pausado') {
-    return { texto: 'Pausado', fondo: '#eef0f2', color: '#555', punto: '#999' };
-  }
-  if (estado === 'agotado') {
-    return { texto: 'Agotado', fondo: '#fdeaea', color: '#a33', punto: '#d35' };
-  }
-  // Por las dudas: si apareciera un estado inesperado, lo mostramos tal cual.
+  if (estado === 'en_revision') return { texto: 'En revisión', fondo: '#fff3d6', color: '#8a6d00', punto: '#e0a800' };
+  if (estado === 'activo') return { texto: 'Publicado', fondo: '#e2f5e6', color: '#1e6b34', punto: '#2faa55' };
+  if (estado === 'pausado') return { texto: 'Pausado', fondo: '#eef0f2', color: '#555', punto: '#999' };
+  if (estado === 'agotado') return { texto: 'Agotado', fondo: '#fdeaea', color: '#a33', punto: '#d35' };
+  if (estado === 'rechazado') return { texto: 'Rechazado', fondo: '#f3f3f3', color: '#888', punto: '#aaa' };
   return { texto: estado, fondo: '#eee', color: '#666', punto: '#999' };
 }
 
 function formatearPrecio(valor) {
   if (valor === null || valor === undefined) return '';
   return Number(valor).toLocaleString('es-AR');
+}
+
+function extraerRutaStorage(url, bucket) {
+  const marker = `/${bucket}/`;
+  const idx = url.indexOf(marker);
+  if (idx === -1) return null;
+  return url.substring(idx + marker.length).split('?')[0];
 }
 
 export default function MisProductosPage() {
@@ -34,17 +33,13 @@ export default function MisProductosPage() {
   const [productos, setProductos] = useState([]);
   const [nombreCategoria, setNombreCategoria] = useState('');
   const [error, setError] = useState(null);
+  const [eliminando, setEliminando] = useState(null);
 
   useEffect(() => {
     async function cargarProductos() {
       try {
-        // 1. Quién es el vendedor logueado (mismo patrón que en el alta de producto)
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          setError('No hay una sesión iniciada.');
-          setCargando(false);
-          return;
-        }
+        if (!user) { setError('No hay una sesión iniciada.'); setCargando(false); return; }
 
         const { data: vendedor, error: errVendedor } = await supabase
           .from('vendedores')
@@ -53,14 +48,11 @@ export default function MisProductosPage() {
           .single();
 
         if (errVendedor || !vendedor) {
-          console.error('Error cargando el vendedor:', errVendedor);
           setError('No se pudo identificar tu cuenta de vendedor.');
           setCargando(false);
           return;
         }
 
-        // 2. Nombre de la categoría del vendedor (es una sola, vale para todos sus productos).
-        //    Si esta consulta falla no rompe nada: simplemente no mostramos la categoría.
         const { data: categoria } = await supabase
           .from('categorias')
           .select('nombre')
@@ -68,58 +60,34 @@ export default function MisProductosPage() {
           .single();
         if (categoria) setNombreCategoria(categoria.nombre);
 
-        // 3. Los productos del vendedor, del más nuevo al más viejo.
-        //    Ordenamos por id descendente: el id más alto es el último que se cargó.
         const { data: lista, error: errProductos } = await supabase
           .from('productos')
           .select('id, nombre, precio, precio_anterior, estado, subcategoria_id')
           .eq('vendedor_id', vendedor.id)
           .order('id', { ascending: false });
 
-        if (errProductos) {
-          console.error('Error cargando productos:', errProductos);
-          setError('No se pudieron cargar tus productos.');
-          setCargando(false);
-          return;
-        }
-
-        if (!lista || lista.length === 0) {
-          setProductos([]);
-          setCargando(false);
-          return;
-        }
+        if (errProductos) { setError('No se pudieron cargar tus productos.'); setCargando(false); return; }
+        if (!lista || lista.length === 0) { setProductos([]); setCargando(false); return; }
 
         const ids = lista.map((p) => p.id);
         const subIds = [...new Set(lista.map((p) => p.subcategoria_id).filter(Boolean))];
 
-        // 4. La foto principal de cada producto, en UNA sola consulta para todos.
         const { data: medias } = await supabase
           .from('producto_media')
           .select('producto_id, url, es_principal, orden')
           .in('producto_id', ids)
           .eq('tipo', 'foto');
 
-        // 5. Los nombres de las subcategorías usadas, también en una sola consulta.
         const nombresSub = {};
         if (subIds.length > 0) {
-          const { data: subs } = await supabase
-            .from('subcategorias')
-            .select('id, nombre')
-            .in('id', subIds);
+          const { data: subs } = await supabase.from('subcategorias').select('id, nombre').in('id', subIds);
           if (subs) subs.forEach((s) => { nombresSub[s.id] = s.nombre; });
         }
 
-        // 6. Armamos cada producto con su foto principal y su subcategoría.
         const completos = lista.map((p) => {
           const fotosDeEste = (medias || []).filter((m) => m.producto_id === p.id);
-          const principal =
-            fotosDeEste.find((m) => m.es_principal) ||
-            fotosDeEste.sort((a, b) => a.orden - b.orden)[0];
-          return {
-            ...p,
-            foto: principal ? principal.url : null,
-            subcategoria: p.subcategoria_id ? nombresSub[p.subcategoria_id] : null,
-          };
+          const principal = fotosDeEste.find((m) => m.es_principal) || fotosDeEste.sort((a, b) => a.orden - b.orden)[0];
+          return { ...p, foto: principal ? principal.url : null, subcategoria: p.subcategoria_id ? nombresSub[p.subcategoria_id] : null };
         });
 
         setProductos(completos);
@@ -133,10 +101,103 @@ export default function MisProductosPage() {
     cargarProductos();
   }, []);
 
+  // ── Pausar / Reactivar ──
+  // Solo aplica a productos activos, pausados o agotados.
+  // Los que están en_revision o rechazados no son visibles de todas formas.
+
+  async function toggleEstado(producto) {
+    const nuevoEstado = producto.estado === 'activo' ? 'pausado' : 'activo';
+
+    const { error } = await supabase
+      .from('productos')
+      .update({ estado: nuevoEstado })
+      .eq('id', producto.id);
+
+    if (error) {
+      alert('No se pudo cambiar el estado del producto.');
+      return;
+    }
+
+    setProductos(prev =>
+      prev.map(p => p.id === producto.id ? { ...p, estado: nuevoEstado } : p)
+    );
+  }
+
+  // ── Eliminar ──
+
+  async function eliminarProducto(producto) {
+    const confirmar = window.confirm(
+      `¿Seguro que querés eliminar "${producto.nombre}"? Esta acción no se puede deshacer.`
+    );
+    if (!confirmar) return;
+
+    setEliminando(producto.id);
+
+    try {
+      // 1. Traer las fotos para limpiar el storage
+      const { data: medias } = await supabase
+        .from('producto_media')
+        .select('url')
+        .eq('producto_id', producto.id);
+
+      // 2. Eliminar archivos del storage
+      if (medias && medias.length > 0) {
+        const rutas = medias.map(m => extraerRutaStorage(m.url, 'productos')).filter(Boolean);
+        if (rutas.length > 0) {
+          await supabase.storage.from('productos').remove(rutas);
+        }
+      }
+
+      // 3. Eliminar variantes, media, producto
+      await supabase.from('producto_variantes').delete().eq('producto_id', producto.id);
+      await supabase.from('producto_media').delete().eq('producto_id', producto.id);
+
+      const { error: errDelete } = await supabase
+        .from('productos')
+        .delete()
+        .eq('id', producto.id);
+
+      if (errDelete) throw errDelete;
+
+      setProductos(prev => prev.filter(p => p.id !== producto.id));
+
+    } catch (err) {
+      console.error(err);
+
+      // Detectar error de foreign key (tiene pedidos asociados)
+      const esForeignKey =
+        err?.message?.includes('foreign key') ||
+        err?.message?.includes('violates') ||
+        err?.code === '23503';
+
+      if (esForeignKey) {
+        alert(
+          'Este producto tiene pedidos asociados y no se puede eliminar.\n\n' +
+          'Si no querés que los compradores lo vean, podés pausarlo con el botón "Pausar" en la lista de productos.'
+        );
+      } else {
+        alert('Hubo un error al eliminar. Intentá de nuevo.');
+      }
+    } finally {
+      setEliminando(null);
+    }
+  }
+
+  // ── Helpers de UI ──
+
+  // Muestra el botón Pausar/Reactivar solo para estados donde tiene sentido
+  function puedeToggle(estado) {
+    return estado === 'activo' || estado === 'pausado' || estado === 'agotado';
+  }
+
+  function textoToggle(estado) {
+    return estado === 'activo' ? 'Pausar' : 'Reactivar';
+  }
+
   return (
     <main style={{ padding: '2rem', maxWidth: '800px', width: '100%', margin: '0 auto' }}>
+      <VolverAtras href="/perfil" texto="Volver a Mi perfil" />
 
-      {/* Encabezado */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <h1 style={{ margin: 0 }}>Mis productos</h1>
         {productos.length > 0 && (
@@ -149,29 +210,24 @@ export default function MisProductosPage() {
         )}
       </div>
 
-      {/* Cargando */}
-      {cargando && (
-        <p style={{ color: '#888' }}>Cargando tus productos...</p>
-      )}
+      {cargando && <p style={{ color: '#888' }}>Cargando tus productos...</p>}
+      {!cargando && error && <p style={{ color: '#c00' }}>{error}</p>}
 
-      {/* Error */}
-      {!cargando && error && (
-        <p style={{ color: '#c00' }}>{error}</p>
-      )}
-
-      {/* Lista de productos */}
       {!cargando && !error && productos.map((p) => {
         const estado = infoEstado(p.estado);
+        const estaEliminando = eliminando === p.id;
         return (
           <div
             key={p.id}
-            style={{ display: 'flex', gap: '1rem', alignItems: 'center', background: '#fff', border: '1px solid #e3e3e3', borderRadius: '10px', padding: '0.9rem', marginBottom: '0.9rem' }}
+            style={{
+              display: 'flex', gap: '1rem', alignItems: 'center', background: '#fff',
+              border: '1px solid #e3e3e3', borderRadius: '10px', padding: '0.9rem', marginBottom: '0.9rem',
+              opacity: estaEliminando ? 0.5 : 1, transition: 'opacity 0.2s',
+            }}
           >
             {/* Foto */}
             <div style={{ width: '84px', height: '84px', borderRadius: '8px', flexShrink: 0, background: '#f0f0f0', overflow: 'hidden' }}>
-              {p.foto && (
-                <img src={p.foto} alt={p.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              )}
+              {p.foto && <img src={p.foto} alt={p.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
             </div>
 
             {/* Info */}
@@ -194,20 +250,53 @@ export default function MisProductosPage() {
               </span>
             </div>
 
-            {/* Acción: por ahora sólo "Ver" */}
-            <div>
+            {/* Acciones */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', flexShrink: 0 }}>
+              <Link
+                href={`/vendedor/productos/${p.id}/editar`}
+                style={{ background: '#fff', border: '1px solid #222', borderRadius: '7px', padding: '0.4rem 0.9rem', fontSize: '0.85rem', color: '#222', textDecoration: 'none', whiteSpace: 'nowrap', textAlign: 'center' }}
+              >
+                Editar
+              </Link>
+
+              {puedeToggle(p.estado) && (
+                <button
+                  onClick={() => toggleEstado(p)}
+                  style={{
+                    background: '#fff',
+                    border: `1px solid ${p.estado === 'activo' ? '#e0a800' : '#2faa55'}`,
+                    borderRadius: '7px', padding: '0.4rem 0.9rem', fontSize: '0.85rem',
+                    color: p.estado === 'activo' ? '#8a6d00' : '#1e6b34',
+                    cursor: 'pointer', whiteSpace: 'nowrap',
+                  }}
+                >
+                  {textoToggle(p.estado)}
+                </button>
+              )}
+
               <Link
                 href={`/producto/${p.id}`}
-                style={{ background: '#fff', border: '1px solid #ccc', borderRadius: '7px', padding: '0.4rem 0.9rem', fontSize: '0.85rem', color: '#222', textDecoration: 'none', whiteSpace: 'nowrap' }}
+                style={{ background: '#fff', border: '1px solid #ccc', borderRadius: '7px', padding: '0.4rem 0.9rem', fontSize: '0.85rem', color: '#222', textDecoration: 'none', whiteSpace: 'nowrap', textAlign: 'center' }}
               >
                 Ver
               </Link>
+
+              <button
+                onClick={() => eliminarProducto(p)}
+                disabled={estaEliminando}
+                style={{
+                  background: '#fff', border: '1px solid #e0c0c0', borderRadius: '7px',
+                  padding: '0.4rem 0.9rem', fontSize: '0.85rem', color: '#c44',
+                  cursor: estaEliminando ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap',
+                }}
+              >
+                {estaEliminando ? '...' : 'Eliminar'}
+              </button>
             </div>
           </div>
         );
       })}
 
-      {/* Estado vacío */}
       {!cargando && !error && productos.length === 0 && (
         <div style={{ background: '#fff', border: '1px dashed #d0d0d0', borderRadius: '12px', padding: '3rem 2rem', textAlign: 'center' }}>
           <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>📦</div>
@@ -221,7 +310,6 @@ export default function MisProductosPage() {
           </Link>
         </div>
       )}
-
     </main>
   );
 }

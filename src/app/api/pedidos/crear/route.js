@@ -158,7 +158,7 @@ export async function POST(request) {
 
   // 9. Devolver el link de pago al checkout para que mande al comprador.
   return NextResponse.json({
-    checkout_url: mpData.sandbox_init_point,
+    checkout_url: mpData.init_point,
     pedido_id: pedido.id,
   });
 }
