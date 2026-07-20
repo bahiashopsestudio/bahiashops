@@ -2,19 +2,20 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
-export default function LoginPage() {
+export default function RegistroPage() {
   const supabase = createClient()
-  const router = useRouter()
 
+  const [nombre, setNombre] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [passwordConfirm, setPasswordConfirm] = useState('')
   const [error, setError] = useState('')
   const [cargando, setCargando] = useState(false)
+  const [enviado, setEnviado] = useState(false)
 
-  async function loginConEmail(e) {
+  async function registrar(e) {
     e.preventDefault()
     setError('')
 
@@ -23,29 +24,44 @@ export default function LoginPage() {
       return
     }
 
+    if (password.length < 6) {
+      setError('La contraseña tiene que tener al menos 6 caracteres.')
+      return
+    }
+
+    if (password !== passwordConfirm) {
+      setError('Las contraseñas no coinciden.')
+      return
+    }
+
     setCargando(true)
 
-    const { error: authError } = await supabase.auth.signInWithPassword({
+    const { error: authError } = await supabase.auth.signUp({
       email: email.trim(),
       password,
+      options: {
+        data: {
+          full_name: nombre.trim() || null,
+        },
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+      },
     })
 
     if (authError) {
-      if (authError.message.includes('Invalid login')) {
-        setError('Email o contraseña incorrectos.')
-      } else if (authError.message.includes('Email not confirmed')) {
-        setError('Revisá tu casilla de email y confirmá tu cuenta antes de iniciar sesión.')
+      if (authError.message.includes('already registered')) {
+        setError('Este email ya tiene una cuenta. Probá iniciar sesión.')
       } else {
-        setError('No se pudo iniciar sesión. Probá de nuevo.')
+        setError('No se pudo crear la cuenta. Probá de nuevo.')
       }
       setCargando(false)
       return
     }
 
-    router.push('/')
+    setEnviado(true)
+    setCargando(false)
   }
 
-  async function loginConGoogle() {
+  async function registrarConGoogle() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -54,9 +70,33 @@ export default function LoginPage() {
     })
 
     if (error) {
-      console.error('Error al iniciar sesión con Google:', error.message)
       setError('Hubo un error con Google. Probá de nuevo.')
     }
+  }
+
+  // Pantalla de confirmación después del registro
+  if (enviado) {
+    return (
+      <main className="min-h-screen flex items-center justify-center px-4 bg-white">
+        <div className="w-full max-w-sm text-center">
+          <div className="text-4xl mb-4">✉️</div>
+          <h1 className="text-xl font-bold text-gray-900 mb-2">Revisá tu email</h1>
+          <p className="text-sm text-gray-500 mb-2">
+            Te enviamos un enlace de confirmación a:
+          </p>
+          <p className="text-sm font-semibold text-gray-900 mb-6">{email}</p>
+          <p className="text-sm text-gray-400 mb-6">
+            Hacé click en el enlace del email para activar tu cuenta. Si no lo ves, revisá la carpeta de spam.
+          </p>
+          <Link
+            href="/login"
+            className="inline-block px-6 py-3 bg-[#222] text-white rounded-xl text-sm font-semibold hover:bg-[#333] transition"
+          >
+            Ir a iniciar sesión
+          </Link>
+        </div>
+      </main>
+    )
   }
 
   return (
@@ -72,12 +112,23 @@ export default function LoginPage() {
               className="h-10 mx-auto mb-4 object-contain"
             />
           </Link>
-          <h1 className="text-xl font-bold text-gray-900">Iniciá sesión</h1>
-          <p className="text-sm text-gray-400 mt-1">Entrá a tu cuenta de Bahía Shops</p>
+          <h1 className="text-xl font-bold text-gray-900">Creá tu cuenta</h1>
+          <p className="text-sm text-gray-400 mt-1">Registrate en Bahía Shops</p>
         </div>
 
-        {/* Formulario email/contraseña */}
-        <form onSubmit={loginConEmail} className="space-y-4">
+        {/* Formulario */}
+        <form onSubmit={registrar} className="space-y-4">
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">Nombre (opcional)</label>
+            <input
+              type="text"
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              placeholder="Tu nombre"
+              className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#8B7EC8]"
+            />
+          </div>
+
           <div>
             <label className="block text-sm text-gray-600 mb-1">Email</label>
             <input
@@ -90,17 +141,23 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-sm text-gray-600">Contraseña</label>
-              <Link href="/recuperar-contrasena" className="text-xs text-[#8B7EC8] hover:text-[#7a6db7]">
-                ¿Olvidaste tu contraseña?
-              </Link>
-            </div>
+            <label className="block text-sm text-gray-600 mb-1">Contraseña</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Tu contraseña"
+              placeholder="Mínimo 6 caracteres"
+              className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#8B7EC8]"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">Repetir contraseña</label>
+            <input
+              type="password"
+              value={passwordConfirm}
+              onChange={(e) => setPasswordConfirm(e.target.value)}
+              placeholder="Repetí la contraseña"
               className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#8B7EC8]"
             />
           </div>
@@ -115,7 +172,7 @@ export default function LoginPage() {
             className="w-full py-3 rounded-xl text-sm font-semibold text-white transition cursor-pointer"
             style={{ background: cargando ? '#999' : '#222' }}
           >
-            {cargando ? 'Entrando...' : 'Iniciar sesión'}
+            {cargando ? 'Creando cuenta...' : 'Crear cuenta'}
           </button>
         </form>
 
@@ -128,7 +185,7 @@ export default function LoginPage() {
 
         {/* Google */}
         <button
-          onClick={loginConGoogle}
+          onClick={registrarConGoogle}
           className="w-full py-3 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition cursor-pointer flex items-center justify-center gap-3"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -140,18 +197,11 @@ export default function LoginPage() {
           Continuar con Google
         </button>
 
-        {/* Link a registro */}
+        {/* Link a login */}
         <p className="text-center text-sm text-gray-400 mt-6">
-          ¿No tenés cuenta?{' '}
-          <Link href="/registro" className="text-[#8B7EC8] font-medium hover:text-[#7a6db7]">
-            Registrate
-          </Link>
-        </p>
-
-        {/* Explorar sin cuenta */}
-        <p className="text-center text-sm text-gray-300 mt-3">
-          <Link href="/" className="hover:text-gray-500">
-            Explorar sin cuenta →
+          ¿Ya tenés cuenta?{' '}
+          <Link href="/login" className="text-[#8B7EC8] font-medium hover:text-[#7a6db7]">
+            Iniciá sesión
           </Link>
         </p>
 
