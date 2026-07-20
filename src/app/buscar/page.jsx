@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
@@ -16,7 +16,7 @@ function getImageUrl(media) {
   return sorted[0]?.url || null
 }
 
-export default function BuscarPage() {
+function BuscarContenido() {
   const searchParams = useSearchParams()
   const q = searchParams.get('q') || ''
 
@@ -146,5 +146,13 @@ export default function BuscarPage() {
         )}
       </div>
     </main>
+  )
+}
+
+export default function BuscarPage() {
+  return (
+    <Suspense fallback={<main className="min-h-screen flex items-center justify-center"><p className="text-gray-400">Cargando...</p></main>}>
+      <BuscarContenido />
+    </Suspense>
   )
 }
