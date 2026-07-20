@@ -24,9 +24,14 @@ export default function ActualizarContrasenaPage() {
       return
     }
 
-    if (password.length < 6) {
-      setError('La contraseña tiene que tener al menos 6 caracteres.')
-      return
+    if (password.length < 8) {
+        setError('La contraseña tiene que tener al menos 8 caracteres.')
+        return
+    }
+
+    if (!/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+        setError('La contraseña tiene que combinar letras y números.')
+        return
     }
 
     if (password !== passwordConfirm) {
@@ -88,7 +93,7 @@ export default function ActualizarContrasenaPage() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Mínimo 6 caracteres"
+              placeholder="Mínimo 8 caracteres, letras y números"
               className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#8B7EC8]"
             />
           </div>

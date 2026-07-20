@@ -19,15 +19,25 @@ export default function RegistroPage() {
     e.preventDefault()
     setError('')
 
+    if (!nombre.trim()) {
+        setError('Completá tu nombre y apellido.')
+        return
+    }
+
     if (!email.trim() || !password) {
       setError('Completá email y contraseña.')
       return
     }
 
-    if (password.length < 6) {
-      setError('La contraseña tiene que tener al menos 6 caracteres.')
-      return
-    }
+    if (password.length < 8) {
+        setError('La contraseña tiene que tener al menos 8 caracteres.')
+        return
+        }
+
+        if (!/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+        setError('La contraseña tiene que combinar letras y números.')
+        return
+        }
 
     if (password !== passwordConfirm) {
       setError('Las contraseñas no coinciden.')
@@ -119,7 +129,7 @@ export default function RegistroPage() {
         {/* Formulario */}
         <form onSubmit={registrar} className="space-y-4">
           <div>
-            <label className="block text-sm text-gray-600 mb-1">Nombre (opcional)</label>
+            <label className="block text-sm text-gray-600 mb-1">Nombre y Apellido</label>
             <input
               type="text"
               value={nombre}
