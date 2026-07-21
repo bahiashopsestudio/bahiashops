@@ -161,6 +161,22 @@ export default function VendedorPedidosPage() {
         prev.map(p => p.id === pedido.id ? { ...p, estado: accion.siguiente } : p)
       );
 
+      // Enviar email al comprador cuando se despacha
+    if (accion.siguiente === 'despachado') {
+      try {
+        const resEmail = await fetch('/api/notificaciones/despacho', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pedidoId: pedido.id }),
+        });
+        if (!resEmail.ok) {
+          alert('El pedido se marcó como despachado, pero no se pudo enviar el email al comprador. Podés avisarle por WhatsApp.');
+        }
+      } catch {
+        alert('El pedido se marcó como despachado, pero no se pudo enviar el email al comprador. Podés avisarle por WhatsApp.');
+      }
+    }
+
       if (accion.whatsapp && pedido.direccion?.telefono) {
         const mensaje = accion.mensajeWA(pedido, franja, nombreNegocio);
         abrirWhatsApp(pedido.direccion.telefono, mensaje);
