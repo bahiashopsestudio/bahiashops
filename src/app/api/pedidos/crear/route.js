@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
+import { getValidAccessToken } from '@/lib/mercadopago/tokens';
 
 export async function POST(request) {
   // 1. ¿Quién está comprando? (necesitamos su sesión)
@@ -38,15 +39,18 @@ export async function POST(request) {
     process.env.SUPABASE_SERVICE_ROLE_KEY
   );
 
-  const { data: mpCuenta, error: errorMp } = await admin
-    .from('mercadopago_cuentas')
-    .select('access_token')
-    .eq('vendedor_id', vendedorId)
-    .single();
-
-  if (errorMp || !mpCuenta) {
+  // 4b. Obtener un token válido del vendedor (se auto-renueva si está por vencer).
+  let accessToken;
+  try {
+    accessToken = await getValidAccessToken(vendedorId, admin);
+  } catch (err) {
+    const mensajes = {
+      VENDEDOR_SIN_MP: 'Este vendedor no tiene MercadoPago conectado.',
+      TOKEN_SIN_REFRESH: 'La conexión de MercadoPago del vendedor venció y no se pudo renovar.',
+      REFRESH_RECHAZADO: 'La conexión de MercadoPago del vendedor fue revocada. Tiene que reconectar.',
+    };
     return NextResponse.json(
-      { error: 'Este vendedor no tiene MercadoPago conectado.' },
+      { error: mensajes[err.message] || 'Error con la conexión de MercadoPago del vendedor.' },
       { status: 400 }
     );
   }
@@ -125,7 +129,7 @@ export async function POST(request) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${mpCuenta.access_token}`,
+      'Authorization': `Bearer ${accessToken}`,
     },
     body: JSON.stringify({
       items: mpItems,
