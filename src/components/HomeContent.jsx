@@ -446,7 +446,11 @@ export default function HomeContent({ categorias, recientes, elegidos }) {
 
           {/* ── Footer mínimo ── */}
           <footer className="bg-[#1a1a1a] text-gray-500 text-xs text-center py-6">
-            © 2026 Bahía Shops — Bahía Blanca, Argentina
+            <div>© 2026 Bahía Shops — Bahía Blanca, Argentina</div>
+            <div className="mt-2 flex justify-center gap-4">
+              <a href="/privacidad" className="hover:text-white transition">Política de privacidad</a>
+              <a href="/terminos" className="hover:text-white transition">Términos y condiciones</a>
+            </div>
           </footer>
 
         </main>
