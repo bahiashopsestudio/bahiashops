@@ -2,12 +2,11 @@
 
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import Navbar from '@/components/Navbar'
 import Buscador from '@/components/Buscador'
 import BotonFavorito from '@/components/BotonFavorito'
-import dynamic from 'next/dynamic'
 
-// Leaflet no soporta SSR — lo cargamos solo en el cliente
 const MapaHome = dynamic(() => import('@/components/MapaHome'), {
   ssr: false,
   loading: () => (
@@ -16,6 +15,7 @@ const MapaHome = dynamic(() => import('@/components/MapaHome'), {
     </div>
   ),
 })
+
 
 // ═══════════════════════════════════════════════════════════
 // CONFIGURACIÓN
@@ -92,7 +92,6 @@ export default function HomeContent({ categorias, recientes, elegidos, vendedore
 
   return (
     <>
-      {/* Inter font — todos los pesos */}
       <link
         rel="stylesheet"
         href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&display=swap"
@@ -224,7 +223,7 @@ export default function HomeContent({ categorias, recientes, elegidos, vendedore
                 subí tus productos y empezá a vender hoy.
               </p>
               <Link
-                href="/vendedor/registro"
+                href="/vendedor/nuevo"
                 className="inline-block bg-[#e60000] text-white px-8 py-3.5 rounded-full text-sm font-medium hover:bg-[#cc0000] transition"
               >
                 Empezá a vender
@@ -233,8 +232,8 @@ export default function HomeContent({ categorias, recientes, elegidos, vendedore
           </section>
 
 
-          {/* ── Footer — pb-20 para que el buscador flotante no tape ── */}
-          <footer className="bg-[#0a0a0a] text-white/25 text-xs py-8 pb-20 lg:pb-8 px-6">
+          {/* ── Footer ── */}
+          <footer className="bg-[#0a0a0a] text-white/25 text-xs pt-8 pb-24 px-6">
             <div className="max-w-5xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
               <div className="font-light">© 2026 Bahía Shops — Bahía Blanca, Argentina</div>
               <div className="flex gap-6 font-light">
@@ -318,12 +317,10 @@ function MapaSection({ vendedores = [] }) {
   return (
     <section className="py-12 md:py-20 px-4 md:px-8">
       <div className="max-w-5xl mx-auto">
-        {/* Label alineado a la izquierda */}
         <p className="text-[9px] font-medium tracking-[3px] uppercase text-[#0a0a0a]/25 mb-4">
           Cerca tuyo
         </p>
 
-        {/* Título y subtítulo centrados */}
         <div className="text-center">
           <h2 className="text-3xl md:text-5xl font-black text-[#0a0a0a] tracking-tight leading-[1.05] mb-3">
             Encontrá quién vende
@@ -336,10 +333,8 @@ function MapaSection({ vendedores = [] }) {
           </p>
         </div>
 
-        {/* Mapa real con Leaflet */}
         <MapaHome vendedores={vendedores} />
 
-        {/* Leyenda */}
         <div className="flex gap-5 mt-4 justify-center">
           <div className="flex items-center gap-2">
             <div className="w-[8px] h-[8px] rounded-full bg-[#e60000] shrink-0" />
@@ -351,10 +346,9 @@ function MapaSection({ vendedores = [] }) {
           </div>
         </div>
 
-        {/* CTA */}
         <div className="mt-8 text-center">
           <Link
-            href="/vendedor/registro"
+            href="/vendedor/nuevo"
             className="inline-block bg-[#0a0a0a] text-[#F5F2EC] px-7 py-3 rounded-full text-sm font-medium hover:bg-[#2a2a2a] transition"
           >
             Sumar mi negocio
@@ -406,8 +400,6 @@ function CtaAnimado() {
     requestAnimationFrame(step)
   }
 
-  const words = ['¿Tenés', 'un', 'emprendimiento?']
-
   return (
     <section
       ref={sectionRef}
@@ -415,26 +407,47 @@ function CtaAnimado() {
     >
       <div className="max-w-3xl mx-auto">
         <div className="text-3xl md:text-5xl font-black text-[#0a0a0a] tracking-tight leading-[1.1]">
-          {words.map((word, i) => (
-            <span
-              key={i}
-              className="inline-block transition-all duration-500"
-              style={{
-                opacity: visible ? 1 : 0,
-                transform: visible ? 'translateY(0)' : 'translateY(16px)',
-                transitionDelay: `${i * 120}ms`,
-              }}
-            >
-              {word}{' '}
-            </span>
-          ))}
-          <br />
           <span
-            className="inline-block transition-all duration-500"
+            className="transition-all duration-500"
             style={{
               opacity: visible ? 1 : 0,
               transform: visible ? 'translateY(0)' : 'translateY(16px)',
-              transitionDelay: `${words.length * 120}ms`,
+              transitionDelay: '450ms',
+              display: 'inline',
+            }}
+          >
+            ¿Tenés{' '}
+          </span>
+          <span
+            className="transition-all duration-500"
+            style={{
+              opacity: visible ? 1 : 0,
+              transform: visible ? 'translateY(0)' : 'translateY(16px)',
+              transitionDelay: '400ms',
+              display: 'inline',
+            }}
+          >
+            un{' '}
+          </span>
+          <span
+            className="transition-all duration-500"
+            style={{
+              opacity: visible ? 1 : 0,
+              transform: visible ? 'translateY(0)' : 'translateY(16px)',
+              transitionDelay: '450ms',
+              display: 'inline',
+            }}
+          >
+            emprendimiento?
+          </span>
+          <br />
+          <span
+            className="transition-all duration-500"
+            style={{
+              opacity: visible ? 1 : 0,
+              transform: visible ? 'translateY(0)' : 'translateY(16px)',
+              transitionDelay: '450ms',
+              display: 'inline',
             }}
           >
             Sumate.
@@ -446,13 +459,10 @@ function CtaAnimado() {
           style={{
             opacity: visible ? 1 : 0,
             transform: visible ? 'translateY(0)' : 'translateY(12px)',
-            transitionDelay: '600ms',
+            transitionDelay: '700ms',
           }}
         >
-          <Link href="/vendedor/registro" className="text-[#0a0a0a] font-medium underline underline-offset-2">
-            Registrá tu negocio
-          </Link>
-          , subí tus productos y empezá a vender. Así de simple.
+          Registrá tu negocio, subí tus productos y empezá a vender. Así de simple.
         </p>
 
         <div
@@ -464,7 +474,7 @@ function CtaAnimado() {
           }}
         >
           <Link
-            href="/vendedor/registro"
+            href="/vendedor/nuevo"
             className="inline-block bg-[#e60000] text-white px-7 py-3 rounded-full text-sm font-medium hover:bg-[#cc0000] transition"
           >
             Empezar a vender
@@ -540,83 +550,85 @@ function RecienLlegados({ productos }) {
   return (
     <section className="pt-8 pb-6 md:pt-10 md:pb-8 px-4 md:px-8">
       <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl md:text-2xl font-black text-[#0a0a0a] tracking-tight">
-            Recién llegados
-          </h2>
+        <h2 className="text-xl md:text-2xl font-black text-[#0a0a0a] tracking-tight mb-6">
+          Recién llegados
+        </h2>
+
+        <div className="relative">
           {productos.length > 3 && (
-            <div className="flex gap-2">
-              <button
-                onClick={() => scroll(-1)}
-                className={`w-7 h-7 flex items-center justify-center cursor-pointer transition-all bg-[#0a0a0a] rounded-full ${canScrollLeft ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-                aria-label="Anterior"
-              >
-                <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
-                </svg>
-              </button>
-              <button
-                onClick={() => scroll(1)}
-                className={`w-7 h-7 flex items-center justify-center cursor-pointer transition-all bg-[#0a0a0a] rounded-full ${canScrollRight ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-                aria-label="Siguiente"
-              >
-                <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-                </svg>
-              </button>
-            </div>
+            <button
+              onClick={() => scroll(-1)}
+              className={`absolute left-0 top-1/2 -translate-y-1/2 z-10 w-9 h-9 flex items-center justify-center cursor-pointer transition-all bg-white/90 backdrop-blur-sm shadow-md rounded-full ${canScrollLeft ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+              aria-label="Anterior"
+            >
+              <svg className="w-4 h-4 text-[#0a0a0a]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+              </svg>
+            </button>
           )}
-        </div>
 
-        <div
-          ref={scrollRef}
-          className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory"
-          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-        >
-          {productos.map((prod) => {
-            const imageUrl = getImageUrl(prod.media)
-            return (
-              <div key={prod.id} className="shrink-0 w-48 md:w-56 snap-start relative">
-                <Link href={`/producto/${prod.id}`} className="block group">
-                  <div className="aspect-square bg-[#ECEAE3] rounded-xl overflow-hidden flex items-center justify-center">
-                    {imageUrl ? (
-                      <img src={imageUrl} alt={prod.nombre} className="w-full h-full object-cover" />
-                    ) : (
-                      <span className="text-[#0a0a0a]/20 text-xs font-light">foto</span>
-                    )}
+          <div
+            ref={scrollRef}
+            className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          >
+            {productos.map((prod) => {
+              const imageUrl = getImageUrl(prod.media)
+              return (
+                <div key={prod.id} className="shrink-0 w-48 md:w-56 snap-start relative">
+                  <Link href={`/producto/${prod.id}`} className="block group">
+                    <div className="aspect-square bg-[#ECEAE3] rounded-xl overflow-hidden flex items-center justify-center">
+                      {imageUrl ? (
+                        <img src={imageUrl} alt={prod.nombre} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-[#0a0a0a]/20 text-xs font-light">foto</span>
+                      )}
+                    </div>
+                    <div className="mt-2.5">
+                      <p className="text-sm font-medium text-[#0a0a0a] group-hover:text-[#0a0a0a]/50 transition truncate">{prod.nombre}</p>
+                      <p className="text-xs text-[#0a0a0a]/30 mt-0.5 font-light">{prod.vendedor?.nombre_negocio}</p>
+                      <p className="text-sm font-semibold text-[#0a0a0a] mt-1">
+                        ${Number(prod.precio).toLocaleString('es-AR')}
+                      </p>
+                    </div>
+                  </Link>
+                  <div className="absolute top-2 right-2">
+                    <BotonFavorito
+                      productoId={prod.id}
+                      className="w-8 h-8 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center text-gray-500"
+                    />
                   </div>
-                  <div className="mt-2.5">
-                    <p className="text-sm font-medium text-[#0a0a0a] group-hover:text-[#0a0a0a]/50 transition truncate">{prod.nombre}</p>
-                    <p className="text-xs text-[#0a0a0a]/30 mt-0.5 font-light">{prod.vendedor?.nombre_negocio}</p>
-                    <p className="text-sm font-semibold text-[#0a0a0a] mt-1">
-                      ${Number(prod.precio).toLocaleString('es-AR')}
-                    </p>
-                  </div>
-                </Link>
-                <div className="absolute top-2 right-2">
-                  <BotonFavorito
-                    productoId={prod.id}
-                    className="w-8 h-8 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center text-gray-500"
-                  />
                 </div>
-              </div>
-            )
-          })}
+              )
+            })}
 
-          {productos.length < 4 && (
-            <Link href="/vendedor/registro" className="shrink-0 w-48 md:w-56 snap-start">
-              <div className="aspect-square bg-white rounded-xl overflow-hidden flex flex-col items-center justify-center border-2 border-dashed border-[#0a0a0a]/10 hover:border-[#0a0a0a]/30 transition group p-4">
-                <svg className="w-8 h-8 text-[#0a0a0a]/15 group-hover:text-[#0a0a0a]/40 transition mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349M3.75 21V9.349m0 0a3.001 3.001 0 0 0 3.75-.615A2.993 2.993 0 0 0 9.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 0 0 2.25 1.016c.896 0 1.7-.393 2.25-1.015a3.001 3.001 0 0 0 3.75.614m-16.5 0a3.004 3.004 0 0 1-.621-4.72l1.189-1.19A1.5 1.5 0 0 1 5.378 3h13.243a1.5 1.5 0 0 1 1.06.44l1.19 1.189a3 3 0 0 1-.621 4.72M6.75 18h3.75a.75.75 0 0 0 .75-.75V13.5a.75.75 0 0 0-.75-.75H6.75a.75.75 0 0 0-.75.75v3.75c0 .414.336.75.75.75Z" />
-                </svg>
-                <p className="text-sm font-medium text-[#0a0a0a]/25 group-hover:text-[#0a0a0a]/50 transition text-center">
-                  ¿Vendés en Bahía?
-                </p>
-                <p className="text-xs text-[#0a0a0a]/15 mt-1 text-center font-light">
-                  Sumá tus productos
-                </p>
-              </div>
-            </Link>
+            {productos.length < 4 && (
+              <Link href="/vendedor/nuevo" className="shrink-0 w-48 md:w-56 snap-start">
+                <div className="aspect-square bg-white rounded-xl overflow-hidden flex flex-col items-center justify-center border-2 border-dashed border-[#0a0a0a]/10 hover:border-[#0a0a0a]/30 transition group p-4">
+                  <svg className="w-8 h-8 text-[#0a0a0a]/15 group-hover:text-[#0a0a0a]/40 transition mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349M3.75 21V9.349m0 0a3.001 3.001 0 0 0 3.75-.615A2.993 2.993 0 0 0 9.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 0 0 2.25 1.016c.896 0 1.7-.393 2.25-1.015a3.001 3.001 0 0 0 3.75.614m-16.5 0a3.004 3.004 0 0 1-.621-4.72l1.189-1.19A1.5 1.5 0 0 1 5.378 3h13.243a1.5 1.5 0 0 1 1.06.44l1.19 1.189a3 3 0 0 1-.621 4.72M6.75 18h3.75a.75.75 0 0 0 .75-.75V13.5a.75.75 0 0 0-.75-.75H6.75a.75.75 0 0 0-.75.75v3.75c0 .414.336.75.75.75Z" />
+                  </svg>
+                  <p className="text-sm font-medium text-[#0a0a0a]/25 group-hover:text-[#0a0a0a]/50 transition text-center">
+                    ¿Vendés en Bahía?
+                  </p>
+                  <p className="text-xs text-[#0a0a0a]/15 mt-1 text-center font-light">
+                    Sumá tus productos
+                  </p>
+                </div>
+              </Link>
+            )}
+          </div>
+
+          {productos.length > 3 && (
+            <button
+              onClick={() => scroll(1)}
+              className={`absolute right-0 top-1/2 -translate-y-1/2 z-10 w-9 h-9 flex items-center justify-center cursor-pointer transition-all bg-white/90 backdrop-blur-sm shadow-md rounded-full ${canScrollRight ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+              aria-label="Siguiente"
+            >
+              <svg className="w-4 h-4 text-[#0a0a0a]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+              </svg>
+            </button>
           )}
         </div>
       </div>
@@ -637,54 +649,54 @@ function ColeccionCurada({ coleccion }) {
       className="rounded-2xl mx-4 md:mx-8 py-10 md:py-8 px-6 md:px-10 mb-8 overflow-hidden"
       style={{ backgroundColor: coleccion.color, color: '#000' }}
     >
-      <div className="flex items-center justify-between mb-2">
-        <div>
-          <h2 className="text-xl md:text-2xl font-black tracking-tight">{coleccion.titulo}</h2>
-          <p className="text-sm opacity-50 mt-1 font-light">{coleccion.descripcion}</p>
-        </div>
-        <div className="hidden md:flex gap-2">
-          <button
-            onClick={() => scroll(-1)}
-            className="w-9 h-9 rounded-full bg-black/10 hover:bg-black/20 flex items-center justify-center transition cursor-pointer"
-            aria-label="Anterior"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
-            </svg>
-          </button>
-          <button
-            onClick={() => scroll(1)}
-            className="w-9 h-9 rounded-full bg-black/10 hover:bg-black/20 flex items-center justify-center transition cursor-pointer"
-            aria-label="Siguiente"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-            </svg>
-          </button>
-        </div>
+      <div>
+        <h2 className="text-xl md:text-2xl font-black tracking-tight">{coleccion.titulo}</h2>
+        <p className="text-sm opacity-50 mt-1 font-light">{coleccion.descripcion}</p>
       </div>
 
-      <div
-        ref={scrollRef}
-        className="flex gap-4 overflow-x-auto mt-6 pb-2 snap-x snap-mandatory"
-        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-      >
-        {coleccion.productos.map((prod) => (
-          <Link
-            key={prod.id}
-            href={`/producto/${prod.id}`}
-            className="shrink-0 w-48 md:w-56 snap-start group"
-          >
-            <div className="aspect-square bg-white/30 rounded-xl overflow-hidden flex items-center justify-center">
-              <span className="opacity-30 text-xs font-light">foto</span>
-            </div>
-            <div className="mt-2.5">
-              <p className="text-sm font-medium group-hover:opacity-70 transition truncate">{prod.nombre}</p>
-              <p className="text-xs opacity-40 mt-0.5 font-light">{prod.vendedor}</p>
-              <p className="text-sm font-semibold mt-1">${prod.precio.toLocaleString('es-AR')}</p>
-            </div>
-          </Link>
-        ))}
+      <div className="relative mt-6">
+        <button
+          onClick={() => scroll(-1)}
+          className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-9 h-9 hidden md:flex items-center justify-center cursor-pointer transition-all bg-white/90 backdrop-blur-sm shadow-md rounded-full opacity-0 hover:opacity-100"
+          aria-label="Anterior"
+        >
+          <svg className="w-4 h-4 text-[#0a0a0a]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+          </svg>
+        </button>
+
+        <div
+          ref={scrollRef}
+          className="flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        >
+          {coleccion.productos.map((prod) => (
+            <Link
+              key={prod.id}
+              href={`/producto/${prod.id}`}
+              className="shrink-0 w-48 md:w-56 snap-start group"
+            >
+              <div className="aspect-square bg-white/30 rounded-xl overflow-hidden flex items-center justify-center">
+                <span className="opacity-30 text-xs font-light">foto</span>
+              </div>
+              <div className="mt-2.5">
+                <p className="text-sm font-medium group-hover:opacity-70 transition truncate">{prod.nombre}</p>
+                <p className="text-xs opacity-40 mt-0.5 font-light">{prod.vendedor}</p>
+                <p className="text-sm font-semibold mt-1">${prod.precio.toLocaleString('es-AR')}</p>
+              </div>
+            </Link>
+          ))}
+        </div>
+
+        <button
+          onClick={() => scroll(1)}
+          className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-9 h-9 hidden md:flex items-center justify-center cursor-pointer transition-all bg-white/90 backdrop-blur-sm shadow-md rounded-full opacity-0 hover:opacity-100"
+          aria-label="Siguiente"
+        >
+          <svg className="w-4 h-4 text-[#0a0a0a]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+          </svg>
+        </button>
       </div>
     </section>
   )
@@ -718,59 +730,59 @@ function ValoresCarrusel() {
   return (
     <section className="py-6 md:py-10 px-4 md:px-8">
       <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl md:text-2xl font-black text-[#0a0a0a] tracking-tight">
-            Lo que nos mueve
-          </h2>
-          <div className="flex gap-2">
-            <button
-              onClick={() => scroll(-1)}
-              className={`w-7 h-7 flex items-center justify-center cursor-pointer transition-all bg-[#0a0a0a] rounded-full ${canScrollLeft ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-              aria-label="Anterior"
-            >
-              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
-              </svg>
-            </button>
-            <button
-              onClick={() => scroll(1)}
-              className={`w-7 h-7 flex items-center justify-center cursor-pointer transition-all bg-[#0a0a0a] rounded-full ${canScrollRight ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-              aria-label="Siguiente"
-            >
-              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-              </svg>
-            </button>
-          </div>
-        </div>
+        <h2 className="text-xl md:text-2xl font-black text-[#0a0a0a] tracking-tight mb-6">
+          Lo que nos mueve
+        </h2>
 
-        <div
-          ref={scrollRef}
-          className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory"
-          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-        >
-          {VALORES.map((item, i) =>
-            item.tipo === 'texto' ? (
-              <div
-                key={i}
-                className="shrink-0 w-60 md:w-72 bg-white rounded-xl p-6 snap-start"
-              >
-                <h3 className="text-lg font-black text-[#0a0a0a] mb-2 tracking-tight">{item.titulo}</h3>
-                <p className="text-sm text-[#0a0a0a]/40 leading-relaxed font-light">{item.descripcion}</p>
-              </div>
-            ) : (
-              <div
-                key={i}
-                className="shrink-0 w-44 md:w-56 rounded-xl overflow-hidden snap-start bg-[#ECEAE3]"
-              >
-                <img
-                  src={item.src}
-                  alt="Imagen de marca"
-                  className="w-full h-full object-cover min-h-[160px] md:min-h-[200px]"
-                />
-              </div>
-            )
-          )}
+        <div className="relative">
+          <button
+            onClick={() => scroll(-1)}
+            className={`absolute left-0 top-1/2 -translate-y-1/2 z-10 w-9 h-9 flex items-center justify-center cursor-pointer transition-all bg-white/90 backdrop-blur-sm shadow-md rounded-full ${canScrollLeft ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+            aria-label="Anterior"
+          >
+            <svg className="w-4 h-4 text-[#0a0a0a]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+            </svg>
+          </button>
+
+          <div
+            ref={scrollRef}
+            className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          >
+            {VALORES.map((item, i) =>
+              item.tipo === 'texto' ? (
+                <div
+                  key={i}
+                  className="shrink-0 w-60 md:w-72 bg-white rounded-xl p-6 snap-start"
+                >
+                  <h3 className="text-lg font-black text-[#0a0a0a] mb-2 tracking-tight">{item.titulo}</h3>
+                  <p className="text-sm text-[#0a0a0a]/40 leading-relaxed font-light">{item.descripcion}</p>
+                </div>
+              ) : (
+                <div
+                  key={i}
+                  className="shrink-0 w-44 md:w-56 rounded-xl overflow-hidden snap-start bg-[#ECEAE3]"
+                >
+                  <img
+                    src={item.src}
+                    alt="Imagen de marca"
+                    className="w-full h-full object-cover min-h-[160px] md:min-h-[200px]"
+                  />
+                </div>
+              )
+            )}
+          </div>
+
+          <button
+            onClick={() => scroll(1)}
+            className={`absolute right-0 top-1/2 -translate-y-1/2 z-10 w-9 h-9 flex items-center justify-center cursor-pointer transition-all bg-white/90 backdrop-blur-sm shadow-md rounded-full ${canScrollRight ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+            aria-label="Siguiente"
+          >
+            <svg className="w-4 h-4 text-[#0a0a0a]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+            </svg>
+          </button>
         </div>
       </div>
     </section>
