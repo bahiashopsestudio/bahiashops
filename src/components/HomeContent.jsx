@@ -5,6 +5,17 @@ import Link from 'next/link'
 import Navbar from '@/components/Navbar'
 import Buscador from '@/components/Buscador'
 import BotonFavorito from '@/components/BotonFavorito'
+import dynamic from 'next/dynamic'
+
+// Leaflet no soporta SSR — lo cargamos solo en el cliente
+const MapaHome = dynamic(() => import('@/components/MapaHome'), {
+  ssr: false,
+  loading: () => (
+    <div className="bg-[#ECEAE3] rounded-2xl h-[320px] md:h-[400px] flex items-center justify-center">
+      <span className="text-[#0a0a0a]/15 text-sm font-light">Cargando mapa...</span>
+    </div>
+  ),
+})
 
 // ═══════════════════════════════════════════════════════════
 // CONFIGURACIÓN
@@ -63,7 +74,7 @@ function getImageUrl(media) {
 // COMPONENTE PRINCIPAL
 // ═══════════════════════════════════════════════════════════
 
-export default function HomeContent({ categorias, recientes, elegidos }) {
+export default function HomeContent({ categorias, recientes, elegidos, vendedoresMapa = [] }) {
   const [menuOpen, setMenuOpen] = useState(false)
 
   const menuCats = MENU_CATEGORIAS
@@ -135,7 +146,7 @@ export default function HomeContent({ categorias, recientes, elegidos }) {
 
 
           {/* ═══ MAPA ═══ */}
-          <MapaSection />
+          <MapaSection vendedores={vendedoresMapa} />
 
 
           {/* ═══ VALORES ═══ */}
@@ -303,7 +314,7 @@ function MenuTakeover({ categorias, onClose }) {
 // SECCIÓN MAPA
 // ═══════════════════════════════════════════════════════════
 
-function MapaSection() {
+function MapaSection({ vendedores = [] }) {
   return (
     <section className="py-12 md:py-20 px-4 md:px-8">
       <div className="max-w-5xl mx-auto">
@@ -325,52 +336,17 @@ function MapaSection() {
           </p>
         </div>
 
-        {/* Mapa visual placeholder */}
-        <div className="bg-[#ECEAE3] rounded-2xl h-[320px] md:h-[400px] relative overflow-hidden">
-          <div
-            className="absolute inset-0 opacity-[0.04]"
-            style={{
-              backgroundImage: 'linear-gradient(rgba(10,10,10,1) 0.5px, transparent 0.5px), linear-gradient(90deg, rgba(10,10,10,1) 0.5px, transparent 0.5px)',
-              backgroundSize: '40px 40px',
-            }}
-          />
-
-          <div className="absolute top-[25%] left-[5%] w-[90%] h-[1.5px] bg-[#0a0a0a]/[0.06]" />
-          <div className="absolute top-[45%] left-[3%] w-[94%] h-[1.5px] bg-[#0a0a0a]/[0.06]" />
-          <div className="absolute top-[65%] left-[8%] w-[85%] h-[1.5px] bg-[#0a0a0a]/[0.06]" />
-          <div className="absolute top-[10%] left-[20%] w-[1.5px] h-[75%] bg-[#0a0a0a]/[0.06]" />
-          <div className="absolute top-[5%] left-[42%] w-[1.5px] h-[80%] bg-[#0a0a0a]/[0.06]" />
-          <div className="absolute top-[15%] left-[62%] w-[1.5px] h-[70%] bg-[#0a0a0a]/[0.06]" />
-          <div className="absolute top-[8%] left-[80%] w-[1.5px] h-[78%] bg-[#0a0a0a]/[0.06]" />
-
-          {/* Pines sólidos */}
-          <div className="absolute top-[30%] left-[18%] w-[11px] h-[11px] rounded-full bg-[#0a0a0a] border-[1.5px] border-[#ECEAE3] -translate-x-1/2 -translate-y-1/2" />
-          <div className="absolute top-[52%] left-[40%] w-[11px] h-[11px] rounded-full bg-[#0a0a0a] border-[1.5px] border-[#ECEAE3] -translate-x-1/2 -translate-y-1/2" />
-          <div className="absolute top-[23%] left-[60%] w-[11px] h-[11px] rounded-full bg-[#0a0a0a] border-[1.5px] border-[#ECEAE3] -translate-x-1/2 -translate-y-1/2" />
-          <div className="absolute top-[68%] left-[25%] w-[11px] h-[11px] rounded-full bg-[#0a0a0a] border-[1.5px] border-[#ECEAE3] -translate-x-1/2 -translate-y-1/2" />
-          <div className="absolute top-[45%] left-[78%] w-[11px] h-[11px] rounded-full bg-[#0a0a0a] border-[1.5px] border-[#ECEAE3] -translate-x-1/2 -translate-y-1/2" />
-          <div className="absolute top-[60%] left-[65%] w-[11px] h-[11px] rounded-full bg-[#0a0a0a] border-[1.5px] border-[#ECEAE3] -translate-x-1/2 -translate-y-1/2" />
-
-          {/* Pines difusos */}
-          <div className="absolute top-[38%] left-[12%] w-[11px] h-[11px] rounded-full bg-[#0a0a0a]/15 border-[1.5px] border-[#ECEAE3]/50 -translate-x-1/2 -translate-y-1/2 shadow-[0_0_12px_rgba(10,10,10,0.06)]" />
-          <div className="absolute top-[70%] left-[50%] w-[11px] h-[11px] rounded-full bg-[#0a0a0a]/15 border-[1.5px] border-[#ECEAE3]/50 -translate-x-1/2 -translate-y-1/2 shadow-[0_0_12px_rgba(10,10,10,0.06)]" />
-          <div className="absolute top-[26%] left-[38%] w-[11px] h-[11px] rounded-full bg-[#0a0a0a]/15 border-[1.5px] border-[#ECEAE3]/50 -translate-x-1/2 -translate-y-1/2 shadow-[0_0_12px_rgba(10,10,10,0.06)]" />
-          <div className="absolute top-[55%] left-[14%] w-[11px] h-[11px] rounded-full bg-[#0a0a0a]/15 border-[1.5px] border-[#ECEAE3]/50 -translate-x-1/2 -translate-y-1/2 shadow-[0_0_12px_rgba(10,10,10,0.06)]" />
-          <div className="absolute top-[35%] left-[72%] w-[11px] h-[11px] rounded-full bg-[#0a0a0a]/15 border-[1.5px] border-[#ECEAE3]/50 -translate-x-1/2 -translate-y-1/2 shadow-[0_0_12px_rgba(10,10,10,0.06)]" />
-
-          <span className="absolute bottom-3 left-4 text-[9px] font-light text-[#0a0a0a]/15 tracking-wide">
-            Bahía Blanca
-          </span>
-        </div>
+        {/* Mapa real con Leaflet */}
+        <MapaHome vendedores={vendedores} />
 
         {/* Leyenda */}
         <div className="flex gap-5 mt-4 justify-center">
           <div className="flex items-center gap-2">
-            <div className="w-[8px] h-[8px] rounded-full bg-[#0a0a0a] border-[1.5px] border-[#F5F2EC] shrink-0" />
+            <div className="w-[8px] h-[8px] rounded-full bg-[#e60000] shrink-0" />
             <span className="text-[11px] font-light text-[#0a0a0a]/35">Local con dirección</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-[8px] h-[8px] rounded-full bg-[#0a0a0a]/15 border-[1.5px] border-[#F5F2EC]/50 shrink-0" />
+            <div className="w-[8px] h-[8px] rounded-full bg-[#9cc3ea] shrink-0" />
             <span className="text-[11px] font-light text-[#0a0a0a]/35">Trabaja desde casa</span>
           </div>
         </div>

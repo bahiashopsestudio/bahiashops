@@ -35,11 +35,19 @@ export default async function Home() {
     .eq('destacado', true)
     .limit(8)
 
+  // ── Vendedores con ubicación (para el mapa) ──
+  const { data: vendedoresMapa } = await supabase
+    .from('vendedores')
+    .select('id, nombre_negocio, slug, latitud, longitud, recibe_publico')
+    .not('latitud', 'is', null)
+    .not('longitud', 'is', null)
+
   return (
     <HomeContent
       categorias={categorias || []}
       recientes={recientes || []}
       elegidos={elegidos || []}
+      vendedoresMapa={vendedoresMapa || []}
     />
   )
 }
