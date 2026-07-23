@@ -193,7 +193,7 @@ export default function Buscador({ placeholder = '¿Qué estás buscando?', most
         {mostrarFlecha && (
           <button
             onClick={() => irABuscar()}
-            className="absolute right-2 w-9 h-9 rounded-full bg-[#fe6337] border-2 border-[#fe6337] text-white hover:bg-white hover:text-[#fe6337] flex items-center justify-center transition cursor-pointer"
+            className="absolute right-2 w-9 h-9 rounded-full bg-[#e60000] border-2 border-bg-[#e60000] text-white hover:bg-white hover:text-[#fe6337] flex items-center justify-center transition cursor-pointer"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
