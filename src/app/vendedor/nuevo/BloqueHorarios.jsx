@@ -186,8 +186,8 @@ export default function BloqueHorarios({ valor, onChange, notas, onNotasChange }
                 <div style={{
                   marginTop: '0.5rem',
                   padding: '0.75rem',
-                  background: '#eff6ff',
-                  border: '1px solid #bfdbfe',
+                  background: '#F5F2EC',
+                  border: '1px solid rgba(10,10,10,0.1)',
                   borderRadius: 4,
                   display: 'flex',
                   flexDirection: 'column',
@@ -215,7 +215,7 @@ export default function BloqueHorarios({ valor, onChange, notas, onNotasChange }
                       disabled={diasDestino.length === 0}
                       style={{
                         ...botonMiniStyle,
-                        background: diasDestino.length === 0 ? '#ccc' : '#2563eb',
+                        background: diasDestino.length === 0 ? '#ccc' : '#0a0a0a',
                         color: 'white',
                         border: 'none',
                         cursor: diasDestino.length === 0 ? 'not-allowed' : 'pointer',

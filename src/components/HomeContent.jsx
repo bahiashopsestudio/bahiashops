@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic'
 import Navbar from '@/components/Navbar'
 import Buscador from '@/components/Buscador'
 import BotonFavorito from '@/components/BotonFavorito'
+import MenuTakeover from '@/components/MenuTakeover'
 
 const MapaHome = dynamic(() => import('@/components/MapaHome'), {
   ssr: false,
@@ -253,63 +254,6 @@ export default function HomeContent({ categorias, recientes, elegidos, vendedore
 
 
 // ═══════════════════════════════════════════════════════════
-// MENÚ FULL-SCREEN TAKEOVER
-// ═══════════════════════════════════════════════════════════
-
-function MenuTakeover({ categorias, onClose }) {
-  return (
-    <div className="fixed inset-0 z-[60] bg-[#E5DFD3] flex flex-col" style={{ fontFamily: "'Inter', sans-serif" }}>
-      <div className="flex justify-between items-center px-6 md:px-10 pt-6">
-        <span className="text-xs font-extrabold tracking-[3px] uppercase text-[#0a0a0a]">
-          Bahía Shops
-        </span>
-        <button
-          onClick={onClose}
-          className="text-xs font-light text-[#0a0a0a]/40 flex items-center gap-2 cursor-pointer hover:text-[#0a0a0a] transition"
-        >
-          Cerrar
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-
-      <div className="flex-1 flex flex-col justify-center px-8 md:px-16 gap-1 md:gap-2 overflow-y-auto">
-        {categorias.map((cat) => (
-          <Link
-            key={cat.slug}
-            href={`/categoria/${cat.slug}`}
-            onClick={onClose}
-            className="text-2xl md:text-4xl font-extralight text-[#0a0a0a] tracking-tight leading-snug hover:text-[#0a0a0a]/30 transition-colors"
-          >
-            {cat.nombre}
-          </Link>
-        ))}
-        <Link
-          href="/sobre-nosotros"
-          onClick={onClose}
-          className="text-2xl md:text-4xl font-extralight text-[#0a0a0a]/25 tracking-tight leading-snug hover:text-[#0a0a0a] transition-colors mt-2"
-        >
-          Ver todas →
-        </Link>
-      </div>
-
-      <div className="flex justify-between items-end px-6 md:px-10 pb-6">
-        <div className="flex gap-4 text-[10px] font-light text-[#0a0a0a]/30 tracking-wide">
-          <a href="https://instagram.com/bahiashops" target="_blank" rel="noopener noreferrer" className="hover:text-[#0a0a0a] transition">Instagram</a>
-          <a href="https://tiktok.com/@bahiashops" target="_blank" rel="noopener noreferrer" className="hover:text-[#0a0a0a] transition">TikTok</a>
-          <a href="https://facebook.com/bahiashops" target="_blank" rel="noopener noreferrer" className="hover:text-[#0a0a0a] transition">Facebook</a>
-        </div>
-        <span className="text-[10px] font-light text-[#0a0a0a]/30 tracking-wide">
-          bahiashops.com.ar
-        </span>
-      </div>
-    </div>
-  )
-}
-
-
-// ═══════════════════════════════════════════════════════════
 // SECCIÓN MAPA
 // ═══════════════════════════════════════════════════════════
 
@@ -408,33 +352,33 @@ function CtaAnimado() {
       <div className="max-w-3xl mx-auto">
         <div className="text-3xl md:text-5xl font-black text-[#0a0a0a] tracking-tight leading-[1.1]">
           <span
-            className="transition-all duration-500"
+            className="transition-all duration-700"
             style={{
               opacity: visible ? 1 : 0,
               transform: visible ? 'translateY(0)' : 'translateY(16px)',
-              transitionDelay: '450ms',
+              transitionDelay: '0ms',
               display: 'inline',
             }}
           >
             ¿Tenés{' '}
           </span>
           <span
-            className="transition-all duration-500"
+            className="transition-all duration-700"
             style={{
               opacity: visible ? 1 : 0,
               transform: visible ? 'translateY(0)' : 'translateY(16px)',
-              transitionDelay: '400ms',
+              transitionDelay: '250ms',
               display: 'inline',
             }}
           >
             un{' '}
           </span>
           <span
-            className="transition-all duration-500"
+            className="transition-all duration-700"
             style={{
               opacity: visible ? 1 : 0,
               transform: visible ? 'translateY(0)' : 'translateY(16px)',
-              transitionDelay: '450ms',
+              transitionDelay: '500ms',
               display: 'inline',
             }}
           >
@@ -442,11 +386,11 @@ function CtaAnimado() {
           </span>
           <br />
           <span
-            className="transition-all duration-500"
+            className="transition-all duration-700"
             style={{
               opacity: visible ? 1 : 0,
               transform: visible ? 'translateY(0)' : 'translateY(16px)',
-              transitionDelay: '450ms',
+              transitionDelay: '800ms',
               display: 'inline',
             }}
           >
@@ -455,22 +399,22 @@ function CtaAnimado() {
         </div>
 
         <p
-          className="text-sm md:text-base font-light text-[#0a0a0a]/40 mt-5 leading-relaxed transition-all duration-500"
+          className="text-sm md:text-base font-light text-[#0a0a0a]/40 mt-5 leading-relaxed transition-all duration-700"
           style={{
             opacity: visible ? 1 : 0,
             transform: visible ? 'translateY(0)' : 'translateY(12px)',
-            transitionDelay: '700ms',
+            transitionDelay: '1200ms',
           }}
         >
           Registrá tu negocio, subí tus productos y empezá a vender. Así de simple.
         </p>
 
         <div
-          className="mt-7 transition-all duration-500"
+          className="mt-7 transition-all duration-700"
           style={{
             opacity: visible ? 1 : 0,
             transform: visible ? 'translateY(0)' : 'translateY(12px)',
-            transitionDelay: '750ms',
+            transitionDelay: '1500ms',
           }}
         >
           <Link
@@ -482,10 +426,10 @@ function CtaAnimado() {
         </div>
 
         <div
-          className="flex justify-center gap-12 md:gap-16 mt-12 transition-all duration-500"
+          className="flex justify-center gap-12 md:gap-16 mt-12 transition-all duration-700"
           style={{
             opacity: visible ? 1 : 0,
-            transitionDelay: '900ms',
+            transitionDelay: '1800ms',
           }}
         >
           <div className="text-center">

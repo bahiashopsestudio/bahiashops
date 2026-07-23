@@ -1,20 +1,12 @@
 import Link from 'next/link'
 
-export default function VolverAtras({ href, texto = 'Volver' }) {
+export default function VolverAtras({ href = '/', texto = 'Volver' }) {
   return (
     <Link
       href={href}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '0.4rem',
-        color: '#666',
-        textDecoration: 'none',
-        fontSize: '0.9rem',
-        marginBottom: '1rem',
-      }}
+      className="inline-flex items-center gap-2 text-[#0a0a0a]/40 hover:text-[#0a0a0a] text-sm font-light transition mb-6"
     >
-      <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
       </svg>
       {texto}

@@ -1,56 +1,31 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { useRouter } from 'next/navigation'
 
-export default function ProfileForm({ perfil }) {
+export default function ProfileForm({ userId }) {
+  const supabase = createClient()
   const router = useRouter()
-  const [nombre, setNombre] = useState(perfil?.nombre || '')
-  const [apellido, setApellido] = useState(perfil?.apellido || '')
-  const [nombreUsuario, setNombreUsuario] = useState(perfil?.nombre_usuario || '')
-  const [telefono, setTelefono] = useState(perfil?.telefono || '')
-  const [loading, setLoading] = useState(false)
+  const [nombre, setNombre] = useState('')
+  const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState(null)
 
-  const handleSubmit = async (e) => {
+  async function guardar(e) {
     e.preventDefault()
-    setLoading(true)
+    if (!nombre.trim()) return
+
+    setGuardando(true)
     setError(null)
 
-    if (!nombre.trim() || !apellido.trim() || !nombreUsuario.trim()) {
-      setError('Nombre, apellido y nombre de usuario son obligatorios.')
-      setLoading(false)
-      return
-    }
+    const { error: err } = await supabase
+      .from('perfiles')
+      .update({ nombre_completo: nombre.trim() })
+      .eq('id', userId)
 
-    if (!/^[a-z0-9_]+$/.test(nombreUsuario)) {
-      setError('El nombre de usuario solo puede tener letras minúsculas, números y guión bajo.')
-      setLoading(false)
-      return
-    }
-
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    const { error: updateError } = await supabase
-      .from('usuarios')
-      .update({
-        nombre: nombre.trim(),
-        apellido: apellido.trim(),
-        nombre_usuario: nombreUsuario.trim(),
-        telefono: telefono.trim() || null,
-      })
-      .eq('id', user.id)
-
-    if (updateError) {
-      if (updateError.code === '23505') {
-        setError('Ese nombre de usuario ya está en uso. Probá con otro.')
-      } else {
-        setError('Hubo un error al guardar. Intentá de nuevo.')
-        console.error(updateError)
-      }
-      setLoading(false)
+    if (err) {
+      setError('No se pudo guardar. Intentá de nuevo.')
+      setGuardando(false)
       return
     }
 
@@ -58,92 +33,40 @@ export default function ProfileForm({ perfil }) {
     router.refresh()
   }
 
-  const inputStyle = {
-    width: '100%',
-    padding: '0.5rem',
-    fontSize: '1rem',
-    border: '1px solid #ddd',
-    borderRadius: '6px',
-    marginBottom: '1rem',
-  }
-
-  const labelStyle = {
-    display: 'block',
-    marginBottom: '0.25rem',
-    fontSize: '0.9rem',
-    fontWeight: '500',
-  }
-
   return (
-    <form onSubmit={handleSubmit}>
-      <label style={labelStyle}>
-        Nombre *
+    <div>
+      <div className="mb-6">
+        <label className="block text-sm text-[#0a0a0a]/40 font-light mb-1.5">
+          Nombre completo
+        </label>
         <input
           type="text"
           value={nombre}
           onChange={(e) => setNombre(e.target.value)}
-          style={inputStyle}
-          required
+          className="w-full px-4 py-3 rounded-xl border border-[#0a0a0a]/10 text-sm text-[#0a0a0a] focus:outline-none focus:border-[#0a0a0a]/30 transition bg-white"
+          placeholder="Tu nombre y apellido"
+          autoFocus
         />
-      </label>
-
-      <label style={labelStyle}>
-        Apellido *
-        <input
-          type="text"
-          value={apellido}
-          onChange={(e) => setApellido(e.target.value)}
-          style={inputStyle}
-          required
-        />
-      </label>
-
-      <label style={labelStyle}>
-        Nombre de usuario *
-        <input
-          type="text"
-          value={nombreUsuario}
-          onChange={(e) => setNombreUsuario(e.target.value.toLowerCase())}
-          style={inputStyle}
-          placeholder="lulu_ceramic"
-          required
-        />
-        <small style={{ display: 'block', color: '#666', marginTop: '-0.75rem', marginBottom: '1rem' }}>
-          Solo minúsculas, números y guión bajo. Es como te ven los demás.
-        </small>
-      </label>
-
-      <label style={labelStyle}>
-        Teléfono (opcional)
-        <input
-          type="tel"
-          value={telefono}
-          onChange={(e) => setTelefono(e.target.value)}
-          style={inputStyle}
-          placeholder="291-555-1234"
-        />
-      </label>
+      </div>
 
       {error && (
-        <p style={{ color: '#c0392b', marginBottom: '1rem' }}>{error}</p>
+        <div className="bg-red-50 text-[#e60000] text-sm p-3 rounded-xl mb-4 font-light">
+          {error}
+        </div>
       )}
 
       <button
-        type="submit"
-        disabled={loading}
-        style={{
-          padding: '0.75rem 1.5rem',
-          fontSize: '1rem',
-          cursor: loading ? 'not-allowed' : 'pointer',
-          border: 'none',
-          borderRadius: '8px',
-          background: loading ? '#999' : '#222',
-          color: 'white',
-          width: '100%',
-        }}
+        type="button"
+        onClick={guardar}
+        disabled={guardando || !nombre.trim()}
+        className={`w-full py-3.5 rounded-full text-sm font-medium transition cursor-pointer ${
+          guardando || !nombre.trim()
+            ? 'bg-[#0a0a0a]/10 text-[#0a0a0a]/20 cursor-not-allowed'
+            : 'bg-[#0a0a0a] text-white hover:bg-[#2a2a2a]'
+        }`}
       >
-        {loading ? 'Guardando...' : 'Guardar perfil'}
+        {guardando ? 'Guardando...' : 'Continuar'}
       </button>
-    </form>
+    </div>
   )
 }

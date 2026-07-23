@@ -67,7 +67,7 @@ export default function MapaUbicacion({ posicionBuscada, onUbicacionChange }) {
   }
 
   const estiloNormal = { color: '#94a3b8', weight: 1, fillColor: '#cbd5e1', fillOpacity: 0.08 }
-  const estiloActivo = { color: '#2563eb', weight: 2, fillColor: '#3b82f6', fillOpacity: 0.4 }
+  const estiloActivo = { color: '#0a0a0a', weight: 2, fillColor: '#0a0a0a', fillOpacity: 0.15 }
 
   return (
     <MapContainer center={CENTRO_BB} zoom={12} style={{ height: '350px', width: '100%', borderRadius: 8 }}>

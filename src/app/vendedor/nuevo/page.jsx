@@ -1,26 +1,44 @@
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
+'use client'
+
+import { useState, useEffect } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import Navbar from '@/components/Navbar'
+import MenuTakeover from '@/components/MenuTakeover'
 import FormularioVendedor from './FormularioVendedor'
 
-export default async function NuevoVendedorPage() {
-  const supabase = await createClient()
+const MENU_CATEGORIAS = ['moda','belleza-y-cuidado-personal','gastronomia','hogar-deco-y-jardin','diseno-y-artesanias','tecnologia','salud-y-bienestar','arte-e-ilustracion']
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+export default function NuevoVendedorPage() {
+  const supabase = createClient()
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [categorias, setCategorias] = useState([])
 
-  if (!user) {
-    redirect('/login')
-  }
+  useEffect(() => {
+    if (menuOpen) { document.body.style.overflow = 'hidden' } else { document.body.style.overflow = '' }
+    return () => { document.body.style.overflow = '' }
+  }, [menuOpen])
+
+  useEffect(() => {
+    async function cargarCats() {
+      const { data } = await supabase.from('categorias').select('id, nombre, slug').eq('activa', true).order('orden')
+      if (data) setCategorias(data)
+    }
+    cargarCats()
+  }, [])
+
+  const menuCats = MENU_CATEGORIAS.map(s => categorias.find(c => c.slug === s)).filter(Boolean)
 
   return (
-    <main style={{ maxWidth: 600, margin: '2rem auto', padding: '1rem' }}>
-      <h1>Crear mi emprendimiento</h1>
-      <p style={{ color: '#666', marginBottom: '2rem' }}>
-        Contanos sobre tu proyecto. Tu perfil queda pendiente de revisión
-        hasta que lo aprobemos.
-      </p>
-      <FormularioVendedor userId={user.id} />
-    </main>
+    <>
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&display=swap" />
+      <div className="min-h-screen bg-white" style={{ fontFamily: "'Inter', sans-serif" }}>
+        {menuOpen && <MenuTakeover categorias={menuCats} onClose={() => setMenuOpen(false)} />}
+        <Navbar onToggleMenu={() => setMenuOpen(!menuOpen)} variant="solid" />
+
+        <div className="pt-16">
+          <FormularioVendedor />
+        </div>
+      </div>
+    </>
   )
 }
