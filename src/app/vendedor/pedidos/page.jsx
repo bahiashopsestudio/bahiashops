@@ -2,23 +2,24 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import Navbar from '@/components/Navbar';
 import VolverAtras from '@/components/VolverAtras';
 
 const ESTADOS = {
-  pendiente:   { label: 'Esperando pago',  color: '#8a6d00', bg: '#fff3d6', orden: 0 },
-  pagado:      { label: 'Pagado',          color: '#1e7e46', bg: '#e9f7ef', orden: 1 },
-  rechazado:   { label: 'Pago rechazado',  color: '#c0392b', bg: '#fdecea', orden: -1 },
-  preparando:  { label: 'Preparando',      color: '#1a5fb4', bg: '#e6f0ff', orden: 2 },
-  franja:      { label: 'Franja avisada',  color: '#7c3aed', bg: '#f3e8ff', orden: 3 },
-  por_salir:   { label: 'Por salir',       color: '#d97706', bg: '#fff8e1', orden: 4 },
-  despachado:  { label: 'Despachado',      color: '#1e7e46', bg: '#e9f7ef', orden: 5 },
+  pendiente:  { label: 'Esperando pago',  color: 'text-amber-700',   bg: 'bg-amber-100',   orden: 0 },
+  pagado:     { label: 'Pagado',           color: 'text-emerald-700', bg: 'bg-emerald-100',  orden: 1 },
+  rechazado:  { label: 'Pago rechazado',   color: 'text-red-600',     bg: 'bg-red-50',       orden: -1 },
+  preparando: { label: 'Preparando',       color: 'text-blue-700',    bg: 'bg-blue-50',      orden: 2 },
+  franja:     { label: 'Franja avisada',   color: 'text-violet-600',  bg: 'bg-violet-100',   orden: 3 },
+  por_salir:  { label: 'Por salir',        color: 'text-amber-600',   bg: 'bg-amber-50',     orden: 4 },
+  despachado: { label: 'Despachado',       color: 'text-emerald-700', bg: 'bg-emerald-100',  orden: 5 },
 };
 
 const ACCIONES = {
   pagado: {
     label: 'Empezar a preparar',
     siguiente: 'preparando',
-    color: '#1a5fb4',
+    btnClass: 'bg-blue-700 hover:bg-blue-800',
     whatsapp: true,
     mensajeWA: (p, franja, nombre) =>
       `¡Hola! 👋 Soy ${nombre}. Ya estamos preparando tu pedido #${p.id}. ¡Te avisamos cuando esté por salir!`,
@@ -26,7 +27,7 @@ const ACCIONES = {
   preparando: {
     label: 'Avisar franja horaria',
     siguiente: 'franja',
-    color: '#7c3aed',
+    btnClass: 'bg-violet-600 hover:bg-violet-700',
     whatsapp: true,
     pideFranja: true,
     mensajeWA: (p, franja, nombre) =>
@@ -35,7 +36,7 @@ const ACCIONES = {
   franja: {
     label: 'Avisar que sale',
     siguiente: 'por_salir',
-    color: '#d97706',
+    btnClass: 'bg-amber-600 hover:bg-amber-700',
     whatsapp: true,
     mensajeWA: (p, franja, nombre) =>
       `¡Hola! 🚀 Soy ${nombre}. Tu pedido #${p.id} ya está saliendo hacia ${p.direccion?.calle} ${p.direccion?.numero}. ¡Ya llega!`,
@@ -43,9 +44,8 @@ const ACCIONES = {
   por_salir: {
     label: 'Marcar como despachado',
     siguiente: 'despachado',
-    color: '#1e7e46',
+    btnClass: 'bg-emerald-700 hover:bg-emerald-800',
     whatsapp: false,
-    // Acá iría el email cuando lo configuremos
   },
 };
 
@@ -161,21 +161,20 @@ export default function VendedorPedidosPage() {
         prev.map(p => p.id === pedido.id ? { ...p, estado: accion.siguiente } : p)
       );
 
-      // Enviar email al comprador cuando se despacha
-    if (accion.siguiente === 'despachado') {
-      try {
-        const resEmail = await fetch('/api/notificaciones/despacho', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pedidoId: pedido.id }),
-        });
-        if (!resEmail.ok) {
+      if (accion.siguiente === 'despachado') {
+        try {
+          const resEmail = await fetch('/api/notificaciones/despacho', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pedidoId: pedido.id }),
+          });
+          if (!resEmail.ok) {
+            alert('El pedido se marcó como despachado, pero no se pudo enviar el email al comprador. Podés avisarle por WhatsApp.');
+          }
+        } catch {
           alert('El pedido se marcó como despachado, pero no se pudo enviar el email al comprador. Podés avisarle por WhatsApp.');
         }
-      } catch {
-        alert('El pedido se marcó como despachado, pero no se pudo enviar el email al comprador. Podés avisarle por WhatsApp.');
       }
-    }
 
       if (accion.whatsapp && pedido.direccion?.telefono) {
         const mensaje = accion.mensajeWA(pedido, franja, nombreNegocio);
@@ -186,16 +185,26 @@ export default function VendedorPedidosPage() {
     setAvanzando(null);
   }
 
+  // ── Estados de carga y error ──
+
   if (cargando) {
-    return <main style={{ padding: '2rem', textAlign: 'center' }}>Cargando pedidos...</main>;
+    return (
+      <>
+        <Navbar variant="solid" />
+        <main className="pt-28 px-6 text-center text-gray-400">Cargando pedidos...</main>
+      </>
+    );
   }
 
   if (error) {
     return (
-      <main style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
-        <VolverAtras href="/perfil" texto="Mi perfil" />
-        <p style={{ color: '#c00' }}>{error}</p>
-      </main>
+      <>
+        <Navbar variant="solid" />
+        <main className="pt-28 px-6 max-w-[800px] mx-auto">
+          <VolverAtras href="/perfil" texto="Mi perfil" />
+          <p className="text-red-700">{error}</p>
+        </main>
+      </>
     );
   }
 
@@ -203,172 +212,199 @@ export default function VendedorPedidosPage() {
   const completados = pedidos.filter(p => ['despachado', 'rechazado', 'pendiente'].includes(p.estado));
 
   return (
-    <main style={{ padding: '2rem', maxWidth: '800px', width: '100%', margin: '0 auto' }}>
-      <VolverAtras href="/perfil" texto="Mi perfil" />
+    <>
+      <Navbar variant="solid" />
 
-      <h1 style={{ margin: '0 0 0.25rem' }}>Pedidos de mi negocio</h1>
-      <p style={{ color: '#666', margin: '0 0 1.5rem', fontSize: '0.9rem' }}>
-        {pedidos.length} {pedidos.length === 1 ? 'pedido' : 'pedidos'} en total
-      </p>
+      <main className="pt-28 pb-12 px-6 max-w-[800px] w-full mx-auto">
+        <VolverAtras href="/perfil" texto="Mi perfil" />
 
-      {pedidos.length === 0 && (
-        <div style={{ border: '1px dashed #ccc', borderRadius: '12px', padding: '3rem 2rem', textAlign: 'center', color: '#666' }}>
-          <p style={{ fontSize: '2rem', margin: '0 0 0.5rem' }}>📦</p>
-          <p style={{ margin: 0 }}>Todavía no recibiste pedidos. ¡Van a llegar!</p>
-        </div>
-      )}
+        <h1 className="text-2xl font-semibold text-[#0a0a0a] m-0 mb-1">Pedidos de mi negocio</h1>
+        <p className="text-gray-500 text-sm m-0 mb-6">
+          {pedidos.length} {pedidos.length === 1 ? 'pedido' : 'pedidos'} en total
+        </p>
 
-      {activos.length > 0 && (
-        <>
-          <h2 style={{ fontSize: '1rem', color: '#666', margin: '0 0 0.75rem' }}>
-            Pedidos activos ({activos.length})
-          </h2>
-          {activos.map(p => (
-            <PedidoCard
-              key={p.id} pedido={p} abierto={abierto === p.id}
-              items={detalles[p.id] || []} avanzando={avanzando === p.id}
-              onToggle={() => toggleDetalle(p.id)} onAvanzar={() => iniciarAvance(p)}
-            />
-          ))}
-        </>
-      )}
+        {/* Estado vacío */}
+        {pedidos.length === 0 && (
+          <div className="border border-dashed border-gray-300 rounded-xl px-8 py-12 text-center text-gray-500">
+            <p className="text-3xl m-0 mb-2">📦</p>
+            <p className="m-0">Todavía no recibiste pedidos. ¡Van a llegar!</p>
+          </div>
+        )}
 
-      {completados.length > 0 && (
-        <>
-          <h2 style={{ fontSize: '1rem', color: '#999', margin: '1.5rem 0 0.75rem' }}>
-            Historial ({completados.length})
-          </h2>
-          {completados.map(p => (
-            <PedidoCard
-              key={p.id} pedido={p} abierto={abierto === p.id}
-              items={detalles[p.id] || []} avanzando={avanzando === p.id}
-              onToggle={() => toggleDetalle(p.id)} onAvanzar={() => iniciarAvance(p)}
-            />
-          ))}
-        </>
-      )}
+        {/* Pedidos activos */}
+        {activos.length > 0 && (
+          <>
+            <h2 className="text-base text-gray-500 font-semibold m-0 mb-3">
+              Pedidos activos ({activos.length})
+            </h2>
+            {activos.map(p => (
+              <PedidoCard
+                key={p.id} pedido={p} abierto={abierto === p.id}
+                items={detalles[p.id] || []} avanzando={avanzando === p.id}
+                onToggle={() => toggleDetalle(p.id)} onAvanzar={() => iniciarAvance(p)}
+              />
+            ))}
+          </>
+        )}
 
-      {franjaModal && (
-        <div
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}
-          onClick={() => setFranjaModal(null)}
-        >
-          <div onClick={(e) => e.stopPropagation()}
-            style={{ background: 'white', borderRadius: '16px', padding: '1.5rem', maxWidth: '380px', width: '100%' }}>
-            <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.1rem' }}>¿En qué franja sale?</h3>
-            <p style={{ fontSize: '0.85rem', color: '#666', margin: '0 0 1rem' }}>
-              Le avisamos al comprador en qué horario esperar el envío.
-            </p>
-            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem' }}>
-              {['Mañana', 'Tarde'].map(f => (
-                <button key={f} type="button" onClick={() => setFranjaElegida(f)}
-                  style={{
-                    flex: 1, padding: '0.75rem', borderRadius: '8px', cursor: 'pointer',
-                    border: franjaElegida === f ? '2px solid #7c3aed' : '1px solid #ddd',
-                    background: franjaElegida === f ? '#f3e8ff' : 'white',
-                    color: franjaElegida === f ? '#7c3aed' : '#666',
-                    fontWeight: franjaElegida === f ? 600 : 400, fontSize: '0.95rem',
-                  }}>
-                  {f}
+        {/* Historial */}
+        {completados.length > 0 && (
+          <>
+            <h2 className="text-base text-gray-400 font-semibold mt-6 mb-3">
+              Historial ({completados.length})
+            </h2>
+            {completados.map(p => (
+              <PedidoCard
+                key={p.id} pedido={p} abierto={abierto === p.id}
+                items={detalles[p.id] || []} avanzando={avanzando === p.id}
+                onToggle={() => toggleDetalle(p.id)} onAvanzar={() => iniciarAvance(p)}
+              />
+            ))}
+          </>
+        )}
+
+        {/* Modal de franja horaria */}
+        {franjaModal && (
+          <div
+            className="fixed inset-0 bg-black/40 flex items-center justify-center z-[1000] p-4"
+            onClick={() => setFranjaModal(null)}
+          >
+            <div onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl p-6 max-w-[380px] w-full">
+              <h3 className="text-lg font-semibold text-[#0a0a0a] m-0 mb-2">¿En qué franja sale?</h3>
+              <p className="text-sm text-gray-500 m-0 mb-4">
+                Le avisamos al comprador en qué horario esperar el envío.
+              </p>
+              <div className="flex gap-2 mb-5">
+                {['Mañana', 'Tarde'].map(f => (
+                  <button key={f} type="button" onClick={() => setFranjaElegida(f)}
+                    className={`flex-1 py-3 rounded-lg cursor-pointer text-[0.95rem] transition-colors ${
+                      franjaElegida === f
+                        ? 'border-2 border-violet-600 bg-violet-50 text-violet-600 font-semibold'
+                        : 'border border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                    }`}>
+                    {f}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setFranjaModal(null)}
+                  className="flex-1 py-3 border border-gray-300 rounded-lg bg-white cursor-pointer hover:bg-gray-50 transition-colors">
+                  Cancelar
                 </button>
-              ))}
-            </div>
-            <div style={{ display: 'flex', gap: '0.75rem' }}>
-              <button type="button" onClick={() => setFranjaModal(null)}
-                style={{ flex: 1, padding: '0.7rem', border: '1px solid #ccc', borderRadius: '8px', background: 'white', cursor: 'pointer' }}>
-                Cancelar
-              </button>
-              <button type="button" onClick={() => ejecutarAvance(franjaModal, franjaElegida)}
-                style={{ flex: 1, padding: '0.7rem', border: 'none', borderRadius: '8px', background: '#7c3aed', color: 'white', cursor: 'pointer', fontWeight: 500 }}>
-                Avisar por WhatsApp
-              </button>
+                <button type="button" onClick={() => ejecutarAvance(franjaModal, franjaElegida)}
+                  className="flex-1 py-3 border-none rounded-lg bg-violet-600 text-white cursor-pointer font-medium hover:bg-violet-700 transition-colors">
+                  Avisar por WhatsApp
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </main>
+        )}
+      </main>
+    </>
   );
 }
 
+// ══════════════════════════════════════════════════════
+// TARJETA DE PEDIDO
+// ══════════════════════════════════════════════════════
+
 function PedidoCard({ pedido, abierto, items, avanzando, onToggle, onAvanzar }) {
   const p = pedido;
-  const estado = ESTADOS[p.estado] || { label: p.estado, color: '#666', bg: '#f5f5f5' };
+  const estado = ESTADOS[p.estado] || { label: p.estado, color: 'text-gray-500', bg: 'bg-gray-100' };
   const accion = ACCIONES[p.estado];
   const primerItem = items[0];
 
   return (
-    <div style={{ border: '1px solid #e3e3e3', borderRadius: '12px', padding: '1rem 1.25rem', marginBottom: '0.75rem', background: '#fff' }}>
-      <div onClick={onToggle} style={{ cursor: 'pointer' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: '8px', background: '#f5f5f5', flexShrink: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#bbb', fontSize: '1.2rem' }}>
+    <div className="border border-gray-200 rounded-xl px-5 py-4 mb-3 bg-white">
+      {/* Header clickeable */}
+      <div onClick={onToggle} className="cursor-pointer">
+        <div className="flex items-center gap-3">
+          {/* Miniatura */}
+          <div className="w-12 h-12 rounded-lg bg-[#F5F2EC] shrink-0 overflow-hidden flex items-center justify-center text-gray-300 text-xl">
             {primerItem?.foto_url ? (
-              <img src={primerItem.foto_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <img src={primerItem.foto_url} alt="" className="w-full h-full object-cover" />
             ) : '📦'}
           </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-              <strong style={{ fontSize: '0.95rem' }}>Pedido #{p.id}</strong>
-              <span style={{ fontSize: '0.75rem', fontWeight: 500, padding: '3px 10px', borderRadius: '20px', background: estado.bg, color: estado.color }}>
+
+          {/* Info */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <strong className="text-[0.95rem] text-[#0a0a0a]">Pedido #{p.id}</strong>
+              <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full ${estado.bg} ${estado.color}`}>
                 {estado.label}
               </span>
             </div>
-            <p style={{ margin: '2px 0 0', fontSize: '0.85rem', color: '#666' }}>
+            <p className="mt-0.5 mb-0 text-sm text-gray-500">
               {p.metodo_envio} · {tiempoRelativo(p.creado_en)}
             </p>
           </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontWeight: 600 }}>${fmt(p.total)}</div>
-            <div style={{ fontSize: '0.75rem', color: '#888' }}>{abierto ? 'Ocultar ▲' : 'Ver detalle ▼'}</div>
+
+          {/* Total */}
+          <div className="text-right shrink-0">
+            <div className="font-semibold text-[#0a0a0a]">${fmt(p.total)}</div>
+            <div className="text-xs text-gray-400">{abierto ? 'Ocultar ▲' : 'Ver detalle ▼'}</div>
           </div>
         </div>
       </div>
 
+      {/* Detalle expandible */}
       {abierto && (
-        <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #eee' }}>
-          <div style={{ marginBottom: '1rem' }}>
-            <p style={{ margin: '0 0 0.5rem', fontSize: '0.85rem', color: '#888' }}>Productos</p>
+        <div className="mt-4 pt-4 border-t border-gray-100">
+          {/* Productos */}
+          <div className="mb-4">
+            <p className="m-0 mb-2 text-sm text-gray-400">Productos</p>
             {items.length === 0 ? (
-              <p style={{ fontSize: '0.85rem', color: '#aaa' }}>Cargando...</p>
+              <p className="text-sm text-gray-300">Cargando...</p>
             ) : items.map(it => (
-              <div key={it.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.35rem 0', fontSize: '0.9rem', color: '#555' }}>
+              <div key={it.id} className="flex justify-between py-1 text-sm text-gray-600">
                 <span>{it.nombre}{it.variante ? ` · ${it.variante}` : ''} × {it.cantidad}</span>
                 <span>${fmt(it.precio * it.cantidad)}</span>
               </div>
             ))}
           </div>
 
-          <div style={{ marginBottom: '1rem' }}>
-            <p style={{ margin: '0 0 0.35rem', fontSize: '0.85rem', color: '#888' }}>Entrega</p>
-            <p style={{ margin: 0, fontSize: '0.9rem', color: '#555' }}>{p.metodo_envio}</p>
+          {/* Entrega */}
+          <div className="mb-4">
+            <p className="m-0 mb-1.5 text-sm text-gray-400">Entrega</p>
+            <p className="m-0 text-sm text-gray-600">{p.metodo_envio}</p>
             {p.turno_preferido && (
-              <p style={{ margin: 0, fontSize: '0.85rem', color: '#888' }}>Preferencia del comprador: {p.turno_preferido.toLowerCase()}</p>
+              <p className="m-0 text-sm text-gray-400">Preferencia del comprador: {p.turno_preferido.toLowerCase()}</p>
             )}
             {p.direccion && (
-              <p style={{ margin: '0.25rem 0 0', fontSize: '0.85rem', color: '#555' }}>
+              <p className="mt-1 mb-0 text-sm text-gray-600">
                 {p.direccion.calle} {p.direccion.numero}{p.direccion.piso_depto ? `, ${p.direccion.piso_depto}` : ''}<br />
                 Tel. {p.direccion.telefono}
               </p>
             )}
           </div>
 
-          <div style={{ paddingTop: '0.5rem', borderTop: '1px solid #eee', marginBottom: '1rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', padding: '0.15rem 0' }}>
-              <span style={{ color: '#666' }}>Productos</span><span>${fmt(p.subtotal_productos)}</span>
+          {/* Resumen de cobro */}
+          <div className="pt-2 border-t border-gray-100 mb-4">
+            <div className="flex justify-between text-sm py-0.5">
+              <span className="text-gray-500">Productos</span>
+              <span className="text-[#0a0a0a]">${fmt(p.subtotal_productos)}</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', padding: '0.15rem 0' }}>
-              <span style={{ color: '#666' }}>Envío</span><span>${fmt(p.costo_envio)}</span>
+            <div className="flex justify-between text-sm py-0.5">
+              <span className="text-gray-500">Envío</span>
+              <span className="text-[#0a0a0a]">${fmt(p.costo_envio)}</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', padding: '0.15rem 0', color: '#888' }}>
-              <span>Comisión Bahía Shops (5%)</span><span>-${fmt(p.comision_plataforma)}</span>
+            <div className="flex justify-between text-sm py-0.5 text-gray-400">
+              <span>Comisión Bahía Shops (5%)</span>
+              <span>-${fmt(p.comision_plataforma)}</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1rem', fontWeight: 600, padding: '0.4rem 0 0', borderTop: '1px solid #eee', marginTop: '0.25rem' }}>
-              <span>Recibís</span><span>${fmt(p.total - (p.comision_plataforma || 0))}</span>
+            <div className="flex justify-between text-base font-semibold text-[#0a0a0a] pt-2 border-t border-gray-100 mt-1">
+              <span>Recibís</span>
+              <span>${fmt(p.total - (p.comision_plataforma || 0))}</span>
             </div>
           </div>
 
+          {/* Botón de acción */}
           {accion && (
             <button type="button" onClick={(e) => { e.stopPropagation(); onAvanzar(); }} disabled={avanzando}
-              style={{ width: '100%', padding: '0.75rem', fontSize: '0.95rem', border: 'none', borderRadius: '8px', cursor: avanzando ? 'not-allowed' : 'pointer', background: avanzando ? '#ccc' : accion.color, color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+              className={`w-full py-3 text-[0.95rem] border-none rounded-lg text-white flex items-center justify-center gap-2 transition-colors ${
+                avanzando ? 'bg-gray-300 cursor-not-allowed' : `${accion.btnClass} cursor-pointer`
+              }`}>
               {accion.whatsapp && (
                 <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
@@ -379,8 +415,9 @@ function PedidoCard({ pedido, abierto, items, avanzando, onToggle, onAvanzar }) 
             </button>
           )}
 
+          {/* Completado */}
           {p.estado === 'despachado' && (
-            <div style={{ textAlign: 'center', padding: '0.75rem', background: '#e9f7ef', borderRadius: '8px', color: '#1e7e46', fontWeight: 500, fontSize: '0.9rem' }}>
+            <div className="text-center py-3 bg-emerald-50 rounded-lg text-emerald-700 font-medium text-sm">
               ✓ Pedido completado
             </div>
           )}

@@ -4,12 +4,8 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import VistaProducto from '@/components/VistaProducto';
 import { ETIQUETAS_MODERACION } from '@/lib/moderacion';
+import Navbar from '@/components/Navbar';
 
-// ┌────────────────────────────────────────────────────────────┐
-// │ MOTIVOS DE RECHAZO                                          │
-// │ Para cambiar, sumar o sacar un motivo, editá esta lista.    │
-// │ Es el único lugar que toca: el resto se acomoda solo.       │
-// └────────────────────────────────────────────────────────────┘
 const MOTIVOS_RECHAZO = [
   'Tiene datos de contacto (teléfono, mail, redes o links)',
   'Las fotos no muestran el producto real',
@@ -23,16 +19,15 @@ const MOTIVOS_RECHAZO = [
 export default function ModeracionPage() {
   const supabase = createClient();
 
-  const [esAdmin, setEsAdmin] = useState(null); // null = chequeando
+  const [esAdmin, setEsAdmin] = useState(null);
   const [productos, setProductos] = useState([]);
   const [cargando, setCargando] = useState(true);
-  const [procesando, setProcesando] = useState(null); // id del producto en acción
-  const [rechazandoId, setRechazandoId] = useState(null); // id con el motivo abierto
-  const [motivoElegido, setMotivoElegido] = useState(''); // motivo de la lista
-  const [nota, setNota] = useState(''); // aclaración opcional
-  const [previa, setPrevia] = useState(null); // datos completos para el modal "Ver"
+  const [procesando, setProcesando] = useState(null);
+  const [rechazandoId, setRechazandoId] = useState(null);
+  const [motivoElegido, setMotivoElegido] = useState('');
+  const [nota, setNota] = useState('');
+  const [previa, setPrevia] = useState(null);
 
-  // 1. Verificar que el usuario sea admin y, si lo es, traer la cola
   useEffect(() => {
     async function iniciar() {
       const { data: { user } } = await supabase.auth.getUser();
@@ -53,7 +48,6 @@ export default function ModeracionPage() {
     iniciar();
   }, []);
 
-  // Trae los productos en revisión, con su vendedor, foto principal y categoría
   async function cargarCola() {
     const { data, error } = await supabase
       .from('productos')
@@ -66,7 +60,7 @@ export default function ModeracionPage() {
         categorias ( nombre, slug )
       `)
       .eq('estado', 'en_revision')
-      .order('creado_en', { ascending: true }); // los más viejos primero
+      .order('creado_en', { ascending: true });
 
     if (error) {
       console.error('Error cargando la cola:', error);
@@ -85,7 +79,6 @@ export default function ModeracionPage() {
     return Number(valor).toLocaleString('es-AR');
   }
 
-  // Aprobar: pasa el producto a 'activo' y limpia cualquier motivo previo
   async function aprobar(id) {
     setProcesando(id);
     const { error } = await supabase
@@ -102,17 +95,13 @@ export default function ModeracionPage() {
     setProcesando(null);
   }
 
-  // Arma el texto final que se guarda: motivo + nota (si hay)
   function construirMotivoFinal() {
     const base = motivoElegido;
     const aclaracion = nota.trim();
-    if (aclaracion) {
-      return `${base} — ${aclaracion}`;
-    }
+    if (aclaracion) return `${base} — ${aclaracion}`;
     return base;
   }
 
-  // Rechazar: pasa a 'rechazado' y guarda el motivo elegido (+ nota opcional)
   async function confirmarRechazo(id) {
     if (!motivoElegido) {
       alert('Elegí un motivo para que el vendedor sepa qué corregir.');
@@ -146,15 +135,11 @@ export default function ModeracionPage() {
     setNota('');
   }
 
-  // Prepara los datos del producto para el modal "Ver" (formato de VistaProducto)
   function verProducto(p) {
     setPrevia({
       producto: {
-        nombre: p.nombre,
-        descripcion: p.descripcion,
-        precio: p.precio,
-        precio_anterior: p.precio_anterior,
-        marca: p.marca,
+        nombre: p.nombre, descripcion: p.descripcion, precio: p.precio,
+        precio_anterior: p.precio_anterior, marca: p.marca,
         propiedad_1_nombre: p.propiedad_1_nombre,
         tiempo_preparacion: p.tiempo_preparacion,
       },
@@ -165,217 +150,236 @@ export default function ModeracionPage() {
     });
   }
 
-  // --- Render ---
+  // ── Estados de carga ──
 
   if (cargando) {
-    return <main style={{ padding: '2rem', textAlign: 'center' }}>Cargando...</main>;
+    return (
+      <>
+        <Navbar variant="solid" />
+        <main className="pt-28 px-6 text-center text-gray-400">Cargando...</main>
+      </>
+    );
   }
 
   if (!esAdmin) {
     return (
-      <main style={{ padding: '2rem', textAlign: 'center' }}>
-        <h1>Acceso restringido</h1>
-        <p style={{ color: '#666' }}>Esta página es solo para administradores.</p>
-      </main>
+      <>
+        <Navbar variant="solid" />
+        <main className="pt-28 px-6 text-center">
+          <h1 className="text-2xl font-semibold text-[#0a0a0a]">Acceso restringido</h1>
+          <p className="text-gray-500">Esta página es solo para administradores.</p>
+        </main>
+      </>
     );
   }
 
   return (
-    <main style={{ padding: '2rem', maxWidth: '820px', width: '100%', margin: '0 auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
-        <div>
-          <h1 style={{ margin: 0 }}>Productos en revisión</h1>
-          <p style={{ color: '#666', margin: '0.25rem 0 0' }}>Aprobá o rechazá lo que cargan los vendedores</p>
+    <>
+      <Navbar variant="solid" />
+
+      <main className="pt-28 pb-12 px-6 max-w-[820px] w-full mx-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <h1 className="text-2xl font-semibold text-[#0a0a0a] m-0">Productos en revisión</h1>
+            <p className="text-gray-500 mt-1 mb-0 text-sm">Aprobá o rechazá lo que cargan los vendedores</p>
+          </div>
+          <span className="text-sm font-semibold px-3 py-1 bg-amber-100 text-amber-700 rounded-full">
+            {productos.length} {productos.length === 1 ? 'pendiente' : 'pendientes'}
+          </span>
         </div>
-        <span style={{ fontSize: '0.85rem', fontWeight: 600, padding: '0.25rem 0.8rem', background: '#fff3cd', color: '#856404', borderRadius: '999px' }}>
-          {productos.length} {productos.length === 1 ? 'pendiente' : 'pendientes'}
-        </span>
-      </div>
 
-      {productos.length === 0 ? (
-        <div style={{ marginTop: '2rem', padding: '3rem 2rem', textAlign: 'center', border: '1px dashed #ccc', borderRadius: '12px', color: '#666' }}>
-          <p style={{ fontSize: '1.1rem', margin: 0 }}>No hay productos esperando revisión 🎉</p>
-          <p style={{ margin: '0.5rem 0 0', fontSize: '0.9rem' }}>Cuando un vendedor cargue algo nuevo, va a aparecer acá.</p>
-        </div>
-      ) : (
-        <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {productos.map((p) => {
-            const foto = p.producto_media?.[0]?.url;
-            const enAccion = procesando === p.id;
-            // Avisos de moderación: puede venir null, [], o con cosas adentro.
-            const avisos = Array.isArray(p.moderacion_avisos) ? p.moderacion_avisos : [];
-            // Juntamos las etiquetas únicas, sin repetir (ej: dos "animales" → uno solo).
-            const etiquetasAviso = [...new Set(avisos.map((a) => ETIQUETAS_MODERACION[a.tipo] || a.tipo))];
-            return (
-              <div key={p.id} style={{ border: '1px solid #ddd', borderRadius: '10px', padding: '1rem' }}>
-                {/* Cartelito ámbar: solo si el filtro automático marcó algo dudoso */}
-                {etiquetasAviso.length > 0 && (
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '0.85rem', padding: '0.55rem 0.8rem', background: '#fff8e1', border: '1px solid #f5d98b', borderRadius: '8px', color: '#7a5b00', fontSize: '0.82rem' }}>
-                    <span aria-hidden="true" style={{ lineHeight: 1.2 }}>⚠</span>
-                    <span>
-                      <strong>Revisar con cuidado:</strong> {etiquetasAviso.join(' · ')}
-                    </span>
-                  </div>
-                )}
+        {/* Estado vacío */}
+        {productos.length === 0 ? (
+          <div className="mt-8 px-8 py-12 text-center border border-dashed border-gray-300 rounded-xl text-gray-500">
+            <p className="text-lg m-0">No hay productos esperando revisión 🎉</p>
+            <p className="mt-2 mb-0 text-sm">Cuando un vendedor cargue algo nuevo, va a aparecer acá.</p>
+          </div>
+        ) : (
+          <div className="mt-6 flex flex-col gap-4">
+            {productos.map((p) => {
+              const foto = p.producto_media?.[0]?.url;
+              const enAccion = procesando === p.id;
+              const avisos = Array.isArray(p.moderacion_avisos) ? p.moderacion_avisos : [];
+              const etiquetasAviso = [...new Set(avisos.map((a) => ETIQUETAS_MODERACION[a.tipo] || a.tipo))];
 
-                <div style={{ display: 'flex', gap: '1rem' }}>
-                  {/* Miniatura */}
-                  <div style={{ width: '90px', height: '90px', flexShrink: 0, borderRadius: '8px', overflow: 'hidden', background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#aaa' }}>
-                    {foto ? (
-                      <img src={foto} alt={p.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    ) : (
-                      <span style={{ fontSize: '0.7rem' }}>Sin foto</span>
-                    )}
-                  </div>
+              return (
+                <div key={p.id} className="border border-gray-200 rounded-xl p-4">
+                  {/* Cartelito de moderación automática */}
+                  {etiquetasAviso.length > 0 && (
+                    <div className="flex items-start gap-2 mb-3 px-3 py-2.5 bg-amber-50 border border-amber-300 rounded-lg text-amber-800 text-xs">
+                      <span aria-hidden="true" className="leading-tight">⚠</span>
+                      <span>
+                        <strong>Revisar con cuidado:</strong> {etiquetasAviso.join(' · ')}
+                      </span>
+                    </div>
+                  )}
 
-                  {/* Info */}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ margin: 0, fontWeight: 600 }}>{p.nombre}</p>
-                    <p style={{ margin: '0.2rem 0 0', fontSize: '0.85rem', color: '#666' }}>
-                      {p.vendedores?.nombre_negocio || 'Vendedor desconocido'}
-                      {p.categorias?.nombre ? ` · ${p.categorias.nombre}` : ''}
-                    </p>
-                    <p style={{ margin: '0.4rem 0 0', fontWeight: 600 }}>${formatearPrecio(p.precio)}</p>
-                    <p style={{ margin: '0.3rem 0 0', fontSize: '0.85rem', color: '#999', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {p.descripcion}
-                    </p>
-                  </div>
-
-                  {/* Acciones */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', flexShrink: 0 }}>
-                    <button
-                      type="button"
-                      onClick={() => aprobar(p.id)}
-                      disabled={enAccion}
-                      style={{ padding: '0.5rem 1rem', border: 'none', borderRadius: '8px', background: '#1a7f37', color: 'white', cursor: enAccion ? 'not-allowed' : 'pointer', fontSize: '0.85rem' }}
-                    >
-                      Aprobar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => abrirRechazo(p.id)}
-                      disabled={enAccion}
-                      style={{ padding: '0.5rem 1rem', border: '1px solid #c1121f', borderRadius: '8px', background: 'white', color: '#c1121f', cursor: enAccion ? 'not-allowed' : 'pointer', fontSize: '0.85rem' }}
-                    >
-                      Rechazar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => verProducto(p)}
-                      style={{ padding: '0.5rem 1rem', border: '1px solid #ccc', borderRadius: '8px', background: 'white', cursor: 'pointer', fontSize: '0.85rem' }}
-                    >
-                      Ver
-                    </button>
-                  </div>
-                </div>
-
-                {/* Zona de rechazo (se abre al tocar Rechazar) */}
-                {rechazandoId === p.id && (
-                  <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px dashed #eee' }}>
-                    <p style={{ fontSize: '0.85rem', color: '#666', margin: '0 0 0.6rem' }}>
-                      ¿Por qué lo rechazás? El vendedor lo va a ver para corregir.
-                    </p>
-
-                    {/* Lista de motivos */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                      {MOTIVOS_RECHAZO.map((motivo) => {
-                        const elegido = motivoElegido === motivo;
-                        return (
-                          <label
-                            key={motivo}
-                            style={{
-                              display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.5rem 0.7rem',
-                              borderRadius: '8px', cursor: 'pointer', fontSize: '0.88rem',
-                              border: elegido ? '1.5px solid #2563eb' : '1px solid #ddd',
-                              background: elegido ? '#eff6ff' : 'white',
-                              color: elegido ? '#1d4ed8' : '#333',
-                            }}
-                          >
-                            <input
-                              type="radio"
-                              name={`motivo-${p.id}`}
-                              checked={elegido}
-                              onChange={() => setMotivoElegido(motivo)}
-                              style={{ margin: 0 }}
-                            />
-                            {motivo}
-                          </label>
-                        );
-                      })}
+                  <div className="flex gap-4">
+                    {/* Miniatura */}
+                    <div className="w-[90px] h-[90px] shrink-0 rounded-lg overflow-hidden bg-[#F5F2EC] flex items-center justify-center text-gray-400">
+                      {foto ? (
+                        <img src={foto} alt={p.nombre} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-xs">Sin foto</span>
+                      )}
                     </div>
 
-                    {/* Nota opcional */}
-                    <label style={{ display: 'block', fontSize: '0.8rem', color: '#666', margin: '0.8rem 0 0.3rem' }}>
-                      Nota para el vendedor (opcional)
-                    </label>
-                    <textarea
-                      value={nota}
-                      onChange={(e) => setNota(e.target.value)}
-                      rows={2}
-                      placeholder='Aclarale el caso puntual, ej: "el teléfono está en la última foto".'
-                      style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid #ccc', resize: 'vertical' }}
-                    />
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <p className="m-0 font-semibold text-[#0a0a0a]">{p.nombre}</p>
+                      <p className="mt-0.5 mb-0 text-sm text-gray-500">
+                        {p.vendedores?.nombre_negocio || 'Vendedor desconocido'}
+                        {p.categorias?.nombre ? ` · ${p.categorias.nombre}` : ''}
+                      </p>
+                      <p className="mt-1.5 mb-0 font-semibold text-[#0a0a0a]">${formatearPrecio(p.precio)}</p>
+                      <p className="mt-1 mb-0 text-sm text-gray-400 overflow-hidden text-ellipsis whitespace-nowrap">
+                        {p.descripcion}
+                      </p>
+                    </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.7rem' }}>
+                    {/* Acciones */}
+                    <div className="flex flex-col gap-2 shrink-0">
                       <button
                         type="button"
-                        onClick={cancelarRechazo}
+                        onClick={() => aprobar(p.id)}
                         disabled={enAccion}
-                        style={{ padding: '0.5rem 1rem', border: '1px solid #ccc', borderRadius: '8px', background: 'white', cursor: 'pointer', fontSize: '0.85rem' }}
+                        className={`px-4 py-2 border-none rounded-lg text-white text-sm transition-colors ${
+                          enAccion ? 'bg-gray-300 cursor-not-allowed' : 'bg-emerald-700 cursor-pointer hover:bg-emerald-800'
+                        }`}
                       >
-                        Cancelar
+                        Aprobar
                       </button>
                       <button
                         type="button"
-                        onClick={() => confirmarRechazo(p.id)}
-                        disabled={enAccion || !motivoElegido}
-                        style={{ padding: '0.5rem 1rem', border: 'none', borderRadius: '8px', background: (enAccion || !motivoElegido) ? '#e0a3a8' : '#c1121f', color: 'white', cursor: (enAccion || !motivoElegido) ? 'not-allowed' : 'pointer', fontSize: '0.85rem' }}
+                        onClick={() => abrirRechazo(p.id)}
+                        disabled={enAccion}
+                        className={`px-4 py-2 border border-red-700 rounded-lg bg-white text-red-700 text-sm transition-colors ${
+                          enAccion ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-red-50'
+                        }`}
                       >
-                        {enAccion ? 'Rechazando...' : 'Confirmar rechazo'}
+                        Rechazar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => verProducto(p)}
+                        className="px-4 py-2 border border-gray-300 rounded-lg bg-white text-[#0a0a0a] text-sm cursor-pointer hover:bg-gray-50 transition-colors"
+                      >
+                        Ver
                       </button>
                     </div>
                   </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
 
-      {/* Modal "Ver": el mismo VistaProducto de siempre */}
-      {previa && (
-        <div
-          onClick={() => setPrevia(null)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '2rem 1rem', overflowY: 'auto', zIndex: 1000 }}
-        >
+                  {/* Zona de rechazo */}
+                  {rechazandoId === p.id && (
+                    <div className="mt-4 pt-4 border-t border-dashed border-gray-100">
+                      <p className="text-sm text-gray-500 m-0 mb-2.5">
+                        ¿Por qué lo rechazás? El vendedor lo va a ver para corregir.
+                      </p>
+
+                      {/* Lista de motivos */}
+                      <div className="flex flex-col gap-1.5">
+                        {MOTIVOS_RECHAZO.map((motivo) => {
+                          const elegido = motivoElegido === motivo;
+                          return (
+                            <label
+                              key={motivo}
+                              className={`flex items-center gap-2.5 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${
+                                elegido
+                                  ? 'border-2 border-[#0a0a0a] bg-[#F5F2EC] text-[#0a0a0a] font-medium'
+                                  : 'border border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                              }`}
+                            >
+                              <input
+                                type="radio"
+                                name={`motivo-${p.id}`}
+                                checked={elegido}
+                                onChange={() => setMotivoElegido(motivo)}
+                                className="m-0 accent-[#0a0a0a]"
+                              />
+                              {motivo}
+                            </label>
+                          );
+                        })}
+                      </div>
+
+                      {/* Nota opcional */}
+                      <label className="block text-xs text-gray-500 mt-3 mb-1">
+                        Nota para el vendedor (opcional)
+                      </label>
+                      <textarea
+                        value={nota}
+                        onChange={(e) => setNota(e.target.value)}
+                        rows={2}
+                        placeholder='Aclarale el caso puntual, ej: "el teléfono está en la última foto".'
+                        className="w-full px-3 py-2 rounded-lg border border-gray-300 resize-y outline-none focus:border-[#0a0a0a] focus:ring-1 focus:ring-[#0a0a0a]/20 transition-colors text-sm"
+                      />
+
+                      <div className="flex justify-end gap-2 mt-3">
+                        <button
+                          type="button"
+                          onClick={cancelarRechazo}
+                          disabled={enAccion}
+                          className="px-4 py-2 border border-gray-300 rounded-lg bg-white cursor-pointer text-sm hover:bg-gray-50 transition-colors"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => confirmarRechazo(p.id)}
+                          disabled={enAccion || !motivoElegido}
+                          className={`px-4 py-2 border-none rounded-lg text-white text-sm transition-colors ${
+                            enAccion || !motivoElegido
+                              ? 'bg-red-300 cursor-not-allowed'
+                              : 'bg-red-700 cursor-pointer hover:bg-red-800'
+                          }`}
+                        >
+                          {enAccion ? 'Rechazando...' : 'Confirmar rechazo'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Modal "Ver" */}
+        {previa && (
           <div
-            onClick={(e) => e.stopPropagation()}
-            style={{ background: 'white', borderRadius: '12px', maxWidth: '760px', width: '100%', margin: 'auto', overflow: 'hidden' }}
+            onClick={() => setPrevia(null)}
+            className="fixed inset-0 bg-black/50 flex items-start justify-center p-8 overflow-y-auto z-[1000]"
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.5rem', borderBottom: '1px solid #eee' }}>
-              <p style={{ fontWeight: 600, margin: 0 }}>Vista del producto</p>
-              <button
-                type="button"
-                onClick={() => setPrevia(null)}
-                aria-label="Cerrar"
-                style={{ width: '32px', height: '32px', border: '1px solid #ddd', borderRadius: '8px', background: 'white', cursor: 'pointer', fontSize: '1.2rem', lineHeight: 1 }}
-              >
-                ×
-              </button>
-            </div>
-            <div style={{ padding: '1.5rem' }}>
-              <VistaProducto
-                producto={previa.producto}
-                fotos={previa.fotos}
-                variantes={previa.variantes}
-                vendedor={previa.vendedor}
-                categoria={previa.categoria}
-                modoPrevia
-              />
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-xl max-w-[760px] w-full my-auto overflow-hidden"
+            >
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                <p className="font-semibold text-[#0a0a0a] m-0">Vista del producto</p>
+                <button
+                  type="button"
+                  onClick={() => setPrevia(null)}
+                  aria-label="Cerrar"
+                  className="w-8 h-8 border border-gray-200 rounded-lg bg-white cursor-pointer text-lg leading-none hover:bg-gray-50"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="p-6">
+                <VistaProducto
+                  producto={previa.producto}
+                  fotos={previa.fotos}
+                  variantes={previa.variantes}
+                  vendedor={previa.vendedor}
+                  categoria={previa.categoria}
+                  modoPrevia
+                />
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </main>
+        )}
+      </main>
+    </>
   );
 }

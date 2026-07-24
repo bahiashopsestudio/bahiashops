@@ -8,7 +8,7 @@ import BloqueHorarios, { HORARIOS_INICIALES } from './BloqueHorarios'
 
 const MapaUbicacion = dynamic(() => import('./MapaUbicacion'), {
   ssr: false,
-  loading: () => <p style={{ color: '#666' }}>Cargando mapa...</p>,
+  loading: () => <p className="text-gray-500">Cargando mapa...</p>,
 })
 
 const CENTRO_BB = { lat: -38.7183, lng: -62.2663 }
@@ -24,6 +24,10 @@ const TITULOS_PASOS = {
   2: 'Ubicación',
   3: 'Disponibilidad y despacho',
 }
+
+const inputClasses =
+  'w-full px-3 py-2 border border-gray-300 rounded outline-none focus:border-[#0a0a0a] focus:ring-1 focus:ring-[#0a0a0a]/20 transition-colors'
+const selectClasses = `${inputClasses} bg-white`
 
 export default function FormularioVendedor({ userId }) {
   const router = useRouter()
@@ -200,8 +204,6 @@ export default function FormularioVendedor({ userId }) {
   async function handleSubmit(e) {
     e.preventDefault()
 
-    // Si no estamos en el último paso, el "submit" significa "siguiente".
-    // El navegador ya validó los required visibles antes de llamarnos.
     if (paso < 3) {
       setPaso((p) => p + 1)
       window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -255,56 +257,41 @@ export default function FormularioVendedor({ userId }) {
     router.push('/')
   }
 
-  const inputStyle = { padding: '0.5rem', border: '1px solid #ccc', borderRadius: 4 }
-  const selectStyle = { ...inputStyle, background: 'white' }
-  const botonPrimario = {
-    padding: '0.75rem 1.25rem',
-    background: guardando ? '#999' : '#000',
-    color: 'white',
-    border: 'none',
-    borderRadius: 4,
-    cursor: guardando ? 'not-allowed' : 'pointer',
-    fontSize: '1rem',
-  }
-  const botonSecundario = {
-    padding: '0.75rem 1.25rem',
-    background: 'white',
-    color: '#333',
-    border: '1px solid #ccc',
-    borderRadius: 4,
-    cursor: 'pointer',
-    fontSize: '1rem',
-  }
-
   return (
-    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-      <div style={{ marginBottom: '0.5rem' }}>
-        <h2 style={{ margin: 0, fontSize: '1.5rem' }}>{TITULOS_PASOS[paso]}</h2>
-        <small style={{ color: '#666' }}>Paso {paso} de 3</small>
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      {/* Encabezado del paso */}
+      <div className="mb-2">
+        <h2 className="text-2xl font-semibold text-[#0a0a0a]">
+          {TITULOS_PASOS[paso]}
+        </h2>
+        <span className="text-sm text-gray-500">Paso {paso} de 3</span>
       </div>
 
+      {/* ───── PASO 1: Tu emprendimiento ───── */}
       {paso === 1 && (
         <>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-            <span>Nombre del emprendimiento *</span>
+          <label className="flex flex-col gap-1">
+            <span className="text-[#0a0a0a]">Nombre del emprendimiento *</span>
             <input
               type="text"
               required
               maxLength={80}
               value={nombreNegocio}
               onChange={(e) => setNombreNegocio(e.target.value)}
-              style={inputStyle}
+              className={inputClasses}
             />
           </label>
 
-          <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-            <span>Categoría / rubro *</span>
-            <small style={{ color: '#666' }}>El rubro principal de tu emprendimiento. Tus productos van a quedar dentro de esta categoría.</small>
+          <label className="flex flex-col gap-1">
+            <span className="text-[#0a0a0a]">Categoría / rubro *</span>
+            <span className="text-sm text-gray-500">
+              El rubro principal de tu emprendimiento. Tus productos van a quedar dentro de esta categoría.
+            </span>
             <select
               required
               value={categoriaId}
               onChange={(e) => setCategoriaId(e.target.value)}
-              style={selectStyle}
+              className={selectClasses}
             >
               <option value="">Elegí tu rubro</option>
               {categorias.map((c) => (
@@ -313,47 +300,51 @@ export default function FormularioVendedor({ userId }) {
             </select>
           </label>
 
-          <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-            <span>Descripción corta * <small style={{ color: '#666' }}>(una línea)</small></span>
+          <label className="flex flex-col gap-1">
+            <span className="text-[#0a0a0a]">
+              Descripción corta * <span className="text-sm text-gray-500">(una línea)</span>
+            </span>
             <input
               type="text"
               required
               maxLength={140}
               value={descripcionCorta}
               onChange={(e) => setDescripcionCorta(e.target.value)}
-              style={inputStyle}
+              className={inputClasses}
             />
           </label>
 
-          <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-            <span>Descripción larga <small style={{ color: '#666' }}>(opcional)</small></span>
+          <label className="flex flex-col gap-1">
+            <span className="text-[#0a0a0a]">
+              Descripción larga <span className="text-sm text-gray-500">(opcional)</span>
+            </span>
             <textarea
               rows={5}
               maxLength={1000}
               value={descripcionLarga}
               onChange={(e) => setDescripcionLarga(e.target.value)}
-              style={{ ...inputStyle, fontFamily: 'inherit' }}
+              className={`${inputClasses} font-[inherit]`}
             />
           </label>
 
-          <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-            <span>Instagram *</span>
+          <label className="flex flex-col gap-1">
+            <span className="text-[#0a0a0a]">Instagram *</span>
             <input
               type="text"
               required
               placeholder="bahiashops (sin @)"
               value={instagram}
               onChange={(e) => setInstagram(e.target.value.replace('@', ''))}
-              style={inputStyle}
+              className={inputClasses}
             />
           </label>
 
-          <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-            <span>Sitio web propio</span>
+          <label className="flex flex-col gap-1">
+            <span className="text-[#0a0a0a]">Sitio web propio</span>
             <select
               value={plataformaSitio}
               onChange={(e) => setPlataformaSitio(e.target.value)}
-              style={selectStyle}
+              className={selectClasses}
             >
               <option value="">Elegí una opción</option>
               <option value="no_tengo">No tengo sitio web</option>
@@ -369,25 +360,25 @@ export default function FormularioVendedor({ userId }) {
           </label>
 
           {tienePlataforma && (
-            <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-              <span>URL del sitio *</span>
+            <label className="flex flex-col gap-1">
+              <span className="text-[#0a0a0a]">URL del sitio *</span>
               <input
                 type="url"
                 required
                 placeholder="https://bahiashops.com.ar"
                 value={sitioWeb}
                 onChange={(e) => setSitioWeb(e.target.value)}
-                style={inputStyle}
+                className={inputClasses}
               />
             </label>
           )}
 
-          <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-            <span>Otra red social</span>
+          <label className="flex flex-col gap-1">
+            <span className="text-[#0a0a0a]">Otra red social</span>
             <select
               value={redSecundariaTipo}
               onChange={(e) => setRedSecundariaTipo(e.target.value)}
-              style={selectStyle}
+              className={selectClasses}
             >
               <option value="">Elegí una opción</option>
               <option value="no_tengo">No tengo otra red</option>
@@ -398,34 +389,28 @@ export default function FormularioVendedor({ userId }) {
           </label>
 
           {tieneRedSecundaria && (
-            <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-              <span>URL o usuario *</span>
+            <label className="flex flex-col gap-1">
+              <span className="text-[#0a0a0a]">URL o usuario *</span>
               <input
                 type="text"
                 required
                 placeholder={placeholderRed}
                 value={redSecundariaUrl}
                 onChange={(e) => setRedSecundariaUrl(e.target.value)}
-                style={inputStyle}
+                className={inputClasses}
               />
             </label>
           )}
 
-          <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-            <span>
-              WhatsApp <small style={{ color: '#666' }}>(recomendado, te facilita mucho que te contacten)</small>
+          <label className="flex flex-col gap-1">
+            <span className="text-[#0a0a0a]">
+              WhatsApp{' '}
+              <span className="text-sm text-gray-500">
+                (recomendado, te facilita mucho que te contacten)
+              </span>
             </span>
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'stretch' }}>
-              <span style={{
-                padding: '0.5rem 0.75rem',
-                border: '1px solid #ccc',
-                borderRadius: 4,
-                background: '#f5f5f5',
-                color: '#666',
-                display: 'flex',
-                alignItems: 'center',
-                fontSize: '0.95rem',
-              }}>
+            <div className="flex gap-2 items-stretch">
+              <span className="px-3 py-2 border border-gray-300 rounded bg-[#F5F2EC] text-gray-500 flex items-center text-[0.95rem]">
                 +54 9
               </span>
               <input
@@ -433,66 +418,70 @@ export default function FormularioVendedor({ userId }) {
                 placeholder="291 555 1234 (sin 0 y sin 15)"
                 value={whatsapp}
                 onChange={(e) => setWhatsapp(e.target.value.replace(/\D/g, ''))}
-                style={{ ...inputStyle, flex: 1 }}
+                className={`${inputClasses} flex-1`}
               />
             </div>
           </label>
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+          <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
               checked={usarOtroEmail}
               onChange={(e) => setUsarOtroEmail(e.target.checked)}
+              className="accent-[#0a0a0a]"
             />
-            <span>Usar otro email para contacto público</span>
+            <span className="text-[#0a0a0a]">Usar otro email para contacto público</span>
           </label>
 
           {usarOtroEmail && (
-            <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-              <span>Email de contacto *</span>
+            <label className="flex flex-col gap-1">
+              <span className="text-[#0a0a0a]">Email de contacto *</span>
               <input
                 type="email"
                 required
                 placeholder="contacto@bahiashops.com.ar"
                 value={emailContacto}
                 onChange={(e) => setEmailContacto(e.target.value)}
-                style={inputStyle}
+                className={inputClasses}
               />
             </label>
           )}
         </>
       )}
 
+      {/* ───── PASO 2: Ubicación ───── */}
       {paso === 2 && (
-        <fieldset style={{ border: '1px solid #ddd', borderRadius: 4, padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <legend style={{ padding: '0 0.5rem', fontWeight: 600 }}>Ubicación</legend>
+        <fieldset className="border border-gray-200 rounded-lg p-5 flex flex-col gap-4">
+          <legend className="px-2 font-semibold text-[#0a0a0a]">Ubicación</legend>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <span>¿Recibís gente en tu local, taller o showroom? *</span>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+          <div className="flex flex-col gap-2">
+            <span className="text-[#0a0a0a]">¿Recibís gente en tu local, taller o showroom? *</span>
+            <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="radio"
                 name="recibe_publico"
                 checked={recibePublico === true}
                 onChange={() => { setRecibePublico(true); resetearUbicacion() }}
                 required
+                className="accent-[#0a0a0a]"
               />
               <span>Sí, recibo gente</span>
             </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+            <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="radio"
                 name="recibe_publico"
                 checked={recibePublico === false}
                 onChange={() => { setRecibePublico(false); resetearUbicacion() }}
+                className="accent-[#0a0a0a]"
               />
               <span>No, vendo desde casa o solo despacho</span>
             </label>
           </div>
 
           {recibePublico !== null && (
-            <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-              <span>Localidad *</span>
+            <label className="flex flex-col gap-1">
+              <span className="text-[#0a0a0a]">Localidad *</span>
               <select
                 value={localidadId}
                 onChange={(e) => {
@@ -500,7 +489,7 @@ export default function FormularioVendedor({ userId }) {
                   resetearUbicacion()
                 }}
                 required
-                style={selectStyle}
+                className={selectClasses}
               >
                 <option value="">Elegí una localidad</option>
                 {localidades.map((l) => (
@@ -512,35 +501,31 @@ export default function FormularioVendedor({ userId }) {
 
           {recibePublico !== null && localidadId && localidadTieneBarrios && (
             <>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                <span>Dirección *</span>
-                <span style={{ fontSize: '0.85rem', color: '#666' }}>
+              <div className="flex flex-col gap-1">
+                <span className="text-[#0a0a0a]">Dirección *</span>
+                <span className="text-sm text-gray-500">
                   {recibePublico
                     ? 'Escribí la dirección de tu local y tocá "Ubicar".'
                     : 'La usamos solo para detectar tu barrio. No la guardamos: tu dirección exacta no queda registrada ni se muestra.'}
                 </span>
-                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'stretch' }}>
+                <div className="flex gap-2 items-stretch">
                   <input
                     type="text"
                     required
                     placeholder="Ej: Donado 1234"
                     value={direccion}
                     onChange={(e) => setDireccion(e.target.value)}
-                    style={{ ...inputStyle, flex: 1 }}
+                    className={`${inputClasses} flex-1`}
                   />
                   <button
                     type="button"
                     onClick={buscarDireccion}
                     disabled={buscando || !direccion}
-                    style={{
-                      padding: '0.5rem 0.9rem',
-                      background: buscando || !direccion ? '#ccc' : '#2563eb',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: 4,
-                      cursor: buscando || !direccion ? 'not-allowed' : 'pointer',
-                      whiteSpace: 'nowrap',
-                    }}
+                    className={`px-4 py-2 text-white border-none rounded whitespace-nowrap transition-colors ${
+                      buscando || !direccion
+                        ? 'bg-gray-300 cursor-not-allowed'
+                        : 'bg-[#0a0a0a] cursor-pointer hover:bg-[#1a1a1a]'
+                    }`}
                   >
                     {buscando ? 'Buscando...' : 'Ubicar 📍'}
                   </button>
@@ -550,7 +535,7 @@ export default function FormularioVendedor({ userId }) {
               {mapaVisible && (
                 <>
                   {avisoMapa && (
-                    <div style={{ padding: '0.6rem', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 4, fontSize: '0.9rem' }}>
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800">
                       {avisoMapa}
                     </div>
                   )}
@@ -561,17 +546,17 @@ export default function FormularioVendedor({ userId }) {
                   />
 
                   {barrioDetectado ? (
-                    <p style={{ margin: 0, fontSize: '0.95rem' }}>
+                    <p className="text-[0.95rem] m-0">
                       📍 Tu local está en <strong>{barrioDetectado.nombre}</strong>. Si la ubicación no es exacta, arrastrá el pin hasta tu puerta.
                     </p>
                   ) : latitud ? (
-                    <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                      <span>No pudimos detectar el barrio desde el pin. Elegilo vos:</span>
+                    <label className="flex flex-col gap-1">
+                      <span className="text-[#0a0a0a]">No pudimos detectar el barrio desde el pin. Elegilo vos:</span>
                       <select
                         value={barrioId}
                         onChange={(e) => { setBarrioId(e.target.value); setBarrioAuto(false) }}
                         required
-                        style={selectStyle}
+                        className={selectClasses}
                       >
                         <option value="">Elegí un barrio</option>
                         {barriosDeLaLocalidad.map((b) => (
@@ -582,7 +567,7 @@ export default function FormularioVendedor({ userId }) {
                   ) : null}
 
                   {recibePublico && latitud && longitud && (
-                    <span style={{ fontSize: '0.8rem', color: '#999', fontFamily: 'monospace' }}>
+                    <span className="text-xs text-gray-400 font-mono">
                       📍 {latitud.toFixed(6)}, {longitud.toFixed(6)}
                     </span>
                   )}
@@ -593,12 +578,13 @@ export default function FormularioVendedor({ userId }) {
         </fieldset>
       )}
 
+      {/* ───── PASO 3: Disponibilidad y despacho ───── */}
       {paso === 3 && (
-        <fieldset style={{ border: '1px solid #ddd', borderRadius: 4, padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <legend style={{ padding: '0 0.5rem', fontWeight: 600 }}>Disponibilidad y despacho</legend>
+        <fieldset className="border border-gray-200 rounded-lg p-5 flex flex-col gap-4">
+          <legend className="px-2 font-semibold text-[#0a0a0a]">Disponibilidad y despacho</legend>
 
           <div>
-            <span style={{ display: 'block', marginBottom: '0.5rem' }}>Horarios de atención</span>
+            <span className="block mb-2 text-[#0a0a0a]">Horarios de atención</span>
             <BloqueHorarios
               valor={horarios}
               onChange={setHorarios}
@@ -607,16 +593,16 @@ export default function FormularioVendedor({ userId }) {
             />
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <span>Tiempo de despacho *</span>
-            <small style={{ color: '#666' }}>Cuánto te lleva en general despachar un pedido.</small>
+          <div className="flex flex-col gap-2">
+            <span className="text-[#0a0a0a]">Tiempo de despacho *</span>
+            <span className="text-sm text-gray-500">Cuánto te lleva en general despachar un pedido.</span>
             {[
               { valor: 'mismo_dia',  label: 'Mismo día (si se compra dentro del horario)' },
               { valor: '24_48hs',    label: '24 a 48 horas hábiles' },
               { valor: '2_5_dias',   label: '2 a 5 días hábiles' },
               { valor: 'mas_5_dias', label: 'Más de 5 días / a coordinar' },
             ].map((opcion) => (
-              <label key={opcion.valor} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+              <label key={opcion.valor} className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="radio"
                   name="tiempo_despacho"
@@ -624,15 +610,16 @@ export default function FormularioVendedor({ userId }) {
                   checked={tiempoDespacho === opcion.valor}
                   onChange={(e) => setTiempoDespacho(e.target.value)}
                   required
+                  className="accent-[#0a0a0a]"
                 />
                 <span>{opcion.label}</span>
               </label>
             ))}
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <span>Métodos de entrega típicos</span>
-            <small style={{ color: '#666' }}>Los que usás habitualmente. Después podés ajustar producto por producto.</small>
+          <div className="flex flex-col gap-2">
+            <span className="text-[#0a0a0a]">Métodos de entrega típicos</span>
+            <span className="text-sm text-gray-500">Los que usás habitualmente. Después podés ajustar producto por producto.</span>
             {[
               { valor: 'retiro',        label: 'Retiro en mi local / domicilio' },
               { valor: 'coordinar',     label: 'A coordinar con el comprador' },
@@ -640,11 +627,12 @@ export default function FormularioVendedor({ userId }) {
               { valor: 'flash_pedidos', label: 'Uber Flash / PedidosYa Envíos' },
               { valor: 'correo',        label: 'Correo / encomienda' },
             ].map((opcion) => (
-              <label key={opcion.valor} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+              <label key={opcion.valor} className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={metodosEntrega.includes(opcion.valor)}
                   onChange={() => toggleMetodo(opcion.valor)}
+                  className="accent-[#0a0a0a]"
                 />
                 <span>{opcion.label}</span>
               </label>
@@ -653,22 +641,36 @@ export default function FormularioVendedor({ userId }) {
         </fieldset>
       )}
 
+      {/* Error */}
       {error && (
-        <div style={{ padding: '0.75rem', background: '#fee', border: '1px solid #fcc', borderRadius: 4, color: '#900' }}>
+        <div className="p-3 bg-red-50 border border-red-200 rounded text-red-800 text-sm">
           {error}
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'space-between', marginTop: '0.5rem' }}>
+      {/* Navegación del wizard */}
+      <div className="flex gap-2 justify-between mt-2">
         {paso > 1 ? (
-          <button type="button" onClick={irAlAnterior} style={botonSecundario}>
+          <button
+            type="button"
+            onClick={irAlAnterior}
+            className="px-5 py-3 bg-white text-[#0a0a0a] border border-gray-300 rounded cursor-pointer text-base hover:bg-gray-50 transition-colors"
+          >
             ← Anterior
           </button>
         ) : (
           <div />
         )}
 
-        <button type="submit" disabled={guardando} style={botonPrimario}>
+        <button
+          type="submit"
+          disabled={guardando}
+          className={`px-5 py-3 text-white border-none rounded text-base transition-colors ${
+            guardando
+              ? 'bg-gray-400 cursor-not-allowed'
+              : 'bg-[#0a0a0a] cursor-pointer hover:bg-[#1a1a1a]'
+          }`}
+        >
           {paso < 3
             ? 'Siguiente →'
             : (guardando ? 'Guardando...' : 'Sumar mi emprendimiento')}

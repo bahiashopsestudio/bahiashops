@@ -3,15 +3,16 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
+import Navbar from '@/components/Navbar';
 import VolverAtras from '@/components/VolverAtras';
 
 function infoEstado(estado) {
-  if (estado === 'en_revision') return { texto: 'En revisión', fondo: '#fff3d6', color: '#8a6d00', punto: '#e0a800' };
-  if (estado === 'activo') return { texto: 'Publicado', fondo: '#e2f5e6', color: '#1e6b34', punto: '#2faa55' };
-  if (estado === 'pausado') return { texto: 'Pausado', fondo: '#eef0f2', color: '#555', punto: '#999' };
-  if (estado === 'agotado') return { texto: 'Agotado', fondo: '#fdeaea', color: '#a33', punto: '#d35' };
-  if (estado === 'rechazado') return { texto: 'Rechazado', fondo: '#f3f3f3', color: '#888', punto: '#aaa' };
-  return { texto: estado, fondo: '#eee', color: '#666', punto: '#999' };
+  if (estado === 'en_revision') return { texto: 'En revisión', fondo: 'bg-amber-100', color: 'text-amber-700', punto: 'bg-amber-500' };
+  if (estado === 'activo')     return { texto: 'Publicado',   fondo: 'bg-emerald-100', color: 'text-emerald-700', punto: 'bg-emerald-500' };
+  if (estado === 'pausado')    return { texto: 'Pausado',     fondo: 'bg-gray-100', color: 'text-gray-500', punto: 'bg-gray-400' };
+  if (estado === 'agotado')    return { texto: 'Agotado',     fondo: 'bg-red-100', color: 'text-red-700', punto: 'bg-red-400' };
+  if (estado === 'rechazado')  return { texto: 'Rechazado',   fondo: 'bg-gray-100', color: 'text-gray-400', punto: 'bg-gray-300' };
+  return { texto: estado, fondo: 'bg-gray-100', color: 'text-gray-500', punto: 'bg-gray-400' };
 }
 
 function formatearPrecio(valor) {
@@ -101,10 +102,6 @@ export default function MisProductosPage() {
     cargarProductos();
   }, []);
 
-  // ── Pausar / Reactivar ──
-  // Solo aplica a productos activos, pausados o agotados.
-  // Los que están en_revision o rechazados no son visibles de todas formas.
-
   async function toggleEstado(producto) {
     const nuevoEstado = producto.estado === 'activo' ? 'pausado' : 'activo';
 
@@ -123,8 +120,6 @@ export default function MisProductosPage() {
     );
   }
 
-  // ── Eliminar ──
-
   async function eliminarProducto(producto) {
     const confirmar = window.confirm(
       `¿Seguro que querés eliminar "${producto.nombre}"? Esta acción no se puede deshacer.`
@@ -134,13 +129,11 @@ export default function MisProductosPage() {
     setEliminando(producto.id);
 
     try {
-      // 1. Traer las fotos para limpiar el storage
       const { data: medias } = await supabase
         .from('producto_media')
         .select('url')
         .eq('producto_id', producto.id);
 
-      // 2. Eliminar archivos del storage
       if (medias && medias.length > 0) {
         const rutas = medias.map(m => extraerRutaStorage(m.url, 'productos')).filter(Boolean);
         if (rutas.length > 0) {
@@ -148,7 +141,6 @@ export default function MisProductosPage() {
         }
       }
 
-      // 3. Eliminar variantes, media, producto
       await supabase.from('producto_variantes').delete().eq('producto_id', producto.id);
       await supabase.from('producto_media').delete().eq('producto_id', producto.id);
 
@@ -164,7 +156,6 @@ export default function MisProductosPage() {
     } catch (err) {
       console.error(err);
 
-      // Detectar error de foreign key (tiene pedidos asociados)
       const esForeignKey =
         err?.message?.includes('foreign key') ||
         err?.message?.includes('violates') ||
@@ -183,9 +174,6 @@ export default function MisProductosPage() {
     }
   }
 
-  // ── Helpers de UI ──
-
-  // Muestra el botón Pausar/Reactivar solo para estados donde tiene sentido
   function puedeToggle(estado) {
     return estado === 'activo' || estado === 'pausado' || estado === 'agotado';
   }
@@ -195,121 +183,121 @@ export default function MisProductosPage() {
   }
 
   return (
-    <main style={{ padding: '2rem', maxWidth: '800px', width: '100%', margin: '0 auto' }}>
-      <VolverAtras href="/perfil" texto="Volver a Mi perfil" />
+    <>
+      <Navbar variant="solid" />
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-        <h1 style={{ margin: 0 }}>Mis productos</h1>
-        {productos.length > 0 && (
-          <Link
-            href="/vendedor/productos/nuevo"
-            style={{ background: '#222', color: '#fff', borderRadius: '8px', padding: '0.6rem 1.1rem', fontSize: '0.95rem', textDecoration: 'none' }}
-          >
-            + Cargar producto
-          </Link>
-        )}
-      </div>
+      <main className="pt-28 pb-12 px-6 max-w-[800px] w-full mx-auto">
+        <VolverAtras href="/perfil" texto="Volver a Mi perfil" />
 
-      {cargando && <p style={{ color: '#888' }}>Cargando tus productos...</p>}
-      {!cargando && error && <p style={{ color: '#c00' }}>{error}</p>}
-
-      {!cargando && !error && productos.map((p) => {
-        const estado = infoEstado(p.estado);
-        const estaEliminando = eliminando === p.id;
-        return (
-          <div
-            key={p.id}
-            style={{
-              display: 'flex', gap: '1rem', alignItems: 'center', background: '#fff',
-              border: '1px solid #e3e3e3', borderRadius: '10px', padding: '0.9rem', marginBottom: '0.9rem',
-              opacity: estaEliminando ? 0.5 : 1, transition: 'opacity 0.2s',
-            }}
-          >
-            {/* Foto */}
-            <div style={{ width: '84px', height: '84px', borderRadius: '8px', flexShrink: 0, background: '#f0f0f0', overflow: 'hidden' }}>
-              {p.foto && <img src={p.foto} alt={p.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
-            </div>
-
-            {/* Info */}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ fontWeight: 600, fontSize: '1.05rem', margin: '0 0 0.15rem' }}>{p.nombre}</p>
-              <p style={{ fontSize: '0.82rem', color: '#888', margin: '0 0 0.45rem' }}>
-                {[nombreCategoria, p.subcategoria].filter(Boolean).join(' · ')}
-              </p>
-              <p style={{ fontSize: '1rem', fontWeight: 600, margin: 0 }}>
-                {p.precio_anterior && (
-                  <span style={{ color: '#aaa', fontWeight: 400, textDecoration: 'line-through', fontSize: '0.85rem', marginRight: '0.4rem' }}>
-                    ${formatearPrecio(p.precio_anterior)}
-                  </span>
-                )}
-                ${formatearPrecio(p.precio)}
-              </p>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.78rem', fontWeight: 600, padding: '0.25rem 0.6rem', borderRadius: '999px', marginTop: '0.5rem', background: estado.fondo, color: estado.color }}>
-                <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: estado.punto }} />
-                {estado.texto}
-              </span>
-            </div>
-
-            {/* Acciones */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', flexShrink: 0 }}>
-              <Link
-                href={`/vendedor/productos/${p.id}/editar`}
-                style={{ background: '#fff', border: '1px solid #222', borderRadius: '7px', padding: '0.4rem 0.9rem', fontSize: '0.85rem', color: '#222', textDecoration: 'none', whiteSpace: 'nowrap', textAlign: 'center' }}
-              >
-                Editar
-              </Link>
-
-              {puedeToggle(p.estado) && (
-                <button
-                  onClick={() => toggleEstado(p)}
-                  style={{
-                    background: '#fff',
-                    border: `1px solid ${p.estado === 'activo' ? '#e0a800' : '#2faa55'}`,
-                    borderRadius: '7px', padding: '0.4rem 0.9rem', fontSize: '0.85rem',
-                    color: p.estado === 'activo' ? '#8a6d00' : '#1e6b34',
-                    cursor: 'pointer', whiteSpace: 'nowrap',
-                  }}
-                >
-                  {textoToggle(p.estado)}
-                </button>
-              )}
-
-              <Link
-                href={`/producto/${p.id}`}
-                style={{ background: '#fff', border: '1px solid #ccc', borderRadius: '7px', padding: '0.4rem 0.9rem', fontSize: '0.85rem', color: '#222', textDecoration: 'none', whiteSpace: 'nowrap', textAlign: 'center' }}
-              >
-                Ver
-              </Link>
-
-              <button
-                onClick={() => eliminarProducto(p)}
-                disabled={estaEliminando}
-                style={{
-                  background: '#fff', border: '1px solid #e0c0c0', borderRadius: '7px',
-                  padding: '0.4rem 0.9rem', fontSize: '0.85rem', color: '#c44',
-                  cursor: estaEliminando ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap',
-                }}
-              >
-                {estaEliminando ? '...' : 'Eliminar'}
-              </button>
-            </div>
-          </div>
-        );
-      })}
-
-      {!cargando && !error && productos.length === 0 && (
-        <div style={{ background: '#fff', border: '1px dashed #d0d0d0', borderRadius: '12px', padding: '3rem 2rem', textAlign: 'center' }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>📦</div>
-          <h2 style={{ margin: '0 0 0.4rem', fontSize: '1.2rem' }}>Todavía no cargaste productos</h2>
-          <p style={{ margin: '0 0 1.4rem', color: '#777' }}>Cargá tu primer producto y va a aparecer acá.</p>
-          <Link
-            href="/vendedor/productos/nuevo"
-            style={{ background: '#222', color: '#fff', borderRadius: '8px', padding: '0.6rem 1.1rem', fontSize: '0.95rem', textDecoration: 'none' }}
-          >
-            + Cargar mi primer producto
-          </Link>
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-semibold text-[#0a0a0a] m-0">Mis productos</h1>
+          {productos.length > 0 && (
+            <Link
+              href="/vendedor/productos/nuevo"
+              className="bg-[#0a0a0a] text-white rounded-lg px-5 py-2.5 text-[0.95rem] no-underline hover:bg-[#1a1a1a] transition-colors"
+            >
+              + Cargar producto
+            </Link>
+          )}
         </div>
-      )}
-    </main>
+
+        {cargando && <p className="text-gray-400">Cargando tus productos...</p>}
+        {!cargando && error && <p className="text-red-700">{error}</p>}
+
+        {/* Lista de productos */}
+        {!cargando && !error && productos.map((p) => {
+          const estado = infoEstado(p.estado);
+          const estaEliminando = eliminando === p.id;
+          return (
+            <div
+              key={p.id}
+              className={`flex gap-4 items-center bg-white border border-gray-200 rounded-xl p-4 mb-3 transition-opacity ${
+                estaEliminando ? 'opacity-50' : ''
+              }`}
+            >
+              {/* Foto */}
+              <div className="w-[84px] h-[84px] rounded-lg shrink-0 bg-[#F5F2EC] overflow-hidden">
+                {p.foto && <img src={p.foto} alt={p.nombre} className="w-full h-full object-cover" />}
+              </div>
+
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-[1.05rem] text-[#0a0a0a] m-0 mb-0.5 truncate">{p.nombre}</p>
+                <p className="text-xs text-gray-400 m-0 mb-2">
+                  {[nombreCategoria, p.subcategoria].filter(Boolean).join(' · ')}
+                </p>
+                <p className="text-base font-semibold text-[#0a0a0a] m-0">
+                  {p.precio_anterior && (
+                    <span className="text-gray-400 font-normal line-through text-sm mr-1.5">
+                      ${formatearPrecio(p.precio_anterior)}
+                    </span>
+                  )}
+                  ${formatearPrecio(p.precio)}
+                </p>
+                <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full mt-2 ${estado.fondo} ${estado.color}`}>
+                  <span className={`w-[7px] h-[7px] rounded-full ${estado.punto}`} />
+                  {estado.texto}
+                </span>
+              </div>
+
+              {/* Acciones */}
+              <div className="flex flex-col gap-1.5 shrink-0">
+                <Link
+                  href={`/vendedor/productos/${p.id}/editar`}
+                  className="bg-white border border-[#0a0a0a] rounded-lg px-4 py-1.5 text-sm text-[#0a0a0a] no-underline whitespace-nowrap text-center hover:bg-[#0a0a0a] hover:text-white transition-colors"
+                >
+                  Editar
+                </Link>
+
+                {puedeToggle(p.estado) && (
+                  <button
+                    onClick={() => toggleEstado(p)}
+                    className={`bg-white rounded-lg px-4 py-1.5 text-sm cursor-pointer whitespace-nowrap transition-colors ${
+                      p.estado === 'activo'
+                        ? 'border border-amber-500 text-amber-700 hover:bg-amber-50'
+                        : 'border border-emerald-500 text-emerald-700 hover:bg-emerald-50'
+                    }`}
+                  >
+                    {textoToggle(p.estado)}
+                  </button>
+                )}
+
+                <Link
+                  href={`/producto/${p.id}`}
+                  className="bg-white border border-gray-300 rounded-lg px-4 py-1.5 text-sm text-[#0a0a0a] no-underline whitespace-nowrap text-center hover:bg-gray-50 transition-colors"
+                >
+                  Ver
+                </Link>
+
+                <button
+                  onClick={() => eliminarProducto(p)}
+                  disabled={estaEliminando}
+                  className={`bg-white border border-red-200 rounded-lg px-4 py-1.5 text-sm text-red-500 whitespace-nowrap transition-colors ${
+                    estaEliminando ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-red-50'
+                  }`}
+                >
+                  {estaEliminando ? '...' : 'Eliminar'}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Estado vacío */}
+        {!cargando && !error && productos.length === 0 && (
+          <div className="bg-white border border-dashed border-gray-300 rounded-xl px-8 py-12 text-center">
+            <div className="text-4xl mb-2">📦</div>
+            <h2 className="text-xl font-semibold text-[#0a0a0a] m-0 mb-1.5">Todavía no cargaste productos</h2>
+            <p className="text-gray-500 m-0 mb-6">Cargá tu primer producto y va a aparecer acá.</p>
+            <Link
+              href="/vendedor/productos/nuevo"
+              className="bg-[#0a0a0a] text-white rounded-lg px-5 py-2.5 text-[0.95rem] no-underline hover:bg-[#1a1a1a] transition-colors"
+            >
+              + Cargar mi primer producto
+            </Link>
+          </div>
+        )}
+      </main>
+    </>
   );
 }

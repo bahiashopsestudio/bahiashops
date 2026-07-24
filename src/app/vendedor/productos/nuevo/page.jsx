@@ -4,79 +4,61 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import imageCompression from 'browser-image-compression';
 import {
-  DndContext,
-  closestCenter,
-  PointerSensor,
-  KeyboardSensor,
-  useSensor,
-  useSensors,
+  DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors,
 } from '@dnd-kit/core';
 import {
-  SortableContext,
-  arrayMove,
-  horizontalListSortingStrategy,
-  useSortable,
-  sortableKeyboardCoordinates,
+  SortableContext, arrayMove, horizontalListSortingStrategy, useSortable, sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useRouter } from 'next/navigation';
 import VistaProducto from '@/components/VistaProducto';
 import { revisarPublicacion, ETIQUETAS_MODERACION } from '@/lib/moderacion';
+import Navbar from '@/components/Navbar';
 import VolverAtras from '@/components/VolverAtras';
 
-// Una miniatura arrastrable
+const inputClasses =
+  'w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:border-[#0a0a0a] focus:ring-1 focus:ring-[#0a0a0a]/20 transition-colors';
+const selectClasses = `${inputClasses} bg-white`;
+
+// ── Miniatura arrastrable ──
+
 function SortableFoto({ foto, index, onQuitar }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: foto.preview });
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    width: '90px',
-    height: '90px',
-    position: 'relative',
-    opacity: isDragging ? 0.5 : 1,
-    cursor: 'grab',
-    touchAction: 'none',
-  };
-
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <img
-        src={foto.preview}
-        alt={`Foto ${index + 1}`}
-        draggable={false}
-        style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '6px', border: '1px solid #ddd' }}
-      />
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={`w-[90px] h-[90px] relative cursor-grab touch-none ${isDragging ? 'opacity-50' : ''}`}
+      {...attributes} {...listeners}
+    >
+      <img src={foto.preview} alt={`Foto ${index + 1}`} draggable={false}
+        className="w-full h-full object-cover rounded-md border border-gray-200" />
       {index === 0 && (
-        <span style={{ position: 'absolute', bottom: '2px', left: '2px', background: 'rgba(0,0,0,0.7)', color: 'white', fontSize: '0.65rem', padding: '1px 5px', borderRadius: '4px' }}>
+        <span className="absolute bottom-0.5 left-0.5 bg-black/70 text-white text-[0.65rem] px-1.5 py-px rounded">
           Principal
         </span>
       )}
-      <button
-        type="button"
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={() => onQuitar(index)}
-        style={{ position: 'absolute', top: '-8px', right: '-8px', width: '22px', height: '22px', borderRadius: '50%', border: 'none', background: '#e00', color: 'white', cursor: 'pointer', lineHeight: 1 }}
-      >
+      <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={() => onQuitar(index)}
+        className="absolute -top-2 -right-2 w-[22px] h-[22px] rounded-full border-none bg-[#e60000] text-white cursor-pointer leading-none text-sm">
         ×
       </button>
     </div>
   );
 }
 
+// ══════════════════════════════════════════════════════════
+// PÁGINA DE NUEVO PRODUCTO
+// ══════════════════════════════════════════════════════════
+
 export default function NuevoProductoPage() {
   const supabase = createClient();
   const router = useRouter();
 
   const [datos, setDatos] = useState({
-    nombre: '',
-    descripcion: '',
-    subcategoria_id: '',
-    marca: '',
-    precio: '',
-    precio_anterior: '',
-    tiempo_preparacion: '',
+    nombre: '', descripcion: '', subcategoria_id: '', marca: '',
+    precio: '', precio_anterior: '', tiempo_preparacion: '',
   });
 
   const [subcategorias, setSubcategorias] = useState([]);
@@ -131,11 +113,8 @@ export default function NuevoProductoPage() {
         .eq('categoria_id', categoriaVendedor)
         .eq('activa', true)
         .order('orden');
-      if (error) {
-        console.error('Error cargando subcategorías:', error);
-      } else {
-        setSubcategorias(data);
-      }
+      if (error) console.error('Error cargando subcategorías:', error);
+      else setSubcategorias(data);
     }
     async function cargarCategoria() {
       const { data } = await supabase
@@ -150,25 +129,20 @@ export default function NuevoProductoPage() {
   }, [categoriaVendedor]);
 
   useEffect(() => {
-    const id = setTimeout(() => {
+    const timer = setTimeout(() => {
       const texto = `${datos.nombre} ${datos.descripcion} ${datos.marca}`;
       const resultado = revisarPublicacion(texto);
       setBloqueoModeracion(resultado.nivel === 'bloqueo' ? resultado : null);
     }, 1000);
-    return () => clearTimeout(id);
+    return () => clearTimeout(timer);
   }, [datos.nombre, datos.descripcion, datos.marca]);
 
   useEffect(() => {
     if (!mostrarPrevia) return;
-    function alPresionarTecla(e) {
-      if (e.key === 'Escape') setMostrarPrevia(false);
-    }
-    document.addEventListener('keydown', alPresionarTecla);
+    function onKey(e) { if (e.key === 'Escape') setMostrarPrevia(false); }
+    document.addEventListener('keydown', onKey);
     document.body.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', alPresionarTecla);
-      document.body.style.overflow = '';
-    };
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = ''; };
   }, [mostrarPrevia]);
 
   function actualizarCampo(campo, valor) {
@@ -235,14 +209,8 @@ export default function NuevoProductoPage() {
   }
 
   function abrirPrevia() {
-    if (!datos.nombre.trim()) {
-      alert('Cargá al menos el nombre del producto para previsualizar.');
-      return;
-    }
-    if (fotos.length === 0) {
-      alert('Subí al menos una foto para previsualizar.');
-      return;
-    }
+    if (!datos.nombre.trim()) { alert('Cargá al menos el nombre del producto para previsualizar.'); return; }
+    if (fotos.length === 0) { alert('Subí al menos una foto para previsualizar.'); return; }
     setMostrarPrevia(true);
   }
 
@@ -266,10 +234,7 @@ export default function NuevoProductoPage() {
 
     const textoARevisar = `${datos.nombre} ${datos.descripcion} ${datos.marca}`;
     const moderacion = revisarPublicacion(textoARevisar);
-    if (moderacion.nivel === 'bloqueo') {
-      setBloqueoModeracion(moderacion);
-      return;
-    }
+    if (moderacion.nivel === 'bloqueo') { setBloqueoModeracion(moderacion); return; }
 
     setGuardandoProducto(true);
 
@@ -278,20 +243,11 @@ export default function NuevoProductoPage() {
       for (let i = 0; i < fotos.length; i++) {
         const foto = fotos[i];
         const nombreArchivo = `${vendedorId}/${Date.now()}-${i}.webp`;
-        const { error: errorUpload } = await supabase
-          .storage
+        const { error: errorUpload } = await supabase.storage
           .from('productos')
           .upload(nombreArchivo, foto.file);
-
-        if (errorUpload) {
-          throw new Error('Error al subir una foto: ' + errorUpload.message);
-        }
-
-        const { data: dataUrl } = supabase
-          .storage
-          .from('productos')
-          .getPublicUrl(nombreArchivo);
-
+        if (errorUpload) throw new Error('Error al subir una foto: ' + errorUpload.message);
+        const { data: dataUrl } = supabase.storage.from('productos').getPublicUrl(nombreArchivo);
         urls.push(dataUrl.publicUrl);
       }
 
@@ -315,41 +271,23 @@ export default function NuevoProductoPage() {
         .select()
         .single();
 
-      if (errorProducto) {
-        throw new Error('Error al guardar el producto: ' + errorProducto.message);
-      }
+      if (errorProducto) throw new Error('Error al guardar el producto: ' + errorProducto.message);
 
       const productoId = productoCreado.id;
 
       const mediaItems = urls.map((url, index) => ({
-        producto_id: productoId,
-        url: url,
-        tipo: 'foto',
-        orden: index,
-        es_principal: index === 0,
+        producto_id: productoId, url, tipo: 'foto', orden: index, es_principal: index === 0,
       }));
 
-      const { error: errorMedia } = await supabase
-        .from('producto_media')
-        .insert(mediaItems);
-
-      if (errorMedia) {
-        throw new Error('El producto se guardó pero hubo un error con las fotos: ' + errorMedia.message);
-      }
+      const { error: errorMedia } = await supabase.from('producto_media').insert(mediaItems);
+      if (errorMedia) throw new Error('El producto se guardó pero hubo un error con las fotos: ' + errorMedia.message);
 
       if (tieneNombre && tieneValores) {
         const variantesItems = valores.map((valor) => ({
-          producto_id: productoId,
-          propiedad_1_valor: valor,
+          producto_id: productoId, propiedad_1_valor: valor,
         }));
-
-        const { error: errorVariantes } = await supabase
-          .from('producto_variantes')
-          .insert(variantesItems);
-
-        if (errorVariantes) {
-          throw new Error('El producto se guardó pero hubo un error con las variantes: ' + errorVariantes.message);
-        }
+        const { error: errorVariantes } = await supabase.from('producto_variantes').insert(variantesItems);
+        if (errorVariantes) throw new Error('El producto se guardó pero hubo un error con las variantes: ' + errorVariantes.message);
       }
 
       alert('¡Producto guardado! Queda en revisión hasta que lo apruebes.');
@@ -366,11 +304,8 @@ export default function NuevoProductoPage() {
   const guardarDeshabilitado = guardandoProducto || bloqueoModeracion !== null;
 
   const productoParaPrevia = {
-    nombre: datos.nombre,
-    descripcion: datos.descripcion,
-    precio: datos.precio,
-    precio_anterior: datos.precio_anterior,
-    marca: datos.marca,
+    nombre: datos.nombre, descripcion: datos.descripcion, precio: datos.precio,
+    precio_anterior: datos.precio_anterior, marca: datos.marca,
     propiedad_1_nombre: nombrePropiedad.trim() || null,
     tiempo_preparacion: datos.tiempo_preparacion || null,
   };
@@ -378,325 +313,230 @@ export default function NuevoProductoPage() {
   const variantesParaPrevia = valores.map((v) => ({ propiedad_1_valor: v }));
   const vendedorParaPrevia = nombreNegocio ? { nombre_negocio: nombreNegocio } : null;
 
+  // ══════════════════════════════════════════════════════
+  // RENDER
+  // ══════════════════════════════════════════════════════
+
   return (
-    <main style={{ padding: '2rem', maxWidth: '800px', width: '100%', margin: '0 auto' }}>
+    <>
+      <Navbar variant="solid" />
 
-      <VolverAtras href="/vendedor/productos" texto="Volver a Mis productos" />
+      <main className="pt-28 pb-12 px-6 max-w-[800px] w-full mx-auto">
+        <VolverAtras href="/vendedor/productos" texto="Volver a Mis productos" />
+        <h1 className="text-2xl font-semibold text-[#0a0a0a] mt-2">Nuevo producto</h1>
 
-      <h1>Nuevo producto</h1>
+        <section className="mt-8 p-6 border border-gray-200 rounded-lg">
+          <h2 className="text-lg font-semibold text-[#0a0a0a]">Datos básicos</h2>
 
-      <section style={{ marginTop: '2rem', padding: '1.5rem', border: '1px solid #ddd', borderRadius: '8px' }}>
-        <h2>Datos básicos</h2>
+          {/* Nombre */}
+          <div className="mt-4">
+            <label htmlFor="nombre" className="block mb-1 text-[#0a0a0a]">Nombre del producto *</label>
+            <input id="nombre" type="text" value={datos.nombre}
+              onChange={(e) => actualizarCampo('nombre', e.target.value)}
+              placeholder="Ej: Remera básica de algodón"
+              className={inputClasses} />
+          </div>
 
-        <div style={{ marginTop: '1rem' }}>
-          <label htmlFor="nombre" style={{ display: 'block', marginBottom: '0.25rem' }}>
-            Nombre del producto *
-          </label>
-          <input
-            id="nombre"
-            type="text"
-            value={datos.nombre}
-            onChange={(e) => actualizarCampo('nombre', e.target.value)}
-            placeholder="Ej: Remera básica de algodón"
-            style={{ width: '100%', padding: '0.5rem' }}
-          />
-        </div>
+          {/* Descripción */}
+          <div className="mt-4">
+            <label htmlFor="descripcion" className="block mb-1 text-[#0a0a0a]">Descripción *</label>
+            <textarea id="descripcion" value={datos.descripcion}
+              onChange={(e) => actualizarCampo('descripcion', e.target.value)}
+              placeholder="Describí el producto: materiales, características, cuidados..."
+              rows={4} className={`${inputClasses} font-[inherit]`} />
 
-        <div style={{ marginTop: '1rem' }}>
-          <label htmlFor="descripcion" style={{ display: 'block', marginBottom: '0.25rem' }}>
-            Descripción *
-          </label>
-          <textarea
-            id="descripcion"
-            value={datos.descripcion}
-            onChange={(e) => actualizarCampo('descripcion', e.target.value)}
-            placeholder="Describí el producto: materiales, características, cuidados..."
-            rows={4}
-            style={{ width: '100%', padding: '0.5rem' }}
-          />
+            {bloqueoModeracion && (
+              <div role="alert" className="mt-3 p-3.5 bg-red-50 border border-red-200 rounded-lg text-red-800">
+                <p className="m-0 font-semibold text-[0.92rem]">No vas a poder publicar con esto</p>
+                <p className="mt-1 mb-2.5 text-sm">
+                  En Bahía Shops el contacto con el comprador se desbloquea recién después de la compra. Sacá esto de tu publicación:
+                </p>
+                <ul className="m-0 pl-5 text-sm">
+                  {bloqueoModeracion.bloqueos.map((b, i) => (
+                    <li key={i} className="mb-0.5">
+                      {ETIQUETAS_MODERACION[b.tipo] || b.tipo}
+                      {b.tipo !== 'lenguaje_ofensivo' && <span className="text-red-700"> — &quot;{b.texto}&quot;</span>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
 
-          {bloqueoModeracion && (
-            <div
-              role="alert"
-              style={{ marginTop: '0.75rem', padding: '0.85rem 1rem', background: '#fdecea', border: '1px solid #f5b1aa', borderRadius: '8px', color: '#7a1f17' }}
-            >
-              <p style={{ margin: 0, fontWeight: 600, fontSize: '0.92rem' }}>No vas a poder publicar con esto</p>
-              <p style={{ margin: '0.35rem 0 0.6rem', fontSize: '0.85rem' }}>
-                En Bahía Shops el contacto con el comprador se desbloquea recién después de la compra.
-                Sacá esto de tu publicación:
-              </p>
-              <ul style={{ margin: 0, paddingLeft: '1.2rem', fontSize: '0.85rem' }}>
-                {bloqueoModeracion.bloqueos.map((b, i) => (
-                  <li key={i} style={{ marginBottom: '0.2rem' }}>
-                    {ETIQUETAS_MODERACION[b.tipo] || b.tipo}
-                    {b.tipo !== 'lenguaje_ofensivo' && (
-                      <span style={{ color: '#a3392f' }}> — "{b.texto}"</span>
-                    )}
-                  </li>
-                ))}
-              </ul>
+          {/* Subcategoría */}
+          {subcategorias.length > 0 && (
+            <div className="mt-4">
+              <label htmlFor="subcategoria" className="block mb-1 text-[#0a0a0a]">Subcategoría</label>
+              <select id="subcategoria" value={datos.subcategoria_id}
+                onChange={(e) => actualizarCampo('subcategoria_id', e.target.value)}
+                className={selectClasses}>
+                <option value="">Elegí una subcategoría (opcional)</option>
+                {subcategorias.map((sub) => <option key={sub.id} value={sub.id}>{sub.nombre}</option>)}
+              </select>
             </div>
           )}
-        </div>
 
-        {subcategorias.length > 0 && (
-          <div style={{ marginTop: '1rem' }}>
-            <label htmlFor="subcategoria" style={{ display: 'block', marginBottom: '0.25rem' }}>
-              Subcategoría
-            </label>
-            <select
-              id="subcategoria"
-              value={datos.subcategoria_id}
-              onChange={(e) => actualizarCampo('subcategoria_id', e.target.value)}
-              style={{ width: '100%', padding: '0.5rem' }}
-            >
-              <option value="">Elegí una subcategoría (opcional)</option>
-              {subcategorias.map((sub) => (
-                <option key={sub.id} value={sub.id}>
-                  {sub.nombre}
-                </option>
-              ))}
+          {/* Marca */}
+          <div className="mt-4">
+            <label htmlFor="marca" className="block mb-1 text-[#0a0a0a]">Marca (opcional)</label>
+            <input id="marca" type="text" value={datos.marca}
+              onChange={(e) => actualizarCampo('marca', e.target.value)}
+              placeholder="Si aplica" className={inputClasses} />
+          </div>
+
+          {/* Precio */}
+          <div className="mt-4">
+            <label htmlFor="precio" className="block mb-1 text-[#0a0a0a]">Precio *</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+              <input id="precio" type="text" inputMode="numeric"
+                value={formatearPrecio(datos.precio)}
+                onChange={(e) => actualizarCampo('precio', e.target.value.replace(/\D/g, ''))}
+                placeholder="15.000" className={`${inputClasses} pl-7`} />
+            </div>
+          </div>
+
+          {/* Precio anterior */}
+          <div className="mt-4">
+            <label htmlFor="precio_anterior" className="block mb-1 text-[#0a0a0a]">Precio anterior (opcional, si está en oferta)</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+              <input id="precio_anterior" type="text" inputMode="numeric"
+                value={formatearPrecio(datos.precio_anterior)}
+                onChange={(e) => actualizarCampo('precio_anterior', e.target.value.replace(/\D/g, ''))}
+                placeholder="Si lo completás, se mostrará tachado"
+                className={`${inputClasses} pl-7`} />
+            </div>
+          </div>
+
+          {/* Tiempo de preparación */}
+          <div className="mt-4">
+            <label htmlFor="tiempo_preparacion" className="block mb-1 text-[#0a0a0a]">Tiempo de preparación</label>
+            <select id="tiempo_preparacion" value={datos.tiempo_preparacion}
+              onChange={(e) => actualizarCampo('tiempo_preparacion', e.target.value)}
+              className={selectClasses}>
+              <option value="">Elegí una opción</option>
+              <option value="inmediata">Entrega inmediata (lo tengo hecho, sale ya)</option>
+              <option value="durante_el_dia">Durante el día</option>
+              <option value="manana">Mañana</option>
+              <option value="2_a_4_dias">2 a 4 días</option>
+              <option value="1_a_2_semanas">1 a 2 semanas</option>
+              <option value="mas_2_semanas">Más de 2 semanas / a coordinar</option>
             </select>
           </div>
-        )}
 
-        <div style={{ marginTop: '1rem' }}>
-          <label htmlFor="marca" style={{ display: 'block', marginBottom: '0.25rem' }}>
-            Marca (opcional)
-          </label>
-          <input
-            id="marca"
-            type="text"
-            value={datos.marca}
-            onChange={(e) => actualizarCampo('marca', e.target.value)}
-            placeholder="Si aplica"
-            style={{ width: '100%', padding: '0.5rem' }}
-          />
-        </div>
+          {/* Fotos */}
+          <div className="mt-4">
+            <label className="block mb-1 text-[#0a0a0a]">
+              Fotos * (hasta 5, arrastrá para ordenar — la primera es la principal)
+            </label>
 
-        <div style={{ marginTop: '1rem' }}>
-          <label htmlFor="precio" style={{ display: 'block', marginBottom: '0.25rem' }}>
-            Precio *
-          </label>
-          <div style={{ position: 'relative' }}>
-            <span style={{ position: 'absolute', left: '0.6rem', top: '50%', transform: 'translateY(-50%)', color: '#666' }}>
-              $
-            </span>
-            <input
-              id="precio"
-              type="text"
-              inputMode="numeric"
-              value={formatearPrecio(datos.precio)}
-              onChange={(e) => actualizarCampo('precio', e.target.value.replace(/\D/g, ''))}
-              placeholder="15.000"
-              style={{ width: '100%', padding: '0.5rem', paddingLeft: '1.6rem' }}
-            />
-          </div>
-        </div>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={alSoltarFoto}>
+              <SortableContext items={fotos.map((f) => f.preview)} strategy={horizontalListSortingStrategy}>
+                <div className="flex flex-wrap gap-3 mb-3">
+                  {fotos.map((foto, index) => (
+                    <SortableFoto key={foto.preview} foto={foto} index={index} onQuitar={quitarFoto} />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
 
-        <div style={{ marginTop: '1rem' }}>
-          <label htmlFor="precio_anterior" style={{ display: 'block', marginBottom: '0.25rem' }}>
-            Precio anterior (opcional, si está en oferta)
-          </label>
-          <div style={{ position: 'relative' }}>
-            <span style={{ position: 'absolute', left: '0.6rem', top: '50%', transform: 'translateY(-50%)', color: '#666' }}>
-              $
-            </span>
-            <input
-              id="precio_anterior"
-              type="text"
-              inputMode="numeric"
-              value={formatearPrecio(datos.precio_anterior)}
-              onChange={(e) => actualizarCampo('precio_anterior', e.target.value.replace(/\D/g, ''))}
-              placeholder="Si lo completás, se mostrará tachado"
-              style={{ width: '100%', padding: '0.5rem', paddingLeft: '1.6rem' }}
-            />
-          </div>
-        </div>
-
-        <div style={{ marginTop: '1rem' }}>
-          <label htmlFor="tiempo_preparacion" style={{ display: 'block', marginBottom: '0.25rem' }}>
-            Tiempo de preparación
-          </label>
-          <select
-            id="tiempo_preparacion"
-            value={datos.tiempo_preparacion}
-            onChange={(e) => actualizarCampo('tiempo_preparacion', e.target.value)}
-            style={{ width: '100%', padding: '0.5rem' }}
-          >
-            <option value="">Elegí una opción</option>
-            <option value="inmediata">Entrega inmediata (lo tengo hecho, sale ya)</option>
-            <option value="durante_el_dia">Durante el día</option>
-            <option value="manana">Mañana</option>
-            <option value="2_a_4_dias">2 a 4 días</option>
-            <option value="1_a_2_semanas">1 a 2 semanas</option>
-            <option value="mas_2_semanas">Más de 2 semanas / a coordinar</option>
-          </select>
-        </div>
-
-        <div style={{ marginTop: '1rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.25rem' }}>
-            Fotos * (hasta 5, arrastrá para ordenar — la primera es la principal)
-          </label>
-
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={alSoltarFoto}>
-            <SortableContext items={fotos.map((f) => f.preview)} strategy={horizontalListSortingStrategy}>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '0.75rem' }}>
-                {fotos.map((foto, index) => (
-                  <SortableFoto key={foto.preview} foto={foto} index={index} onQuitar={quitarFoto} />
-                ))}
-              </div>
-            </SortableContext>
-          </DndContext>
-
-          {fotos.length < 5 && (
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              multiple
-              onChange={agregarFotos}
-              disabled={comprimiendo}
-            />
-          )}
-          <p style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.4rem' }}>
-            {comprimiendo ? 'Procesando imágenes...' : `${fotos.length} de 5 fotos`}
-          </p>
-        </div>
-
-        {/* VARIANTES (opcional) */}
-        <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid #eee' }}>
-          <h3 style={{ margin: 0, fontSize: '1rem' }}>Variantes (opcional)</h3>
-          <p style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.25rem', marginBottom: '0.75rem' }}>
-            Si tu producto viene en distintas opciones (talles, sabores, tamaños), cargalas acá. Si no, dejá esto en blanco.
-          </p>
-
-          <label htmlFor="nombrePropiedad" style={{ display: 'block', marginBottom: '0.25rem' }}>
-            ¿Qué varía?
-          </label>
-          <input
-            id="nombrePropiedad"
-            type="text"
-            value={nombrePropiedad}
-            onChange={(e) => setNombrePropiedad(e.target.value)}
-            placeholder="Ej: Talle"
-            style={{ width: '100%', padding: '0.5rem' }}
-          />
-
-          <label style={{ display: 'block', marginTop: '1rem', marginBottom: '0.25rem' }}>
-            Opciones {nombrePropiedad && `de ${nombrePropiedad}`}
-          </label>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <input
-              type="text"
-              value={valorNuevo}
-              onChange={(e) => setValorNuevo(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  agregarValor();
-                }
-              }}
-              placeholder="Ej: M (Enter para agregar)"
-              style={{ flex: 1, padding: '0.5rem' }}
-            />
-            <button
-              type="button"
-              onClick={agregarValor}
-              style={{ padding: '0.5rem 1rem', cursor: 'pointer' }}
-            >
-              Agregar
-            </button>
+            {fotos.length < 5 && (
+              <input type="file" accept="image/jpeg,image/png,image/webp" multiple
+                onChange={agregarFotos} disabled={comprimiendo} />
+            )}
+            <p className="text-xs text-gray-500 mt-1">
+              {comprimiendo ? 'Procesando imágenes...' : `${fotos.length} de 5 fotos`}
+            </p>
           </div>
 
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.75rem' }}>
-            {valores.map((valor, index) => (
-              <span
-                key={valor}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', background: '#f0f0f0', padding: '0.3rem 0.6rem', borderRadius: '999px', fontSize: '0.9rem' }}
-              >
-                {valor}
-                <button
-                  type="button"
-                  onClick={() => quitarValor(index)}
-                  style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#888', fontSize: '1rem', lineHeight: 1, padding: 0 }}
-                >
-                  ×
-                </button>
-              </span>
-            ))}
-          </div>
-        </div>
-      </section>
+          {/* Variantes */}
+          <div className="mt-6 pt-4 border-t border-gray-100">
+            <h3 className="m-0 text-base font-semibold text-[#0a0a0a]">Variantes (opcional)</h3>
+            <p className="text-sm text-gray-500 mt-1 mb-3">
+              Si tu producto viene en distintas opciones (talles, sabores, tamaños), cargalas acá. Si no, dejá esto en blanco.
+            </p>
 
-      {/* Botones: previsualizar y guardar */}
-      <div style={{ marginTop: '1.5rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-        <button
-          type="button"
-          onClick={abrirPrevia}
-          disabled={guardandoProducto}
-          style={{ padding: '0.75rem 1.5rem', fontSize: '1rem', cursor: 'pointer', background: 'white', color: '#222', border: '1px solid #222', borderRadius: '8px' }}
-        >
-          Previsualizar
-        </button>
-        <button
-          type="button"
-          onClick={guardarProducto}
-          disabled={guardarDeshabilitado}
-          style={{ padding: '0.75rem 1.5rem', fontSize: '1rem', cursor: guardarDeshabilitado ? 'not-allowed' : 'pointer', background: guardarDeshabilitado ? '#999' : '#222', color: 'white', border: 'none', borderRadius: '8px' }}
-        >
-          {guardandoProducto ? 'Guardando...' : 'Guardar producto'}
-        </button>
-      </div>
+            <label htmlFor="nombrePropiedad" className="block mb-1 text-[#0a0a0a]">¿Qué varía?</label>
+            <input id="nombrePropiedad" type="text" value={nombrePropiedad}
+              onChange={(e) => setNombrePropiedad(e.target.value)}
+              placeholder="Ej: Talle" className={inputClasses} />
 
-      {/* MODAL DE PREVISUALIZACIÓN */}
-      {mostrarPrevia && (
-        <div
-          onClick={() => setMostrarPrevia(false)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '2rem 1rem', overflowY: 'auto', zIndex: 1000 }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{ background: 'white', borderRadius: '12px', maxWidth: '760px', width: '100%', margin: 'auto', overflow: 'hidden' }}
-          >
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '1rem 1.5rem', borderBottom: '1px solid #eee' }}>
-              <div>
-                <p style={{ fontWeight: 600, margin: 0 }}>Previsualización</p>
-                <p style={{ fontSize: '0.85rem', color: '#666', margin: '2px 0 0' }}>Así lo va a ver el comprador</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setMostrarPrevia(false)}
-                aria-label="Cerrar"
-                style={{ width: '32px', height: '32px', border: '1px solid #ddd', borderRadius: '8px', background: 'white', cursor: 'pointer', fontSize: '1.2rem', lineHeight: 1 }}
-              >
-                ×
+            <label className="block mt-4 mb-1 text-[#0a0a0a]">
+              Opciones {nombrePropiedad && `de ${nombrePropiedad}`}
+            </label>
+            <div className="flex gap-2">
+              <input type="text" value={valorNuevo}
+                onChange={(e) => setValorNuevo(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); agregarValor(); } }}
+                placeholder="Ej: M (Enter para agregar)"
+                className={`${inputClasses} flex-1`} />
+              <button type="button" onClick={agregarValor}
+                className="px-4 py-2 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                Agregar
               </button>
             </div>
 
-            <div style={{ padding: '1.5rem' }}>
-              <VistaProducto
-                producto={productoParaPrevia}
-                fotos={fotosParaPrevia}
-                variantes={variantesParaPrevia}
-                vendedor={vendedorParaPrevia}
-                categoria={categoria}
-                modoPrevia
-              />
+            <div className="flex flex-wrap gap-2 mt-3">
+              {valores.map((valor, index) => (
+                <span key={valor} className="inline-flex items-center gap-1.5 bg-[#F5F2EC] px-2.5 py-1 rounded-full text-sm">
+                  {valor}
+                  <button type="button" onClick={() => quitarValor(index)}
+                    className="border-none bg-transparent cursor-pointer text-gray-400 text-base leading-none p-0 hover:text-[#0a0a0a]">
+                    ×
+                  </button>
+                </span>
+              ))}
             </div>
+          </div>
+        </section>
 
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', padding: '1rem 1.5rem', borderTop: '1px solid #eee', background: '#fafafa' }}>
-              <span style={{ fontSize: '0.8rem', color: '#888' }}>Todavía no se guardó nada</span>
-              <button
-                type="button"
-                onClick={() => setMostrarPrevia(false)}
-                style={{ padding: '0.5rem 1rem', border: '1px solid #ccc', borderRadius: '8px', background: 'white', cursor: 'pointer' }}
-              >
+        {/* Botones */}
+        <div className="mt-6 flex gap-3 flex-wrap">
+          <button type="button" onClick={abrirPrevia} disabled={guardandoProducto}
+            className="px-6 py-3 text-base cursor-pointer bg-white text-[#0a0a0a] border border-[#0a0a0a] rounded-lg hover:bg-[#0a0a0a] hover:text-white transition-colors">
+            Previsualizar
+          </button>
+          <button type="button" onClick={guardarProducto} disabled={guardarDeshabilitado}
+            className={`px-6 py-3 text-base text-white border-none rounded-lg transition-colors ${
+              guardarDeshabilitado ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#0a0a0a] cursor-pointer hover:bg-[#1a1a1a]'
+            }`}>
+            {guardandoProducto ? 'Guardando...' : 'Guardar producto'}
+          </button>
+        </div>
+      </main>
+
+      {/* MODAL DE PREVISUALIZACIÓN */}
+      {mostrarPrevia && (
+        <div onClick={() => setMostrarPrevia(false)}
+          className="fixed inset-0 bg-black/50 flex items-start justify-center p-8 pt-8 overflow-y-auto z-[1000]">
+          <div onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-xl max-w-[760px] w-full my-auto overflow-hidden">
+            <div className="flex items-start justify-between px-6 py-4 border-b border-gray-100">
+              <div>
+                <p className="font-semibold text-[#0a0a0a] m-0">Previsualización</p>
+                <p className="text-sm text-gray-500 mt-0.5 mb-0">Así lo va a ver el comprador</p>
+              </div>
+              <button type="button" onClick={() => setMostrarPrevia(false)} aria-label="Cerrar"
+                className="w-8 h-8 border border-gray-200 rounded-lg bg-white cursor-pointer text-lg leading-none hover:bg-gray-50">
+                ×
+              </button>
+            </div>
+            <div className="p-6">
+              <VistaProducto producto={productoParaPrevia} fotos={fotosParaPrevia}
+                variantes={variantesParaPrevia} vendedor={vendedorParaPrevia}
+                categoria={categoria} modoPrevia />
+            </div>
+            <div className="flex items-center justify-between gap-4 px-6 py-4 border-t border-gray-100 bg-gray-50">
+              <span className="text-xs text-gray-400">Todavía no se guardó nada</span>
+              <button type="button" onClick={() => setMostrarPrevia(false)}
+                className="px-4 py-2 border border-gray-300 rounded-lg bg-white cursor-pointer hover:bg-gray-50 transition-colors">
                 Cerrar y seguir editando
               </button>
             </div>
           </div>
         </div>
       )}
-    </main>
+    </>
   );
 }

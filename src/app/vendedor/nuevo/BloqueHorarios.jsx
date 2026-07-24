@@ -15,15 +15,17 @@ const DIAS = [
 const TURNO_INICIAL = ['09:00', '18:00']
 const SEGUNDO_TURNO_INICIAL = ['17:00', '20:00']
 
-// Estado inicial: todos los días cerrados, sin turnos.
-// Lo exportamos para que el padre pueda usarlo como valor inicial del useState.
 export const HORARIOS_INICIALES = DIAS.reduce((acc, { clave }) => {
   acc[clave] = { abierto: false, turnos: [] }
   return acc
 }, {})
 
+const timeClasses =
+  'px-1.5 py-1 border border-gray-300 rounded w-[100px] outline-none focus:border-[#0a0a0a] focus:ring-1 focus:ring-[#0a0a0a]/20 transition-colors'
+const btnMiniClasses =
+  'px-2.5 py-1 text-sm bg-white border border-gray-300 rounded cursor-pointer hover:bg-gray-50 transition-colors'
+
 export default function BloqueHorarios({ valor, onChange, notas, onNotasChange }) {
-  // Estado interno: qué día tiene el panel "aplicar a otros" abierto, y qué días tildó adentro.
   const [aplicarDesde, setAplicarDesde] = useState(null)
   const [diasDestino, setDiasDestino] = useState([])
 
@@ -93,64 +95,47 @@ export default function BloqueHorarios({ valor, onChange, notas, onNotasChange }
     cerrarPanelAplicar()
   }
 
-  const filaStyle = {
-    display: 'grid',
-    gridTemplateColumns: '110px 1fr',
-    alignItems: 'center',
-    gap: '0.75rem',
-    padding: '0.6rem 0.75rem',
-    background: '#f9f9f9',
-    borderRadius: 4,
-  }
-  const tiempoStyle = { padding: '0.3rem', border: '1px solid #ccc', borderRadius: 4, width: 100 }
-  const botonMiniStyle = {
-    padding: '0.3rem 0.6rem',
-    fontSize: '0.85rem',
-    background: 'white',
-    border: '1px solid #ccc',
-    borderRadius: 4,
-    cursor: 'pointer',
-  }
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-2">
         {DIAS.map(({ clave, label }) => {
           const dia = valor[clave]
           return (
             <div key={clave}>
-              <div style={filaStyle}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+              {/* Fila del día */}
+              <div className="grid grid-cols-[110px_1fr] items-center gap-3 px-3 py-2.5 bg-[#F5F2EC]/60 rounded">
+                <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={dia.abierto}
                     onChange={() => toggleAbierto(clave)}
+                    className="accent-[#0a0a0a]"
                   />
-                  <span>{label}</span>
+                  <span className="text-[#0a0a0a]">{label}</span>
                 </label>
 
                 {dia.abierto ? (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.4rem' }}>
+                  <div className="flex flex-wrap items-center gap-1.5">
                     {dia.turnos.map((turno, i) => (
-                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                      <div key={i} className="flex items-center gap-1.5">
                         <input
                           type="time"
                           value={turno[0]}
                           onChange={(e) => cambiarHora(clave, i, 0, e.target.value)}
-                          style={tiempoStyle}
+                          className={timeClasses}
                         />
-                        <span style={{ color: '#888' }}>a</span>
+                        <span className="text-gray-400">a</span>
                         <input
                           type="time"
                           value={turno[1]}
                           onChange={(e) => cambiarHora(clave, i, 1, e.target.value)}
-                          style={tiempoStyle}
+                          className={timeClasses}
                         />
                         {i === 1 && (
                           <button
                             type="button"
                             onClick={() => quitarTurno(clave, i)}
-                            style={{ ...botonMiniStyle, color: '#900' }}
+                            className={`${btnMiniClasses} text-red-800`}
                             aria-label="Quitar segundo turno"
                           >
                             ×
@@ -163,7 +148,7 @@ export default function BloqueHorarios({ valor, onChange, notas, onNotasChange }
                       <button
                         type="button"
                         onClick={() => agregarSegundoTurno(clave)}
-                        style={botonMiniStyle}
+                        className={btnMiniClasses}
                       >
                         + Segundo turno
                       </button>
@@ -172,61 +157,52 @@ export default function BloqueHorarios({ valor, onChange, notas, onNotasChange }
                     <button
                       type="button"
                       onClick={() => abrirPanelAplicar(clave)}
-                      style={{ ...botonMiniStyle, color: '#2563eb' }}
+                      className={`${btnMiniClasses} text-[#0a0a0a] font-medium`}
                     >
                       Aplicar a otros días
                     </button>
                   </div>
                 ) : (
-                  <span style={{ color: '#999', fontStyle: 'italic' }}>Cerrado</span>
+                  <span className="text-gray-400 italic">Cerrado</span>
                 )}
               </div>
 
+              {/* Panel "Aplicar a otros días" */}
               {aplicarDesde === clave && (
-                <div style={{
-                  marginTop: '0.5rem',
-                  padding: '0.75rem',
-                  background: '#F5F2EC',
-                  border: '1px solid rgba(10,10,10,0.1)',
-                  borderRadius: 4,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '0.5rem',
-                }}>
-                  <span style={{ fontSize: '0.9rem' }}>
+                <div className="mt-2 p-3 bg-[#F5F2EC] border border-[#0a0a0a]/10 rounded flex flex-col gap-2">
+                  <span className="text-sm text-[#0a0a0a]">
                     ¿A qué días querés aplicar el horario de <strong>{label}</strong>?
                   </span>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
+                  <div className="flex flex-wrap gap-3">
                     {DIAS.filter((d) => d.clave !== clave).map((d) => (
-                      <label key={d.clave} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', cursor: 'pointer' }}>
+                      <label key={d.clave} className="flex items-center gap-1.5 cursor-pointer">
                         <input
                           type="checkbox"
                           checked={diasDestino.includes(d.clave)}
                           onChange={() => toggleDestino(d.clave)}
+                          className="accent-[#0a0a0a]"
                         />
-                        <span style={{ fontSize: '0.9rem' }}>{d.label}</span>
+                        <span className="text-sm">{d.label}</span>
                       </label>
                     ))}
                   </div>
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={confirmarAplicar}
                       disabled={diasDestino.length === 0}
-                      style={{
-                        ...botonMiniStyle,
-                        background: diasDestino.length === 0 ? '#ccc' : '#0a0a0a',
-                        color: 'white',
-                        border: 'none',
-                        cursor: diasDestino.length === 0 ? 'not-allowed' : 'pointer',
-                      }}
+                      className={`px-2.5 py-1 text-sm text-white rounded transition-colors ${
+                        diasDestino.length === 0
+                          ? 'bg-gray-300 cursor-not-allowed'
+                          : 'bg-[#0a0a0a] cursor-pointer hover:bg-[#1a1a1a]'
+                      }`}
                     >
                       Aplicar
                     </button>
                     <button
                       type="button"
                       onClick={cerrarPanelAplicar}
-                      style={botonMiniStyle}
+                      className={btnMiniClasses}
                     >
                       Cancelar
                     </button>
@@ -238,9 +214,12 @@ export default function BloqueHorarios({ valor, onChange, notas, onNotasChange }
         })}
       </div>
 
-      <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-        <span>Notas sobre horarios <small style={{ color: '#666' }}>(opcional)</small></span>
-        <span style={{ fontSize: '0.85rem', color: '#666' }}>
+      {/* Notas */}
+      <label className="flex flex-col gap-1">
+        <span className="text-[#0a0a0a]">
+          Notas sobre horarios <span className="text-sm text-gray-500">(opcional)</span>
+        </span>
+        <span className="text-sm text-gray-500">
           Para excepciones tipo "feriados cerrado" o "lunes con cita previa".
         </span>
         <textarea
@@ -248,7 +227,7 @@ export default function BloqueHorarios({ valor, onChange, notas, onNotasChange }
           maxLength={300}
           value={notas}
           onChange={(e) => onNotasChange(e.target.value)}
-          style={{ padding: '0.5rem', border: '1px solid #ccc', borderRadius: 4, fontFamily: 'inherit' }}
+          className="w-full px-3 py-2 border border-gray-300 rounded font-[inherit] outline-none focus:border-[#0a0a0a] focus:ring-1 focus:ring-[#0a0a0a]/20 transition-colors"
         />
       </label>
     </div>
