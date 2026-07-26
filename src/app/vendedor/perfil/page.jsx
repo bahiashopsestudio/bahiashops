@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Cropper from 'react-easy-crop';
 import Navbar from '@/components/Navbar';
+import MenuTakeover from '@/components/MenuTakeover';
 import VolverAtras from '@/components/VolverAtras';
 
 
@@ -40,10 +41,12 @@ const CONFIG = {
 const TIPOS_VALIDOS = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_BYTES = 3 * 1024 * 1024;
 
+const MENU_CATEGORIAS = ['moda','belleza-y-cuidado-personal','gastronomia','hogar-deco-y-jardin','diseno-y-artesanias','tecnologia','salud-y-bienestar','arte-e-ilustracion'];
+
 
 function Chevron() {
   return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400 shrink-0">
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-[#0a0a0a]/20 shrink-0">
       <path d="M7.5 5l5 5-5 5" />
     </svg>
   );
@@ -67,8 +70,19 @@ export default function PerfilVendedorPage() {
   const [areaPixels, setAreaPixels] = useState(null);
   const [subiendo, setSubiendo] = useState(false);
 
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [categorias, setCategorias] = useState([]);
+
   useEffect(() => {
-    async function cargarVendedor() {
+    if (menuOpen) { document.body.style.overflow = 'hidden' } else { document.body.style.overflow = '' }
+    return () => { document.body.style.overflow = '' }
+  }, [menuOpen]);
+
+  useEffect(() => {
+    async function cargar() {
+      const { data: cats } = await supabase.from('categorias').select('id, nombre, slug').eq('activa', true).order('orden');
+      if (cats) setCategorias(cats);
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setCargando(false); return; }
       const { data, error } = await supabase
@@ -87,8 +101,10 @@ export default function PerfilVendedorPage() {
       }
       setCargando(false);
     }
-    cargarVendedor();
+    cargar();
   }, []);
+
+  const menuCats = MENU_CATEGORIAS.map(s => categorias.find(c => c.slug === s)).filter(Boolean);
 
   const alCompletarRecorte = useCallback((_, pixels) => {
     setAreaPixels(pixels);
@@ -151,8 +167,10 @@ export default function PerfilVendedorPage() {
   if (cargando) {
     return (
       <>
-        <Navbar variant="solid" />
-        <main className="pt-28 px-6 text-center text-gray-500">Cargando...</main>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&display=swap" />
+        <div className="min-h-screen bg-white flex items-center justify-center" style={{ fontFamily: "'Inter', sans-serif" }}>
+          <span className="text-[#0a0a0a]/30 text-sm font-light">Cargando...</span>
+        </div>
       </>
     );
   }
@@ -160,109 +178,139 @@ export default function PerfilVendedorPage() {
   if (!vendedorId) {
     return (
       <>
-        <Navbar variant="solid" />
-        <main className="pt-28 px-6 text-center text-gray-500">No encontramos tu cuenta de vendedor.</main>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&display=swap" />
+        <div className="min-h-screen bg-white flex items-center justify-center" style={{ fontFamily: "'Inter', sans-serif" }}>
+          <span className="text-[#0a0a0a]/30 text-sm font-light">No encontramos tu cuenta de vendedor.</span>
+        </div>
       </>
     );
   }
 
   return (
     <>
-      <Navbar variant="solid" />
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&display=swap" />
 
-      <main className="pt-28 pb-12 px-6 max-w-[700px] w-full mx-auto">
-        <VolverAtras href="/perfil" texto="Volver a Mi perfil" />
-        <h1 className="text-2xl font-semibold text-[#0a0a0a] mt-2">Mi negocio</h1>
-        <p className="text-gray-500 mt-1">{nombreNegocio}</p>
+      <div className="min-h-screen bg-white" style={{ fontFamily: "'Inter', sans-serif" }}>
+        {menuOpen && <MenuTakeover categorias={menuCats} onClose={() => setMenuOpen(false)} />}
+        <Navbar onToggleMenu={() => setMenuOpen(!menuOpen)} variant="solid" />
 
-        {/* ═══ PORTADA + LOGO ═══ */}
-        <div className="relative mt-8">
-          <div className="aspect-video rounded-xl overflow-hidden bg-[#F5F2EC] flex items-center justify-center text-gray-400">
-            {portadaUrl ? (
-              <img src={portadaUrl} alt="Portada" className="w-full h-full object-cover" />
-            ) : (
-              <span className="text-sm">Sin portada (opcional)</span>
-            )}
-          </div>
-          <div className="absolute left-5 -bottom-7 w-24 h-24 rounded-xl overflow-hidden bg-gray-100 shadow-[0_0_0_4px_white] flex items-center justify-center text-gray-400">
-            {logoUrl ? (
-              <img src={logoUrl} alt="Logo" className="w-full h-full object-cover" />
-            ) : (
-              <span className="text-xs">Sin logo</span>
-            )}
-          </div>
-        </div>
+        <div className="pt-20 pb-24 px-4 md:px-8">
+          <div className="max-w-xl mx-auto">
+            <VolverAtras href="/perfil" texto="Volver a Mi perfil" />
 
-        <div className="pt-11 flex gap-3 flex-wrap">
-          <label className="px-5 py-2.5 border border-[#0a0a0a] rounded-lg cursor-pointer text-[0.95rem] text-[#0a0a0a] hover:bg-[#0a0a0a] hover:text-white transition-colors">
-            {logoUrl ? 'Cambiar logo' : 'Subir logo *'}
-            <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => elegirArchivo(e, 'logo')} className="hidden" />
-          </label>
-          <label className="px-5 py-2.5 border border-[#0a0a0a] rounded-lg cursor-pointer text-[0.95rem] text-[#0a0a0a] hover:bg-[#0a0a0a] hover:text-white transition-colors">
-            {portadaUrl ? 'Cambiar portada' : 'Subir portada'}
-            <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => elegirArchivo(e, 'portada')} className="hidden" />
-          </label>
-        </div>
-        <div className="mt-3 text-xs text-gray-500 leading-relaxed space-y-0.5">
-          <div>Logo: obligatorio · cuadrado · mínimo 400×400 px</div>
-          <div>Portada: opcional · panorámica 16:9</div>
-          <div>JPG, PNG o WEBP · hasta 3 MB</div>
-        </div>
+            <h1 className="text-2xl md:text-3xl font-black text-[#0a0a0a] tracking-tight mb-1">
+              Mi negocio
+            </h1>
+            <p className="text-sm text-[#0a0a0a]/30 font-light mb-6">
+              {nombreNegocio}
+            </p>
 
-        {/* ═══ MENÚ DEL NEGOCIO ═══ */}
-        <div className="mt-10 border border-gray-200 rounded-xl divide-y divide-gray-100 overflow-hidden">
-          <Link href="/vendedor/productos" className="flex items-center gap-3 px-5 py-4 no-underline text-[#0a0a0a] hover:bg-gray-50 transition-colors">
-            <span className="text-lg">📦</span>
-            <span className="flex-1 font-medium">Mis productos</span>
-            <Chevron />
-          </Link>
-          <Link href="/vendedor/pedidos" className="flex items-center gap-3 px-5 py-4 no-underline text-[#0a0a0a] hover:bg-gray-50 transition-colors">
-            <span className="text-lg">🛒</span>
-            <span className="flex-1 font-medium">Mis pedidos</span>
-            <Chevron />
-          </Link>
-          <Link href="/vendedor/envios" className="flex items-center gap-3 px-5 py-4 no-underline text-[#0a0a0a] hover:bg-gray-50 transition-colors">
-            <span className="text-lg">🚚</span>
-            <span className="flex-1 font-medium">Costos de envío</span>
-            <Chevron />
-          </Link>
-        </div>
-
-        {/* ═══ COBROS ═══ */}
-        <div className="mt-4 border border-gray-200 rounded-xl overflow-hidden">
-          {mpConectado ? (
-            <div className="flex items-center gap-3 bg-emerald-50 px-5 py-4">
-              <span className="text-xl">✓</span>
-              <div className="flex-1">
-                <div className="font-semibold text-emerald-700">MercadoPago conectado</div>
-                <div className="text-sm text-emerald-700">Recibís el dinero de tus ventas en tu cuenta.</div>
+            {/* ═══ PORTADA + LOGO ═══ */}
+            <div className="relative">
+              <div className="aspect-video rounded-2xl overflow-hidden bg-[#F5F2EC] flex items-center justify-center">
+                {portadaUrl ? (
+                  <img src={portadaUrl} alt="Portada" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-sm text-[#0a0a0a]/15 font-light">Sin portada (opcional)</span>
+                )}
+              </div>
+              <div className="absolute left-4 -bottom-6 w-20 h-20 rounded-xl overflow-hidden bg-white shadow-[0_0_0_3px_white] flex items-center justify-center">
+                {logoUrl ? (
+                  <img src={logoUrl} alt="Logo" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-[10px] text-[#0a0a0a]/20 font-light">Sin logo</span>
+                )}
               </div>
             </div>
-          ) : (
-            <div className="px-5 py-4">
-              <p className="text-sm text-gray-500 m-0 mb-3 leading-relaxed">
-                Conectá tu cuenta de MercadoPago para recibir el dinero de tus ventas.
-              </p>
-              <a
-                href="/api/mercadopago/oauth/start"
-                className="inline-block px-6 py-3 text-base bg-[#009ee3] text-white rounded-lg no-underline hover:bg-[#008dd0] transition-colors"
-              >
-                Conectar con MercadoPago
-              </a>
+
+            <div className="pt-10 flex gap-3 flex-wrap">
+              <label className="px-5 py-2.5 border border-[#0a0a0a]/10 rounded-full cursor-pointer text-sm text-[#0a0a0a]/60 font-light hover:border-[#0a0a0a]/30 hover:text-[#0a0a0a] transition-all">
+                {logoUrl ? 'Cambiar logo' : 'Subir logo *'}
+                <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => elegirArchivo(e, 'logo')} className="hidden" />
+              </label>
+              <label className="px-5 py-2.5 border border-[#0a0a0a]/10 rounded-full cursor-pointer text-sm text-[#0a0a0a]/60 font-light hover:border-[#0a0a0a]/30 hover:text-[#0a0a0a] transition-all">
+                {portadaUrl ? 'Cambiar portada' : 'Subir portada'}
+                <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => elegirArchivo(e, 'portada')} className="hidden" />
+              </label>
             </div>
-          )}
+            <p className="mt-2 text-[11px] text-[#0a0a0a]/20 font-light leading-relaxed">
+              Logo: cuadrado, mín. 400×400 px · Portada: panorámica 16:9 · JPG, PNG o WEBP · hasta 3 MB
+            </p>
+
+            {/* ═══ MENÚ DEL NEGOCIO ═══ */}
+            <div className="mt-10 rounded-2xl border border-[#0a0a0a]/5 divide-y divide-[#0a0a0a]/5 overflow-hidden">
+              <Link href="/vendedor/productos" className="flex items-center gap-3 px-5 py-4 no-underline text-[#0a0a0a] hover:bg-[#0a0a0a]/[0.02] transition-colors">
+                <span className="text-lg">📦</span>
+                <span className="flex-1 text-sm font-light">Mis productos</span>
+                <Chevron />
+              </Link>
+              <Link href="/vendedor/pedidos" className="flex items-center gap-3 px-5 py-4 no-underline text-[#0a0a0a] hover:bg-[#0a0a0a]/[0.02] transition-colors">
+                <span className="text-lg">🛒</span>
+                <span className="flex-1 text-sm font-light">Mis pedidos</span>
+                <Chevron />
+              </Link>
+              <Link href="/vendedor/envios" className="flex items-center gap-3 px-5 py-4 no-underline text-[#0a0a0a] hover:bg-[#0a0a0a]/[0.02] transition-colors">
+                <span className="text-lg">🚚</span>
+                <span className="flex-1 text-sm font-light">Costos de envío</span>
+                <Chevron />
+              </Link>
+              <Link href="/vendedor/ubicacion" className="flex items-center gap-3 px-5 py-4 no-underline text-[#0a0a0a] hover:bg-[#0a0a0a]/[0.02] transition-colors">
+                <span className="text-lg">📍</span>
+                <span className="flex-1 text-sm font-light">Mi ubicación</span>
+                <Chevron />
+              </Link>
+            </div>
+
+            {/* ═══ COBROS ═══ */}
+            <div className="mt-4 rounded-2xl border border-[#0a0a0a]/5 overflow-hidden">
+              {mpConectado ? (
+                <div className="flex items-center gap-3 px-5 py-4">
+                  <span className="text-lg">💳</span>
+                  <div className="flex-1">
+                    <span className="text-sm font-medium text-[#0a0a0a]">MercadoPago conectado</span>
+                    <p className="text-[11px] text-[#0a0a0a]/30 font-light mt-0.5 mb-0">
+                      Recibís el dinero de tus ventas en tu cuenta.
+                    </p>
+                  </div>
+                  <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full font-medium">
+                    Activo
+                  </span>
+                </div>
+              ) : (
+                <div className="px-5 py-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <span className="text-lg">💳</span>
+                    <span className="text-sm font-medium text-[#0a0a0a]">Cobros</span>
+                  </div>
+                  <p className="text-sm text-[#0a0a0a]/30 font-light mb-4 leading-relaxed">
+                    Conectá tu cuenta de MercadoPago para recibir el dinero de tus ventas.
+                  </p>
+                  <a
+                    href="/api/mercadopago/oauth/start"
+                    className="inline-block px-6 py-2.5 text-sm bg-[#009ee3] text-white rounded-full no-underline hover:bg-[#008dd0] transition-colors font-medium"
+                  >
+                    Conectar con MercadoPago
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-      </main>
+      </div>
 
       {/* ═══ MODAL DE RECORTE ═══ */}
       {recorte && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[1000]">
-          <div className="bg-white rounded-xl w-full max-w-[520px] overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100">
-              <p className="font-semibold text-[#0a0a0a] m-0">Recortá tu {CONFIG[recorte.destino].etiqueta}</p>
-              <p className="text-sm text-gray-500 mt-0.5 mb-0">Arrastrá para mover y usá el zoom para ajustar</p>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[1000]">
+          <div className="bg-white rounded-2xl w-full max-w-[520px] overflow-hidden">
+            <div className="px-6 py-4 border-b border-[#0a0a0a]/5">
+              <p className="font-black text-[#0a0a0a] tracking-tight m-0">
+                Recortá tu {CONFIG[recorte.destino].etiqueta}
+              </p>
+              <p className="text-sm text-[#0a0a0a]/30 font-light mt-0.5 mb-0">
+                Arrastrá para mover y usá el zoom para ajustar
+              </p>
             </div>
-            <div className="relative w-full h-[320px] bg-[#333]">
+            <div className="relative w-full h-[320px] bg-[#1a1a1a]">
               <Cropper
                 image={recorte.src} crop={crop} zoom={zoom}
                 aspect={CONFIG[recorte.destino].aspect}
@@ -271,19 +319,19 @@ export default function PerfilVendedorPage() {
               />
             </div>
             <div className="px-6 py-4">
-              <label className="text-sm text-gray-500 block mb-1">Zoom</label>
+              <label className="text-xs text-[#0a0a0a]/30 font-light block mb-1.5">Zoom</label>
               <input type="range" min={1} max={3} step={0.05} value={zoom}
                 onChange={(e) => setZoom(Number(e.target.value))}
                 className="w-full accent-[#0a0a0a]" />
             </div>
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50">
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-[#0a0a0a]/5">
               <button type="button" onClick={cerrarRecorte} disabled={subiendo}
-                className="px-5 py-2.5 border border-gray-300 rounded-lg bg-white cursor-pointer hover:bg-gray-50 transition-colors">
+                className="px-5 py-2.5 border border-[#0a0a0a]/10 rounded-full bg-white cursor-pointer text-sm text-[#0a0a0a]/60 font-light hover:border-[#0a0a0a]/30 transition-all">
                 Cancelar
               </button>
               <button type="button" onClick={recortarYSubir} disabled={subiendo || !areaPixels}
-                className={`px-5 py-2.5 border-none rounded-lg text-white transition-colors ${
-                  subiendo || !areaPixels ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#0a0a0a] cursor-pointer hover:bg-[#1a1a1a]'
+                className={`px-5 py-2.5 border-none rounded-full text-white text-sm font-medium transition-colors ${
+                  subiendo || !areaPixels ? 'bg-[#0a0a0a]/30 cursor-not-allowed' : 'bg-[#0a0a0a] cursor-pointer hover:bg-[#1a1a1a]'
                 }`}>
                 {subiendo ? 'Subiendo...' : 'Recortar y subir'}
               </button>

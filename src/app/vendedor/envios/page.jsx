@@ -3,7 +3,10 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import Navbar from '@/components/Navbar';
+import MenuTakeover from '@/components/MenuTakeover';
 import VolverAtras from '@/components/VolverAtras';
+
+const MENU_CATEGORIAS = ['moda','belleza-y-cuidado-personal','gastronomia','hogar-deco-y-jardin','diseno-y-artesanias','tecnologia','salud-y-bienestar','arte-e-ilustracion'];
 
 const ZONAS = [
   { key: 'zona_1', nombre: 'Tu barrio', descripcion: 'Mismo barrio que tu negocio' },
@@ -34,6 +37,22 @@ export default function EnviosPage() {
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado] = useState(false);
 
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [categorias, setCategorias] = useState([]);
+
+  useEffect(() => {
+    if (menuOpen) { document.body.style.overflow = 'hidden' } else { document.body.style.overflow = '' }
+    return () => { document.body.style.overflow = '' }
+  }, [menuOpen]);
+
+  useEffect(() => {
+    async function cargarCats() {
+      const { data } = await supabase.from('categorias').select('id, nombre, slug').eq('activa', true).order('orden');
+      if (data) setCategorias(data);
+    }
+    cargarCats();
+  }, []);
+
   useEffect(() => {
     async function cargar() {
       const { data: { user } } = await supabase.auth.getUser();
@@ -45,16 +64,11 @@ export default function EnviosPage() {
         .eq('usuario_id', user.id)
         .single();
 
-      if (error) {
-        console.error('Error cargando vendedor:', error);
-        setCargando(false);
-        return;
-      }
+      if (error) { console.error('Error cargando vendedor:', error); setCargando(false); return; }
 
       if (data) {
         setVendedorId(data.id);
         setMetodosActivos(data.metodos_entrega_default || []);
-
         const costos = data.costos_envio_zona || {};
         setCostosZona({
           zona_1: costos.zona_1 != null ? String(costos.zona_1) : '',
@@ -69,7 +83,6 @@ export default function EnviosPage() {
           correo_4: costos.correo_4 != null ? String(costos.correo_4) : '',
         });
       }
-
       setCargando(false);
     }
     cargar();
@@ -77,9 +90,7 @@ export default function EnviosPage() {
 
   function toggleMetodo(metodo) {
     setGuardado(false);
-    setMetodosActivos(prev =>
-      prev.includes(metodo) ? prev.filter(m => m !== metodo) : [...prev, metodo]
-    );
+    setMetodosActivos(prev => prev.includes(metodo) ? prev.filter(m => m !== metodo) : [...prev, metodo]);
   }
 
   function actualizarCostoZona(zona, valor) {
@@ -94,45 +105,32 @@ export default function EnviosPage() {
 
   async function guardar() {
     setGuardando(true);
-
     const costosParaGuardar = {};
-
     if (metodosActivos.includes('cadeteria')) {
-      ZONAS.forEach(z => {
-        const valor = costosZona[z.key];
-        costosParaGuardar[z.key] = valor !== '' ? Number(valor) : null;
-      });
+      ZONAS.forEach(z => { const v = costosZona[z.key]; costosParaGuardar[z.key] = v !== '' ? Number(v) : null; });
     }
-
     if (metodosActivos.includes('correo')) {
-      ZONAS_CORREO.forEach(z => {
-        const valor = costosCorreo[z.key];
-        costosParaGuardar[z.key] = valor !== '' ? Number(valor) : null;
-      });
+      ZONAS_CORREO.forEach(z => { const v = costosCorreo[z.key]; costosParaGuardar[z.key] = v !== '' ? Number(v) : null; });
     }
 
-    const { error } = await supabase
-      .from('vendedores')
-      .update({
-        metodos_entrega_default: metodosActivos,
-        costos_envio_zona: costosParaGuardar,
-      })
-      .eq('id', vendedorId);
+    const { error } = await supabase.from('vendedores').update({
+      metodos_entrega_default: metodosActivos, costos_envio_zona: costosParaGuardar,
+    }).eq('id', vendedorId);
 
-    if (error) {
-      alert('No se pudieron guardar los costos de envío: ' + error.message);
-    } else {
-      setGuardado(true);
-      setTimeout(() => setGuardado(false), 3000);
-    }
+    if (error) alert('No se pudieron guardar los costos de envío: ' + error.message);
+    else { setGuardado(true); setTimeout(() => setGuardado(false), 3000); }
     setGuardando(false);
   }
+
+  const menuCats = MENU_CATEGORIAS.map(s => categorias.find(c => c.slug === s)).filter(Boolean);
 
   if (cargando) {
     return (
       <>
-        <Navbar variant="solid" />
-        <main className="pt-28 px-6 text-center text-gray-500">Cargando...</main>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&display=swap" />
+        <div className="min-h-screen bg-white flex items-center justify-center" style={{ fontFamily: "'Inter', sans-serif" }}>
+          <span className="text-[#0a0a0a]/30 text-sm font-light">Cargando...</span>
+        </div>
       </>
     );
   }
@@ -140,166 +138,162 @@ export default function EnviosPage() {
   if (!vendedorId) {
     return (
       <>
-        <Navbar variant="solid" />
-        <main className="pt-28 px-6 text-center text-gray-500">No encontramos tu cuenta de vendedor.</main>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&display=swap" />
+        <div className="min-h-screen bg-white flex items-center justify-center" style={{ fontFamily: "'Inter', sans-serif" }}>
+          <span className="text-[#0a0a0a]/30 text-sm font-light">No encontramos tu cuenta de vendedor.</span>
+        </div>
       </>
     );
   }
 
   return (
     <>
-      <Navbar variant="solid" />
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&display=swap" />
 
-      <main className="pt-28 pb-12 px-6 max-w-[700px] w-full mx-auto">
-        <VolverAtras href="/vendedor/perfil" texto="Volver a Mi negocio" />
-        <h1 className="text-2xl font-semibold text-[#0a0a0a] mt-2">Costos de envío</h1>
-        <p className="text-sm text-gray-500 mt-1 mb-8 leading-relaxed">
-          Elegí qué métodos de envío ofrecés y cuánto cobrás. Los costos de cadetería se calculan automáticamente según la distancia entre tu barrio y el del comprador.
-        </p>
+      <div className="min-h-screen bg-white" style={{ fontFamily: "'Inter', sans-serif" }}>
+        {menuOpen && <MenuTakeover categorias={menuCats} onClose={() => setMenuOpen(false)} />}
+        <Navbar onToggleMenu={() => setMenuOpen(!menuOpen)} variant="solid" />
 
-        {/* ═══ RETIRO ═══ */}
-        <div
-          onClick={() => toggleMetodo('retiro')}
-          className={`flex items-center gap-3 px-4 py-3 rounded-lg cursor-pointer mb-3 transition-colors ${
-            metodosActivos.includes('retiro')
-              ? 'border-2 border-[#0a0a0a]'
-              : 'border border-gray-200 hover:border-gray-300'
-          }`}
-        >
-          <input type="checkbox" checked={metodosActivos.includes('retiro')} readOnly
-            className="w-[18px] h-[18px] accent-[#0a0a0a]" />
-          <div className="flex-1">
-            <div className="font-medium text-[#0a0a0a]">Retiro en el local</div>
-            <div className="text-xs text-gray-400">El comprador retira en tu dirección</div>
-          </div>
-          <span className="text-sm text-emerald-700 font-medium">Gratis</span>
-        </div>
+        <div className="pt-20 pb-24 px-4 md:px-8">
+          <div className="max-w-xl mx-auto">
+            <VolverAtras href="/vendedor/perfil" texto="Volver a Mi negocio" />
 
-        {/* ═══ CADETERÍA ═══ */}
-        <div className={`rounded-lg mb-3 transition-colors ${
-          metodosActivos.includes('cadeteria')
-            ? 'border-2 border-[#0a0a0a]'
-            : 'border border-gray-200 hover:border-gray-300'
-        }`}>
-          <div onClick={() => toggleMetodo('cadeteria')}
-            className="flex items-center gap-3 px-4 py-3 cursor-pointer">
-            <input type="checkbox" checked={metodosActivos.includes('cadeteria')} readOnly
-              className="w-[18px] h-[18px] accent-[#0a0a0a]" />
-            <div className="flex-1">
-              <div className="font-medium text-[#0a0a0a]">Cadetería</div>
-              <div className="text-xs text-gray-400">Envíos dentro de Bahía Blanca. Vos elegís con quién envías, con una app de envíos o cadetería propia.</div>
+            <h1 className="text-2xl md:text-3xl font-black text-[#0a0a0a] tracking-tight mb-1">Costos de envío</h1>
+            <p className="text-sm text-[#0a0a0a]/30 font-light mb-8 leading-relaxed">
+              Elegí qué métodos de envío ofrecés y cuánto cobrás. Los costos de cadetería se calculan automáticamente según la distancia entre tu barrio y el del comprador.
+            </p>
+
+            {/* ═══ RETIRO ═══ */}
+            <div
+              onClick={() => toggleMetodo('retiro')}
+              className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl cursor-pointer mb-3 transition-all ${
+                metodosActivos.includes('retiro')
+                  ? 'border-2 border-[#0a0a0a]'
+                  : 'border border-[#0a0a0a]/5 hover:border-[#0a0a0a]/15'
+              }`}
+            >
+              <input type="checkbox" checked={metodosActivos.includes('retiro')} readOnly className="w-[18px] h-[18px] accent-[#0a0a0a]" />
+              <div className="flex-1">
+                <div className="text-sm font-medium text-[#0a0a0a]">Retiro en el local</div>
+                <div className="text-[11px] text-[#0a0a0a]/25 font-light">El comprador retira en tu dirección</div>
+              </div>
+              <span className="text-xs text-emerald-600 font-medium">Gratis</span>
             </div>
-          </div>
 
-          {metodosActivos.includes('cadeteria') && (
-            <div className="px-4 pb-4 ml-10">
-              <p className="text-xs text-gray-400 mb-3">
-                Definí el costo para cada zona. Dejá vacío si no enviás a alguna de ellas.
-              </p>
-              {ZONAS.map(zona => (
-                <div key={zona.key} className="flex items-center gap-3 mb-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-[#0a0a0a]">{zona.nombre}</div>
-                    <div className="text-xs text-gray-400">{zona.descripcion}</div>
-                  </div>
-                  <div className="relative">
-                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={formatearPrecio(costosZona[zona.key])}
-                      onChange={(e) => actualizarCostoZona(zona.key, e.target.value)}
-                      placeholder="—"
-                      className={inputPrecioClasses}
-                    />
-                  </div>
+            {/* ═══ CADETERÍA ═══ */}
+            <div className={`rounded-2xl mb-3 transition-all ${
+              metodosActivos.includes('cadeteria')
+                ? 'border-2 border-[#0a0a0a]'
+                : 'border border-[#0a0a0a]/5 hover:border-[#0a0a0a]/15'
+            }`}>
+              <div onClick={() => toggleMetodo('cadeteria')} className="flex items-center gap-3 px-4 py-3.5 cursor-pointer">
+                <input type="checkbox" checked={metodosActivos.includes('cadeteria')} readOnly className="w-[18px] h-[18px] accent-[#0a0a0a]" />
+                <div className="flex-1">
+                  <div className="text-sm font-medium text-[#0a0a0a]">Cadetería</div>
+                  <div className="text-[11px] text-[#0a0a0a]/25 font-light">Envíos dentro de Bahía Blanca. Vos elegís con quién envías.</div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+              </div>
 
-        {/* ═══ CORREO ═══ */}
-        <div className={`rounded-lg mb-3 transition-colors ${
-          metodosActivos.includes('correo')
-            ? 'border-2 border-[#0a0a0a]'
-            : 'border border-gray-200 hover:border-gray-300'
-        }`}>
-          <div onClick={() => toggleMetodo('correo')}
-            className="flex items-center gap-3 px-4 py-3 cursor-pointer">
-            <input type="checkbox" checked={metodosActivos.includes('correo')} readOnly
-              className="w-[18px] h-[18px] accent-[#0a0a0a]" />
-            <div className="flex-1">
-              <div className="font-medium text-[#0a0a0a]">Envíos a otras localidades por Correo</div>
-              <div className="text-xs text-gray-400">Pueblos y ciudades de la zona</div>
-            </div>
-          </div>
-
-          {metodosActivos.includes('correo') && (
-            <div className="px-4 pb-4 ml-10">
-              <p className="text-xs text-gray-400 mb-3">
-                Definí el costo para cada zona. Dejá vacío si no enviás a esa zona.
-              </p>
-              {ZONAS_CORREO.map(zona => (
-                <div key={zona.key} className="flex items-center gap-3 mb-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-[#0a0a0a]">{zona.nombre}</div>
-                    <div className="text-xs text-gray-400">{zona.descripcion}</div>
-                  </div>
-                  <div className="relative">
-                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={formatearPrecio(costosCorreo[zona.key])}
-                      onChange={(e) => {
-                        setGuardado(false);
-                        setCostosCorreo(prev => ({ ...prev, [zona.key]: e.target.value.replace(/\D/g, '') }));
-                      }}
-                      placeholder="—"
-                      className={inputPrecioClasses}
-                    />
-                  </div>
+              {metodosActivos.includes('cadeteria') && (
+                <div className="px-4 pb-4 ml-10">
+                  <p className="text-[11px] text-[#0a0a0a]/25 font-light mb-3">
+                    Definí el costo para cada zona. Dejá vacío si no enviás a alguna de ellas.
+                  </p>
+                  {ZONAS.map(zona => (
+                    <div key={zona.key} className="flex items-center gap-3 mb-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-[#0a0a0a]">{zona.nombre}</div>
+                        <div className="text-[11px] text-[#0a0a0a]/25 font-light">{zona.descripcion}</div>
+                      </div>
+                      <div className="relative">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[#0a0a0a]/30 text-sm">$</span>
+                        <input type="text" inputMode="numeric"
+                          value={formatearPrecio(costosZona[zona.key])}
+                          onChange={(e) => actualizarCostoZona(zona.key, e.target.value)}
+                          placeholder="—" className={inputPrecioClasses} />
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
-          )}
-        </div>
 
-        {/* ═══ ACORDAR ═══ */}
-        <div
-          onClick={() => toggleMetodo('acordar')}
-          className={`flex items-center gap-3 px-4 py-3 rounded-lg cursor-pointer mb-8 transition-colors ${
-            metodosActivos.includes('acordar')
-              ? 'border-2 border-[#0a0a0a]'
-              : 'border border-gray-200 hover:border-gray-300'
-          }`}
-        >
-          <input type="checkbox" checked={metodosActivos.includes('acordar')} readOnly
-            className="w-[18px] h-[18px] accent-[#0a0a0a]" />
-          <div className="flex-1">
-            <div className="font-medium text-[#0a0a0a]">Acordar con el comprador</div>
-            <div className="text-xs text-gray-400">Coordinás el envío por WhatsApp después de la compra</div>
+            {/* ═══ CORREO ═══ */}
+            <div className={`rounded-2xl mb-3 transition-all ${
+              metodosActivos.includes('correo')
+                ? 'border-2 border-[#0a0a0a]'
+                : 'border border-[#0a0a0a]/5 hover:border-[#0a0a0a]/15'
+            }`}>
+              <div onClick={() => toggleMetodo('correo')} className="flex items-center gap-3 px-4 py-3.5 cursor-pointer">
+                <input type="checkbox" checked={metodosActivos.includes('correo')} readOnly className="w-[18px] h-[18px] accent-[#0a0a0a]" />
+                <div className="flex-1">
+                  <div className="text-sm font-medium text-[#0a0a0a]">Envíos a otras localidades por Correo</div>
+                  <div className="text-[11px] text-[#0a0a0a]/25 font-light">Pueblos y ciudades de la zona</div>
+                </div>
+              </div>
+
+              {metodosActivos.includes('correo') && (
+                <div className="px-4 pb-4 ml-10">
+                  <p className="text-[11px] text-[#0a0a0a]/25 font-light mb-3">
+                    Definí el costo para cada zona. Dejá vacío si no enviás a esa zona.
+                  </p>
+                  {ZONAS_CORREO.map(zona => (
+                    <div key={zona.key} className="flex items-center gap-3 mb-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-[#0a0a0a]">{zona.nombre}</div>
+                        <div className="text-[11px] text-[#0a0a0a]/25 font-light">{zona.descripcion}</div>
+                      </div>
+                      <div className="relative">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[#0a0a0a]/30 text-sm">$</span>
+                        <input type="text" inputMode="numeric"
+                          value={formatearPrecio(costosCorreo[zona.key])}
+                          onChange={(e) => {
+                            setGuardado(false);
+                            setCostosCorreo(prev => ({ ...prev, [zona.key]: e.target.value.replace(/\D/g, '') }));
+                          }}
+                          placeholder="—" className={inputPrecioClasses} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* ═══ ACORDAR ═══ */}
+            <div
+              onClick={() => toggleMetodo('acordar')}
+              className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl cursor-pointer mb-8 transition-all ${
+                metodosActivos.includes('acordar')
+                  ? 'border-2 border-[#0a0a0a]'
+                  : 'border border-[#0a0a0a]/5 hover:border-[#0a0a0a]/15'
+              }`}
+            >
+              <input type="checkbox" checked={metodosActivos.includes('acordar')} readOnly className="w-[18px] h-[18px] accent-[#0a0a0a]" />
+              <div className="flex-1">
+                <div className="text-sm font-medium text-[#0a0a0a]">Acordar con el comprador</div>
+                <div className="text-[11px] text-[#0a0a0a]/25 font-light">Coordinás el envío por WhatsApp después de la compra</div>
+              </div>
+              <span className="text-[11px] text-[#0a0a0a]/25 font-light">Sin costo fijo</span>
+            </div>
+
+            {/* ═══ GUARDAR ═══ */}
+            <button
+              type="button"
+              onClick={guardar}
+              disabled={guardando}
+              className={`px-6 py-2.5 text-sm text-white border-none rounded-full font-medium transition-colors ${
+                guardado
+                  ? 'bg-emerald-600 cursor-default'
+                  : guardando
+                    ? 'bg-[#0a0a0a]/30 cursor-not-allowed'
+                    : 'bg-[#0a0a0a] cursor-pointer hover:bg-[#1a1a1a]'
+              }`}
+            >
+              {guardando ? 'Guardando...' : (guardado ? '✓ Guardado' : 'Guardar cambios')}
+            </button>
           </div>
-          <span className="text-sm text-gray-400">Sin costo fijo</span>
         </div>
-
-        {/* ═══ GUARDAR ═══ */}
-        <button
-          type="button"
-          onClick={guardar}
-          disabled={guardando}
-          className={`px-6 py-3 text-base text-white border-none rounded-lg transition-colors ${
-            guardado
-              ? 'bg-emerald-700 cursor-default'
-              : guardando
-                ? 'bg-gray-400 cursor-not-allowed'
-                : 'bg-[#0a0a0a] cursor-pointer hover:bg-[#1a1a1a]'
-          }`}
-        >
-          {guardando ? 'Guardando...' : (guardado ? '✓ Guardado' : 'Guardar cambios')}
-        </button>
-      </main>
+      </div>
     </>
   );
 }

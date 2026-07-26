@@ -58,7 +58,7 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
 
           {/* Zona 2: Navegación principal */}
           <div className="flex items-center gap-5 ml-12">
-            <Link href="/#mapa" className="text-[13px] font-light transition-colors" style={{ color: linkColor }}>
+            <Link href="/mapa" className="text-[13px] font-light transition-colors" style={{ color: linkColor }}>
               Mapa
             </Link>
             <button onClick={onToggleMenu} className="text-[13px] font-light transition-colors cursor-pointer" style={{ color: linkColor }}>

@@ -4,7 +4,10 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 import Navbar from '@/components/Navbar';
+import MenuTakeover from '@/components/MenuTakeover';
 import VolverAtras from '@/components/VolverAtras';
+
+const MENU_CATEGORIAS = ['moda','belleza-y-cuidado-personal','gastronomia','hogar-deco-y-jardin','diseno-y-artesanias','tecnologia','salud-y-bienestar','arte-e-ilustracion'];
 
 function infoEstado(estado) {
   if (estado === 'en_revision') return { texto: 'En revisión', fondo: 'bg-amber-100', color: 'text-amber-700', punto: 'bg-amber-500' };
@@ -35,6 +38,21 @@ export default function MisProductosPage() {
   const [nombreCategoria, setNombreCategoria] = useState('');
   const [error, setError] = useState(null);
   const [eliminando, setEliminando] = useState(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [categorias, setCategorias] = useState([]);
+
+  useEffect(() => {
+    if (menuOpen) { document.body.style.overflow = 'hidden' } else { document.body.style.overflow = '' }
+    return () => { document.body.style.overflow = '' }
+  }, [menuOpen]);
+
+  useEffect(() => {
+    async function cargarCats() {
+      const { data } = await supabase.from('categorias').select('id, nombre, slug').eq('activa', true).order('orden');
+      if (data) setCategorias(data);
+    }
+    cargarCats();
+  }, []);
 
   useEffect(() => {
     async function cargarProductos() {
@@ -104,68 +122,32 @@ export default function MisProductosPage() {
 
   async function toggleEstado(producto) {
     const nuevoEstado = producto.estado === 'activo' ? 'pausado' : 'activo';
-
-    const { error } = await supabase
-      .from('productos')
-      .update({ estado: nuevoEstado })
-      .eq('id', producto.id);
-
-    if (error) {
-      alert('No se pudo cambiar el estado del producto.');
-      return;
-    }
-
-    setProductos(prev =>
-      prev.map(p => p.id === producto.id ? { ...p, estado: nuevoEstado } : p)
-    );
+    const { error } = await supabase.from('productos').update({ estado: nuevoEstado }).eq('id', producto.id);
+    if (error) { alert('No se pudo cambiar el estado del producto.'); return; }
+    setProductos(prev => prev.map(p => p.id === producto.id ? { ...p, estado: nuevoEstado } : p));
   }
 
   async function eliminarProducto(producto) {
-    const confirmar = window.confirm(
-      `¿Seguro que querés eliminar "${producto.nombre}"? Esta acción no se puede deshacer.`
-    );
+    const confirmar = window.confirm(`¿Seguro que querés eliminar "${producto.nombre}"? Esta acción no se puede deshacer.`);
     if (!confirmar) return;
 
     setEliminando(producto.id);
-
     try {
-      const { data: medias } = await supabase
-        .from('producto_media')
-        .select('url')
-        .eq('producto_id', producto.id);
-
+      const { data: medias } = await supabase.from('producto_media').select('url').eq('producto_id', producto.id);
       if (medias && medias.length > 0) {
         const rutas = medias.map(m => extraerRutaStorage(m.url, 'productos')).filter(Boolean);
-        if (rutas.length > 0) {
-          await supabase.storage.from('productos').remove(rutas);
-        }
+        if (rutas.length > 0) await supabase.storage.from('productos').remove(rutas);
       }
-
       await supabase.from('producto_variantes').delete().eq('producto_id', producto.id);
       await supabase.from('producto_media').delete().eq('producto_id', producto.id);
-
-      const { error: errDelete } = await supabase
-        .from('productos')
-        .delete()
-        .eq('id', producto.id);
-
+      const { error: errDelete } = await supabase.from('productos').delete().eq('id', producto.id);
       if (errDelete) throw errDelete;
-
       setProductos(prev => prev.filter(p => p.id !== producto.id));
-
     } catch (err) {
       console.error(err);
-
-      const esForeignKey =
-        err?.message?.includes('foreign key') ||
-        err?.message?.includes('violates') ||
-        err?.code === '23503';
-
+      const esForeignKey = err?.message?.includes('foreign key') || err?.message?.includes('violates') || err?.code === '23503';
       if (esForeignKey) {
-        alert(
-          'Este producto tiene pedidos asociados y no se puede eliminar.\n\n' +
-          'Si no querés que los compradores lo vean, podés pausarlo con el botón "Pausar" en la lista de productos.'
-        );
+        alert('Este producto tiene pedidos asociados y no se puede eliminar.\n\nSi no querés que los compradores lo vean, podés pausarlo.');
       } else {
         alert('Hubo un error al eliminar. Intentá de nuevo.');
       }
@@ -174,130 +156,151 @@ export default function MisProductosPage() {
     }
   }
 
-  function puedeToggle(estado) {
-    return estado === 'activo' || estado === 'pausado' || estado === 'agotado';
-  }
+  function puedeToggle(estado) { return estado === 'activo' || estado === 'pausado' || estado === 'agotado'; }
+  function textoToggle(estado) { return estado === 'activo' ? 'Pausar' : 'Reactivar'; }
 
-  function textoToggle(estado) {
-    return estado === 'activo' ? 'Pausar' : 'Reactivar';
+  const menuCats = MENU_CATEGORIAS.map(s => categorias.find(c => c.slug === s)).filter(Boolean);
+
+  if (cargando) {
+    return (
+      <>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&display=swap" />
+        <div className="min-h-screen bg-white flex items-center justify-center" style={{ fontFamily: "'Inter', sans-serif" }}>
+          <span className="text-[#0a0a0a]/30 text-sm font-light">Cargando tus productos...</span>
+        </div>
+      </>
+    );
   }
 
   return (
     <>
-      <Navbar variant="solid" />
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&display=swap" />
 
-      <main className="pt-28 pb-12 px-6 max-w-[800px] w-full mx-auto">
-        <VolverAtras href="/perfil" texto="Volver a Mi perfil" />
+      <div className="min-h-screen bg-white" style={{ fontFamily: "'Inter', sans-serif" }}>
+        {menuOpen && <MenuTakeover categorias={menuCats} onClose={() => setMenuOpen(false)} />}
+        <Navbar onToggleMenu={() => setMenuOpen(!menuOpen)} variant="solid" />
 
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-semibold text-[#0a0a0a] m-0">Mis productos</h1>
-          {productos.length > 0 && (
-            <Link
-              href="/vendedor/productos/nuevo"
-              className="bg-[#0a0a0a] text-white rounded-lg px-5 py-2.5 text-[0.95rem] no-underline hover:bg-[#1a1a1a] transition-colors"
-            >
-              + Cargar producto
-            </Link>
-          )}
-        </div>
+        <div className="pt-20 pb-24 px-4 md:px-8">
+          <div className="max-w-xl mx-auto">
+            <VolverAtras href="/vendedor/perfil" texto="Volver a Mi negocio" />
 
-        {cargando && <p className="text-gray-400">Cargando tus productos...</p>}
-        {!cargando && error && <p className="text-red-700">{error}</p>}
-
-        {/* Lista de productos */}
-        {!cargando && !error && productos.map((p) => {
-          const estado = infoEstado(p.estado);
-          const estaEliminando = eliminando === p.id;
-          return (
-            <div
-              key={p.id}
-              className={`flex gap-4 items-center bg-white border border-gray-200 rounded-xl p-4 mb-3 transition-opacity ${
-                estaEliminando ? 'opacity-50' : ''
-              }`}
-            >
-              {/* Foto */}
-              <div className="w-[84px] h-[84px] rounded-lg shrink-0 bg-[#F5F2EC] overflow-hidden">
-                {p.foto && <img src={p.foto} alt={p.nombre} className="w-full h-full object-cover" />}
-              </div>
-
-              {/* Info */}
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-[1.05rem] text-[#0a0a0a] m-0 mb-0.5 truncate">{p.nombre}</p>
-                <p className="text-xs text-gray-400 m-0 mb-2">
-                  {[nombreCategoria, p.subcategoria].filter(Boolean).join(' · ')}
-                </p>
-                <p className="text-base font-semibold text-[#0a0a0a] m-0">
-                  {p.precio_anterior && (
-                    <span className="text-gray-400 font-normal line-through text-sm mr-1.5">
-                      ${formatearPrecio(p.precio_anterior)}
-                    </span>
-                  )}
-                  ${formatearPrecio(p.precio)}
-                </p>
-                <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full mt-2 ${estado.fondo} ${estado.color}`}>
-                  <span className={`w-[7px] h-[7px] rounded-full ${estado.punto}`} />
-                  {estado.texto}
-                </span>
-              </div>
-
-              {/* Acciones */}
-              <div className="flex flex-col gap-1.5 shrink-0">
-                <Link
-                  href={`/vendedor/productos/${p.id}/editar`}
-                  className="bg-white border border-[#0a0a0a] rounded-lg px-4 py-1.5 text-sm text-[#0a0a0a] no-underline whitespace-nowrap text-center hover:bg-[#0a0a0a] hover:text-white transition-colors"
-                >
-                  Editar
-                </Link>
-
-                {puedeToggle(p.estado) && (
-                  <button
-                    onClick={() => toggleEstado(p)}
-                    className={`bg-white rounded-lg px-4 py-1.5 text-sm cursor-pointer whitespace-nowrap transition-colors ${
-                      p.estado === 'activo'
-                        ? 'border border-amber-500 text-amber-700 hover:bg-amber-50'
-                        : 'border border-emerald-500 text-emerald-700 hover:bg-emerald-50'
-                    }`}
-                  >
-                    {textoToggle(p.estado)}
-                  </button>
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h1 className="text-2xl md:text-3xl font-black text-[#0a0a0a] tracking-tight m-0">Mis productos</h1>
+                {!error && (
+                  <p className="text-sm text-[#0a0a0a]/30 font-light mt-1 mb-0">
+                    {productos.length} {productos.length === 1 ? 'producto' : 'productos'}
+                  </p>
                 )}
-
+              </div>
+              {productos.length > 0 && (
                 <Link
-                  href={`/producto/${p.id}`}
-                  className="bg-white border border-gray-300 rounded-lg px-4 py-1.5 text-sm text-[#0a0a0a] no-underline whitespace-nowrap text-center hover:bg-gray-50 transition-colors"
+                  href="/vendedor/productos/nuevo"
+                  className="bg-[#0a0a0a] text-white rounded-full px-5 py-2.5 text-sm font-medium no-underline hover:bg-[#1a1a1a] transition-colors"
                 >
-                  Ver
+                  + Cargar producto
                 </Link>
+              )}
+            </div>
 
-                <button
-                  onClick={() => eliminarProducto(p)}
-                  disabled={estaEliminando}
-                  className={`bg-white border border-red-200 rounded-lg px-4 py-1.5 text-sm text-red-500 whitespace-nowrap transition-colors ${
-                    estaEliminando ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-red-50'
+            {error && <p className="text-red-700 text-sm">{error}</p>}
+
+            {/* Lista de productos */}
+            {!error && productos.map((p) => {
+              const estado = infoEstado(p.estado);
+              const estaEliminando = eliminando === p.id;
+              return (
+                <div
+                  key={p.id}
+                  className={`flex gap-4 items-center rounded-2xl border border-[#0a0a0a]/5 p-4 mb-3 transition-opacity ${
+                    estaEliminando ? 'opacity-50' : ''
                   }`}
                 >
-                  {estaEliminando ? '...' : 'Eliminar'}
-                </button>
-              </div>
-            </div>
-          );
-        })}
+                  {/* Foto */}
+                  <div className="w-[80px] h-[80px] rounded-xl shrink-0 bg-[#F5F2EC] overflow-hidden">
+                    {p.foto && <img src={p.foto} alt={p.nombre} className="w-full h-full object-cover" />}
+                  </div>
 
-        {/* Estado vacío */}
-        {!cargando && !error && productos.length === 0 && (
-          <div className="bg-white border border-dashed border-gray-300 rounded-xl px-8 py-12 text-center">
-            <div className="text-4xl mb-2">📦</div>
-            <h2 className="text-xl font-semibold text-[#0a0a0a] m-0 mb-1.5">Todavía no cargaste productos</h2>
-            <p className="text-gray-500 m-0 mb-6">Cargá tu primer producto y va a aparecer acá.</p>
-            <Link
-              href="/vendedor/productos/nuevo"
-              className="bg-[#0a0a0a] text-white rounded-lg px-5 py-2.5 text-[0.95rem] no-underline hover:bg-[#1a1a1a] transition-colors"
-            >
-              + Cargar mi primer producto
-            </Link>
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-[#0a0a0a] m-0 mb-0.5 truncate">{p.nombre}</p>
+                    <p className="text-[11px] text-[#0a0a0a]/25 font-light m-0 mb-1.5">
+                      {[nombreCategoria, p.subcategoria].filter(Boolean).join(' · ')}
+                    </p>
+                    <p className="text-sm font-semibold text-[#0a0a0a] m-0">
+                      {p.precio_anterior && (
+                        <span className="text-[#0a0a0a]/25 font-light line-through text-xs mr-1.5">
+                          ${formatearPrecio(p.precio_anterior)}
+                        </span>
+                      )}
+                      ${formatearPrecio(p.precio)}
+                    </p>
+                    <span className={`inline-flex items-center gap-1.5 text-[10px] font-semibold px-2 py-0.5 rounded-full mt-1.5 ${estado.fondo} ${estado.color}`}>
+                      <span className={`w-[6px] h-[6px] rounded-full ${estado.punto}`} />
+                      {estado.texto}
+                    </span>
+                  </div>
+
+                  {/* Acciones */}
+                  <div className="flex flex-col gap-1.5 shrink-0">
+                    <Link
+                      href={`/vendedor/productos/${p.id}/editar`}
+                      className="bg-white border border-[#0a0a0a]/10 rounded-full px-4 py-1.5 text-xs text-[#0a0a0a]/60 font-light no-underline whitespace-nowrap text-center hover:border-[#0a0a0a]/30 hover:text-[#0a0a0a] transition-all"
+                    >
+                      Editar
+                    </Link>
+
+                    {puedeToggle(p.estado) && (
+                      <button
+                        onClick={() => toggleEstado(p)}
+                        className={`bg-white rounded-full px-4 py-1.5 text-xs cursor-pointer whitespace-nowrap transition-colors ${
+                          p.estado === 'activo'
+                            ? 'border border-amber-400 text-amber-600 hover:bg-amber-50'
+                            : 'border border-emerald-400 text-emerald-600 hover:bg-emerald-50'
+                        }`}
+                      >
+                        {textoToggle(p.estado)}
+                      </button>
+                    )}
+
+                    <Link
+                      href={`/producto/${p.id}`}
+                      className="bg-white border border-[#0a0a0a]/10 rounded-full px-4 py-1.5 text-xs text-[#0a0a0a]/40 font-light no-underline whitespace-nowrap text-center hover:border-[#0a0a0a]/30 transition-all"
+                    >
+                      Ver
+                    </Link>
+
+                    <button
+                      onClick={() => eliminarProducto(p)}
+                      disabled={estaEliminando}
+                      className={`bg-white border border-red-200 rounded-full px-4 py-1.5 text-xs text-red-400 whitespace-nowrap transition-colors ${
+                        estaEliminando ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-red-50 hover:text-red-600'
+                      }`}
+                    >
+                      {estaEliminando ? '...' : 'Eliminar'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Estado vacío */}
+            {!error && productos.length === 0 && (
+              <div className="border border-dashed border-[#0a0a0a]/10 rounded-2xl px-8 py-12 text-center">
+                <div className="text-4xl mb-2">📦</div>
+                <h2 className="text-xl font-black text-[#0a0a0a] tracking-tight m-0 mb-1.5">Todavía no cargaste productos</h2>
+                <p className="text-sm text-[#0a0a0a]/30 font-light m-0 mb-6">Cargá tu primer producto y va a aparecer acá.</p>
+                <Link
+                  href="/vendedor/productos/nuevo"
+                  className="bg-[#0a0a0a] text-white rounded-full px-6 py-2.5 text-sm font-medium no-underline hover:bg-[#1a1a1a] transition-colors"
+                >
+                  + Cargar mi primer producto
+                </Link>
+              </div>
+            )}
           </div>
-        )}
-      </main>
+        </div>
+      </div>
     </>
   );
 }

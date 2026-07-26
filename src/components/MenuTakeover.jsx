@@ -38,7 +38,7 @@ export default function MenuTakeover({ categorias = [], onClose }) {
 
         {/* Secciones */}
         <Link
-          href="/#mapa"
+          href="/mapa"
           onClick={onClose}
           className="text-lg md:text-2xl font-extralight text-[#0a0a0a]/50 tracking-tight leading-snug hover:text-[#0a0a0a] transition-colors"
         >

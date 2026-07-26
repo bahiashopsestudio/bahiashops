@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { MapContainer, TileLayer, Marker, GeoJSON, Tooltip } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Tooltip } from 'react-leaflet'
 import L from 'leaflet'
 import { createClient } from '@/lib/supabase/client'
 import 'leaflet/dist/leaflet.css'
@@ -34,7 +34,7 @@ export default function MapaHome({ vendedores = [] }) {
   const [listo, setListo] = useState(false)
   const [iconoLocal, setIconoLocal] = useState(null)
   const [iconoCasa, setIconoCasa] = useState(null)
-  const [barrios, setBarrios] = useState([])
+  const [barriosMap, setBarriosMap] = useState({})
 
   useEffect(() => {
     setIconoLocal(crearIconoPin(COLOR_LOCAL))
@@ -42,12 +42,18 @@ export default function MapaHome({ vendedores = [] }) {
     setListo(true)
 
     async function cargarBarrios() {
-      const { data, error } = await supabase.rpc('barrios_con_poligono')
+      const { data, error } = await supabase
+        .from('barrios')
+        .select('id, nombre')
       if (error) {
         console.error('Error cargando barrios:', error)
         return
       }
-      if (data) setBarrios(data)
+      if (data) {
+        const mapa = {}
+        data.forEach((b) => { mapa[b.id] = b.nombre })
+        setBarriosMap(mapa)
+      }
     }
     cargarBarrios()
   }, [])
@@ -58,33 +64,6 @@ export default function MapaHome({ vendedores = [] }) {
         <span className="text-[#0a0a0a]/15 text-sm font-light">Cargando mapa...</span>
       </div>
     )
-  }
-
-  const estiloBarrio = {
-    color: 'rgba(10,10,10,0.3)',
-    weight: 0.6,
-    fillColor: '#0a0a0a',
-    fillOpacity: 0.01,
-  }
-
-  function onCadaBarrio(feature, layer) {
-    if (feature.properties?.nombre) {
-      layer.bindTooltip(feature.properties.nombre, {
-        direction: 'top',
-        offset: [0, -4],
-        className: 'mapa-barrio-tooltip',
-      })
-      // En mobile (touch), abrir el tooltip al tocar
-      layer.on('click', function () {
-        if ('ontouchstart' in window) {
-          if (layer.isTooltipOpen()) {
-            layer.closeTooltip()
-          } else {
-            layer.openTooltip()
-          }
-        }
-      })
-    }
   }
 
   return (
@@ -101,26 +80,10 @@ export default function MapaHome({ vendedores = [] }) {
           url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png"
         />
 
-        {/* Polígonos de barrios */}
-        {barrios.map((barrio) => {
-          const feature = {
-            type: 'Feature',
-            properties: { nombre: barrio.nombre },
-            geometry: barrio.geojson,
-          }
-          return (
-            <GeoJSON
-              key={barrio.id}
-              data={feature}
-              style={estiloBarrio}
-              onEachFeature={onCadaBarrio}
-            />
-          )
-        })}
-
-        {/* Pines de vendedores */}
         {vendedores.map((v) => {
           if (!v.latitud || !v.longitud) return null
+
+          const nombreBarrio = v.barrio_id ? barriosMap[v.barrio_id] : null
 
           return (
             <Marker
@@ -128,10 +91,17 @@ export default function MapaHome({ vendedores = [] }) {
               position={[v.latitud, v.longitud]}
               icon={v.recibe_publico ? iconoLocal : iconoCasa}
             >
-              <Tooltip direction="top" offset={[0, -14]} className="mapa-home-tooltip">
-                <span style={{ fontFamily: "'Inter', sans-serif", fontSize: '12px', fontWeight: 500, color: '#0a0a0a' }}>
-                  {v.nombre_negocio}
-                </span>
+              <Tooltip direction="top" offset={[0, -14]} className="mapa-pin-tooltip">
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '12px', color: 'white' }}>
+                    {v.nombre_negocio}
+                  </div>
+                  {nombreBarrio && (
+                    <div style={{ fontWeight: 400, fontSize: '11px', color: 'rgba(255,255,255,0.65)', marginTop: '1px' }}>
+                      {nombreBarrio}
+                    </div>
+                  )}
+                </div>
               </Tooltip>
             </Marker>
           )
@@ -160,19 +130,16 @@ export default function MapaHome({ vendedores = [] }) {
           border-radius: 50%;
           animation: pulso 2s ease-out infinite;
         }
-        .mapa-barrio-tooltip {
-          background: rgba(10,10,10,0.85) !important;
+        .mapa-pin-tooltip {
+          background: rgba(10,10,10,0.9) !important;
           border: none !important;
           border-radius: 8px !important;
-          padding: 6px 12px !important;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
+          padding: 8px 12px !important;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important;
           font-family: 'Inter', sans-serif !important;
-          font-size: 12px !important;
-          font-weight: 400 !important;
-          color: white !important;
         }
-        .mapa-barrio-tooltip::before {
-          border-top-color: rgba(10,10,10,0.85) !important;
+        .mapa-pin-tooltip::before {
+          border-top-color: rgba(10,10,10,0.9) !important;
         }
         .leaflet-container {
           background: #ECEAE3 !important;

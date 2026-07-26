@@ -14,6 +14,7 @@ export default function MisDireccionesPage() {
   const [direcciones, setDirecciones] = useState([])
   const [cargando, setCargando] = useState(true)
   const [mostrarForm, setMostrarForm] = useState(false)
+  const [editando, setEditando] = useState(null) // dirección que se está editando
   const [menuOpen, setMenuOpen] = useState(false)
   const [categorias, setCategorias] = useState([])
 
@@ -45,9 +46,25 @@ export default function MisDireccionesPage() {
     setCargando(false)
   }
 
-  function alGuardar(nueva) {
+  function alGuardarNueva(nueva) {
     setDirecciones((actual) => [...actual, nueva])
     setMostrarForm(false)
+  }
+
+  function alGuardarEditada(actualizada) {
+    setDirecciones((actual) =>
+      actual.map((d) => d.id === actualizada.id ? actualizada : d)
+    )
+    setEditando(null)
+  }
+
+  function abrirEdicion(dir) {
+    setMostrarForm(false) // cerrar el form de nueva si estaba abierto
+    setEditando(dir)
+  }
+
+  function cancelarEdicion() {
+    setEditando(null)
   }
 
   const menuCats = MENU_CATEGORIAS.map(s => categorias.find(c => c.slug === s)).filter(Boolean)
@@ -83,36 +100,62 @@ export default function MisDireccionesPage() {
               Guardá tus direcciones para usarlas al comprar.
             </p>
 
-            {/* Lista */}
+            {/* Lista de direcciones */}
             {direcciones.map((dir) => (
-              <div key={dir.id} className="rounded-2xl border border-[#0a0a0a]/5 p-5 mb-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <svg className="w-4 h-4 text-[#0a0a0a]/25 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
-                  </svg>
-                  <span className="text-sm font-medium text-[#0a0a0a]">{dir.etiqueta || 'Sin etiqueta'}</span>
-                  {dir.es_principal && (
-                    <span className="text-[10px] bg-[#F5F2EC] text-[#0a0a0a]/50 px-2 py-0.5 rounded-full font-light">
-                      Principal
-                    </span>
-                  )}
-                </div>
-                <p className="text-sm text-[#0a0a0a]/40 font-light leading-relaxed ml-6">
-                  {dir.calle} {dir.numero}{dir.piso_depto ? `, ${dir.piso_depto}` : ''}
-                  {dir.referencia && <><br /><span className="text-[#0a0a0a]/25">{dir.referencia}</span></>}
-                  <br />Tel. {dir.telefono}
-                </p>
+              <div key={dir.id}>
+                {/* Si estamos editando esta dirección, mostrar el form */}
+                {editando?.id === dir.id ? (
+                  <div className="rounded-2xl border border-[#0a0a0a]/10 p-5 mb-3">
+                    <h2 className="text-lg font-black text-[#0a0a0a] tracking-tight mb-4">Editar dirección</h2>
+                    <FormularioDireccion
+                      direccionExistente={dir}
+                      onGuardada={alGuardarEditada}
+                      onCancelar={cancelarEdicion}
+                    />
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-[#0a0a0a]/5 p-5 mb-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-2">
+                          <svg className="w-4 h-4 text-[#0a0a0a]/25 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+                          </svg>
+                          <span className="text-sm font-medium text-[#0a0a0a]">{dir.etiqueta || 'Sin etiqueta'}</span>
+                          {dir.es_principal && (
+                            <span className="text-[10px] bg-[#F5F2EC] text-[#0a0a0a]/50 px-2 py-0.5 rounded-full font-light">
+                              Principal
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-[#0a0a0a]/40 font-light leading-relaxed ml-6">
+                          {dir.calle} {dir.numero}{dir.piso_depto ? `, ${dir.piso_depto}` : ''}
+                          {dir.referencia && <><br /><span className="text-[#0a0a0a]/25">{dir.referencia}</span></>}
+                          <br />Tel. {dir.telefono}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => abrirEdicion(dir)}
+                        className="text-sm text-[#0a0a0a]/40 hover:text-[#0a0a0a] transition-colors cursor-pointer shrink-0 mt-0.5"
+                      >
+                        Editar
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
 
-            {/* Formulario o botón */}
-            {mostrarForm ? (
+            {/* Formulario de nueva dirección o botón para abrir */}
+            {editando ? null : mostrarForm ? (
               <div className="rounded-2xl border border-[#0a0a0a]/5 p-5 mt-2">
                 <h2 className="text-lg font-black text-[#0a0a0a] tracking-tight mb-4">Nueva dirección</h2>
                 <FormularioDireccion
                   esPrimera={direcciones.length === 0}
-                  onGuardada={alGuardar}
+                  onGuardada={alGuardarNueva}
                   onCancelar={() => setMostrarForm(false)}
                 />
               </div>

@@ -1,8 +1,30 @@
+// src/middleware.js
+
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 
+// ──────────────────────────────────────────────
+// Cambiá esto a false cuando quieras abrir el sitio al público
+const COMING_SOON = true
+// ──────────────────────────────────────────────
+
+// Rutas que siempre quedan accesibles (sin login)
+const PUBLIC_PATHS = [
+  '/proximamente',
+  '/login',
+  '/registro',
+  '/auth',
+  '/api',
+  '/_next',
+  '/favicon',
+]
+
+function isPublicPath(pathname) {
+  return PUBLIC_PATHS.some((p) => pathname.startsWith(p))
+}
+
 export async function middleware(request) {
-  let response = NextResponse.next({ request })
+  let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -13,24 +35,51 @@ export async function middleware(request) {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
+          cookiesToSet.forEach(({ name, value, options }) =>
             request.cookies.set(name, value)
-            response = NextResponse.next({ request })
-            cookiesToSet.forEach(({ name, value, options }) =>
-              response.cookies.set(name, value, options)
-            )
-          })
+          )
+          supabaseResponse = NextResponse.next({ request })
+          cookiesToSet.forEach(({ name, value, options }) =>
+            supabaseResponse.cookies.set(name, value, options)
+          )
         },
       },
     }
   )
 
-  // Esta línea es la que "re-marca el sello": refresca la sesión en cada navegación.
-  await supabase.auth.getUser()
+  // Refrescar sesión (importante: no usar getSession, usar getUser)
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
-  return response
+  // ── COMING SOON MODE ──
+  if (COMING_SOON) {
+    const { pathname } = request.nextUrl
+
+    // Si ya está logueado, dejarlo pasar a todo el sitio
+    if (user) {
+      // Si un usuario logueado visita /proximamente, mandarlo al home
+      if (pathname === '/proximamente') {
+        const url = request.nextUrl.clone()
+        url.pathname = '/'
+        return NextResponse.redirect(url)
+      }
+      return supabaseResponse
+    }
+
+    // Si NO está logueado y la ruta no es pública, redirigir a /proximamente
+    if (!isPublicPath(pathname)) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/proximamente'
+      return NextResponse.redirect(url)
+    }
+  }
+
+  return supabaseResponse
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
 }

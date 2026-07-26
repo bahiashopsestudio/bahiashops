@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
+import VolverAtras from '@/components/VolverAtras'
 import FormularioVendedor from './FormularioVendedor'
 
 const MENU_CATEGORIAS = ['moda','belleza-y-cuidado-personal','gastronomia','hogar-deco-y-jardin','diseno-y-artesanias','tecnologia','salud-y-bienestar','arte-e-ilustracion']
@@ -12,6 +13,7 @@ export default function NuevoVendedorPage() {
   const supabase = createClient()
   const [menuOpen, setMenuOpen] = useState(false)
   const [categorias, setCategorias] = useState([])
+  const [userId, setUserId] = useState(null)
 
   useEffect(() => {
     if (menuOpen) { document.body.style.overflow = 'hidden' } else { document.body.style.overflow = '' }
@@ -19,11 +21,14 @@ export default function NuevoVendedorPage() {
   }, [menuOpen])
 
   useEffect(() => {
-    async function cargarCats() {
+    async function cargar() {
       const { data } = await supabase.from('categorias').select('id, nombre, slug').eq('activa', true).order('orden')
       if (data) setCategorias(data)
+
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) setUserId(user.id)
     }
-    cargarCats()
+    cargar()
   }, [])
 
   const menuCats = MENU_CATEGORIAS.map(s => categorias.find(c => c.slug === s)).filter(Boolean)
@@ -31,12 +36,24 @@ export default function NuevoVendedorPage() {
   return (
     <>
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&display=swap" />
+
       <div className="min-h-screen bg-white" style={{ fontFamily: "'Inter', sans-serif" }}>
         {menuOpen && <MenuTakeover categorias={menuCats} onClose={() => setMenuOpen(false)} />}
         <Navbar onToggleMenu={() => setMenuOpen(!menuOpen)} variant="solid" />
 
-        <div className="pt-16">
-          <FormularioVendedor />
+        <div className="pt-20 pb-24 px-4 md:px-8">
+          <div className="max-w-xl mx-auto">
+            <VolverAtras href="/" texto="Volver al inicio" />
+
+            <h1 className="text-2xl md:text-3xl font-black text-[#0a0a0a] tracking-tight mb-1">
+              Sumar mi emprendimiento
+            </h1>
+            <p className="text-sm text-[#0a0a0a]/30 font-light mb-8">
+              Completá estos datos para crear tu tienda en Bahía Shops.
+            </p>
+
+            {userId && <FormularioVendedor userId={userId} />}
+          </div>
         </div>
       </div>
     </>

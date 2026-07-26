@@ -4,21 +4,24 @@ import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { createClient } from '@/lib/supabase/client';
 
-// Leaflet no funciona en SSR → importamos el mapa dinámicamente
 const MapaUbicacion = dynamic(
   () => import('@/app/vendedor/nuevo/MapaUbicacion'),
   {
     ssr: false,
     loading: () => (
-      <div style={{ height: '300px', background: '#f5f5f5', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999', fontSize: '0.9rem' }}>
+      <div className="h-[300px] bg-[#F5F2EC] rounded-lg flex items-center justify-center text-gray-400 text-sm">
         Cargando mapa...
       </div>
     ),
   }
 );
 
-export default function FormularioDireccion({ onGuardada, onCancelar, esPrimera = false }) {
+const inputClasses =
+  'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-[0.95rem] outline-none focus:border-[#0a0a0a] focus:ring-1 focus:ring-[#0a0a0a]/20 transition-colors box-border';
+
+export default function FormularioDireccion({ onGuardada, onCancelar, esPrimera = false, direccionExistente = null }) {
   const supabase = createClient();
+  const editando = !!direccionExistente;
 
   const [etiqueta, setEtiqueta] = useState('');
   const [calle, setCalle] = useState('');
@@ -28,7 +31,6 @@ export default function FormularioDireccion({ onGuardada, onCancelar, esPrimera 
   const [telefono, setTelefono] = useState('');
   const [enviando, setEnviando] = useState(false);
 
-  // Estado del mapa y barrio
   const [mostrarMapa, setMostrarMapa] = useState(false);
   const [buscandoDireccion, setBuscandoDireccion] = useState(false);
   const [posicionBuscada, setPosicionBuscada] = useState(null);
@@ -37,11 +39,49 @@ export default function FormularioDireccion({ onGuardada, onCancelar, esPrimera 
   const [latitud, setLatitud] = useState(null);
   const [longitud, setLongitud] = useState(null);
 
-  // Fallback: lista de barrios por si la detección automática no funciona
   const [barrios, setBarrios] = useState([]);
   const [mostrarFallback, setMostrarFallback] = useState(false);
 
-  // ── Geocoding: busca la dirección con Nominatim y muestra el mapa ──
+  // ── Pre-llenar campos si estamos editando ──
+  useEffect(() => {
+    if (!direccionExistente) return;
+
+    setEtiqueta(direccionExistente.etiqueta || '');
+    setCalle(direccionExistente.calle || '');
+    setNumero(direccionExistente.numero || '');
+    setPisoDepto(direccionExistente.piso_depto || '');
+    setReferencia(direccionExistente.referencia || '');
+    setTelefono(direccionExistente.telefono || '');
+    setBarrioId(direccionExistente.barrio_id || null);
+    setLatitud(direccionExistente.lat || null);
+    setLongitud(direccionExistente.lng || null);
+
+    // Si tiene coordenadas, mostrar el mapa con la posición guardada
+    if (direccionExistente.lat && direccionExistente.lng) {
+      setMostrarMapa(true);
+      setPosicionBuscada({
+        lat: direccionExistente.lat,
+        lng: direccionExistente.lng,
+        zoom: 16,
+        nonce: Date.now(),
+      });
+    }
+
+    // Cargar el nombre del barrio
+    if (direccionExistente.barrio_id) {
+      cargarNombreBarrio(direccionExistente.barrio_id);
+    }
+  }, [direccionExistente]);
+
+  async function cargarNombreBarrio(id) {
+    const { data } = await supabase
+      .from('barrios')
+      .select('nombre')
+      .eq('id', id)
+      .single();
+    if (data) setBarrioNombre(data.nombre);
+  }
+
   async function buscarDireccion() {
     if (!calle.trim() || !numero.trim()) {
       alert('Completá calle y número para buscar en el mapa.');
@@ -66,8 +106,6 @@ export default function FormularioDireccion({ onGuardada, onCancelar, esPrimera 
           nonce: Date.now(),
         });
       } else {
-        // No encontró la dirección → mostrar mapa centrado en Bahía Blanca
-        // para que ubique manualmente
         setPosicionBuscada({
           lat: -38.7183,
           lng: -62.2663,
@@ -84,7 +122,6 @@ export default function FormularioDireccion({ onGuardada, onCancelar, esPrimera 
     }
   }
 
-  // ── Callback del mapa: recibe la ubicación y el barrio detectado ──
   function alCambiarUbicacion({ lat, lng, barrioDetectado }) {
     setLatitud(lat);
     setLongitud(lng);
@@ -96,12 +133,10 @@ export default function FormularioDireccion({ onGuardada, onCancelar, esPrimera 
     } else {
       setBarrioId(null);
       setBarrioNombre('');
-      // Si el pin cayó fuera de todos los barrios, ofrecer selector manual
       setMostrarFallback(true);
     }
   }
 
-  // ── Cargar barrios para el fallback (solo si se necesita) ──
   useEffect(() => {
     if (!mostrarFallback || barrios.length > 0) return;
     async function cargar() {
@@ -114,7 +149,6 @@ export default function FormularioDireccion({ onGuardada, onCancelar, esPrimera 
     cargar();
   }, [mostrarFallback]);
 
-  // ── Guardar la dirección ──
   async function manejarSubmit(e) {
     e.preventDefault();
 
@@ -137,8 +171,7 @@ export default function FormularioDireccion({ onGuardada, onCancelar, esPrimera 
         return;
       }
 
-      const nuevaDireccion = {
-        usuario_id: user.id,
+      const campos = {
         etiqueta: etiqueta.trim() || null,
         calle: calle.trim(),
         numero: numero.trim(),
@@ -148,18 +181,36 @@ export default function FormularioDireccion({ onGuardada, onCancelar, esPrimera 
         barrio_id: Number(barrioId),
         lat: latitud,
         lng: longitud,
-        es_principal: esPrimera,
       };
 
-      const { data, error } = await supabase
-        .from('direcciones')
-        .insert(nuevaDireccion)
-        .select()
-        .single();
+      let resultado;
 
-      if (error) throw error;
+      if (editando) {
+        // Actualizar dirección existente
+        const { data, error } = await supabase
+          .from('direcciones')
+          .update(campos)
+          .eq('id', direccionExistente.id)
+          .select()
+          .single();
+        if (error) throw error;
+        resultado = data;
+      } else {
+        // Crear nueva
+        const { data, error } = await supabase
+          .from('direcciones')
+          .insert({
+            ...campos,
+            usuario_id: user.id,
+            es_principal: esPrimera,
+          })
+          .select()
+          .single();
+        if (error) throw error;
+        resultado = data;
+      }
 
-      if (onGuardada) onGuardada(data);
+      if (onGuardada) onGuardada(resultado);
     } catch (err) {
       console.error(err);
       alert('No se pudo guardar la dirección: ' + (err.message || 'error'));
@@ -168,75 +219,63 @@ export default function FormularioDireccion({ onGuardada, onCancelar, esPrimera 
     }
   }
 
-  const labelStyle = { display: 'block', fontSize: '0.85rem', color: '#666', marginBottom: '0.3rem' };
-  const inputStyle = { width: '100%', padding: '0.55rem 0.7rem', border: '1px solid #ccc', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box' };
-
   return (
     <form onSubmit={manejarSubmit}>
-      <div style={{ marginBottom: '0.9rem' }}>
-        <label style={labelStyle}>Etiqueta (personal, solo la ves vos)</label>
-        <input style={inputStyle} value={etiqueta} onChange={(e) => setEtiqueta(e.target.value)} placeholder="Casa, Trabajo, Casa de mamá" />
+      {/* Etiqueta */}
+      <div className="mb-3.5">
+        <label className="block text-sm text-gray-500 mb-1">Etiqueta (personal, solo la ves vos)</label>
+        <input className={inputClasses} value={etiqueta} onChange={(e) => setEtiqueta(e.target.value)} placeholder="Casa, Trabajo, Casa de mamá" />
       </div>
 
-      <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.5rem' }}>
-        <div style={{ flex: 2 }}>
-          <label style={labelStyle}>Calle *</label>
-          <input style={inputStyle} value={calle} onChange={(e) => setCalle(e.target.value)} />
+      {/* Calle + Número */}
+      <div className="flex gap-3 mb-2">
+        <div className="flex-[2]">
+          <label className="block text-sm text-gray-500 mb-1">Calle *</label>
+          <input className={inputClasses} value={calle} onChange={(e) => setCalle(e.target.value)} />
         </div>
-        <div style={{ flex: 1 }}>
-          <label style={labelStyle}>Número *</label>
-          <input style={inputStyle} value={numero} onChange={(e) => setNumero(e.target.value)} />
+        <div className="flex-1">
+          <label className="block text-sm text-gray-500 mb-1">Número *</label>
+          <input className={inputClasses} value={numero} onChange={(e) => setNumero(e.target.value)} />
         </div>
       </div>
 
-      {/* Botón para ubicar en el mapa */}
+      {/* Botón ubicar */}
       <button
         type="button"
         onClick={buscarDireccion}
         disabled={buscandoDireccion}
-        style={{
-          width: '100%', padding: '0.6rem', border: '1px solid #2563eb',
-          borderRadius: '8px', background: 'white', color: '#2563eb',
-          fontSize: '0.85rem', cursor: buscandoDireccion ? 'wait' : 'pointer',
-          marginBottom: '0.9rem', display: 'flex', alignItems: 'center',
-          justifyContent: 'center', gap: '0.4rem',
-        }}
+        className={`w-full py-2.5 border border-[#0a0a0a] rounded-lg bg-white text-[#0a0a0a] text-sm flex items-center justify-center gap-1.5 mb-3.5 transition-colors ${
+          buscandoDireccion ? 'cursor-wait opacity-50' : 'cursor-pointer hover:bg-[#0a0a0a] hover:text-white'
+        }`}
       >
         <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
           <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
         </svg>
-        {buscandoDireccion ? 'Buscando...' : 'Ubicar en el mapa'}
+        {buscandoDireccion ? 'Buscando...' : (editando && mostrarMapa ? 'Volver a ubicar' : 'Ubicar en el mapa')}
       </button>
 
-      {/* Mapa (se muestra después de buscar) */}
+      {/* Mapa */}
       {mostrarMapa && (
-        <div style={{ marginBottom: '0.9rem' }}>
+        <div className="mb-3.5">
           <MapaUbicacion
             posicionBuscada={posicionBuscada}
             onUbicacionChange={alCambiarUbicacion}
           />
 
-          {/* Barrio detectado */}
           {barrioNombre && (
-            <div style={{
-              marginTop: '0.5rem', padding: '0.5rem 0.75rem',
-              background: '#e6f0ff', borderRadius: '8px',
-              fontSize: '0.85rem', color: '#1a5fb4',
-              display: 'flex', alignItems: 'center', gap: '0.4rem',
-            }}>
+            <div className="mt-2 px-3 py-2 bg-[#F5F2EC] rounded-lg text-sm text-[#0a0a0a] flex items-center gap-1.5">
               📍 Barrio detectado: <strong>{barrioNombre}</strong>
             </div>
           )}
 
-          {/* Si no se detectó barrio, ofrecer selector manual */}
           {mostrarFallback && !barrioNombre && (
-            <div style={{ marginTop: '0.5rem' }}>
-              <p style={{ fontSize: '0.8rem', color: '#888', margin: '0 0 0.3rem' }}>
+            <div className="mt-2">
+              <p className="text-xs text-gray-400 mb-1">
                 No pudimos detectar tu barrio automáticamente. Elegilo de la lista:
               </p>
               <select
-                style={inputStyle}
+                className={`${inputClasses} bg-white`}
                 value={barrioId || ''}
                 onChange={(e) => {
                   const id = Number(e.target.value);
@@ -253,43 +292,49 @@ export default function FormularioDireccion({ onGuardada, onCancelar, esPrimera 
             </div>
           )}
 
-          <p style={{ fontSize: '0.75rem', color: '#888', margin: '0.4rem 0 0' }}>
+          <p className="text-xs text-gray-400 mt-1.5">
             Si la ubicación no es exacta, arrastrá el pin hasta tu puerta.
           </p>
         </div>
       )}
 
-      <div style={{ marginBottom: '0.9rem' }}>
-        <label style={labelStyle}>Piso / depto (opcional)</label>
-        <input style={inputStyle} value={pisoDepto} onChange={(e) => setPisoDepto(e.target.value)} />
+      {/* Piso / depto */}
+      <div className="mb-3.5">
+        <label className="block text-sm text-gray-500 mb-1">Piso / depto (opcional)</label>
+        <input className={inputClasses} value={pisoDepto} onChange={(e) => setPisoDepto(e.target.value)} />
       </div>
 
-      <div style={{ marginBottom: '0.9rem' }}>
-        <label style={labelStyle}>Referencia (opcional)</label>
-        <input style={inputStyle} value={referencia} onChange={(e) => setReferencia(e.target.value)} placeholder="Casa de rejas verdes" />
+      {/* Referencia */}
+      <div className="mb-3.5">
+        <label className="block text-sm text-gray-500 mb-1">Referencia (opcional)</label>
+        <input className={inputClasses} value={referencia} onChange={(e) => setReferencia(e.target.value)} placeholder="Casa de rejas verdes" />
       </div>
 
-      <div style={{ marginBottom: '0.9rem' }}>
-        <label style={labelStyle}>Teléfono de contacto para esta entrega *</label>
-        <input style={inputStyle} value={telefono} onChange={(e) => setTelefono(e.target.value)} placeholder="291 512-3456" />
+      {/* Teléfono */}
+      <div className="mb-3.5">
+        <label className="block text-sm text-gray-500 mb-1">Teléfono de contacto para esta entrega *</label>
+        <input className={inputClasses} value={telefono} onChange={(e) => setTelefono(e.target.value)} placeholder="291 512-3456" />
       </div>
 
       {esPrimera && (
-        <p style={{ fontSize: '0.8rem', color: '#888', margin: '0 0 1rem' }}>
+        <p className="text-xs text-gray-400 mb-4">
           Esta primera dirección queda como tu principal.
         </p>
       )}
 
-      <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+      {/* Botones */}
+      <div className="flex gap-3 mt-2">
         {onCancelar && (
           <button type="button" onClick={onCancelar} disabled={enviando}
-            style={{ padding: '0.7rem 1.2rem', border: '1px solid #ccc', borderRadius: '8px', background: 'white', cursor: 'pointer' }}>
+            className="px-5 py-3 border border-gray-300 rounded-lg bg-white cursor-pointer hover:bg-gray-50 transition-colors">
             Cancelar
           </button>
         )}
         <button type="submit" disabled={enviando}
-          style={{ flex: 1, padding: '0.7rem 1.2rem', border: 'none', borderRadius: '8px', background: enviando ? '#999' : '#222', color: 'white', cursor: enviando ? 'not-allowed' : 'pointer', fontSize: '0.95rem' }}>
-          {enviando ? 'Guardando...' : 'Guardar dirección'}
+          className={`flex-1 py-3 border-none rounded-lg text-white text-[0.95rem] transition-colors ${
+            enviando ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#0a0a0a] cursor-pointer hover:bg-[#1a1a1a]'
+          }`}>
+          {enviando ? 'Guardando...' : (editando ? 'Guardar cambios' : 'Guardar dirección')}
         </button>
       </div>
     </form>
