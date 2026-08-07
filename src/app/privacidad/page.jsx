@@ -46,7 +46,7 @@ export default function PrivacidadPage() {
             {/* 1 */}
             <Seccion titulo="1. Responsable del Tratamiento">
               <p>
-                El responsable del tratamiento de tus datos personales es Bahía Shops, con domicilio en Bahía Blanca, provincia de Buenos Aires, Argentina. Podés contactarnos en <a href="mailto:bahiashops.estudio@gmail.com" className="underline underline-offset-2 hover:text-[#e60000]">bahiashops.estudio@gmail.com</a>.
+                El responsable del tratamiento de tus datos personales es Bahía Shops, con domicilio en Bahía Blanca, provincia de Buenos Aires, Argentina. Podés contactarnos en <a href="mailto:bahiashops.estudio@gmail.com" className="underline underline-offset-2 hover:text-[#4164fe]">bahiashops.estudio@gmail.com</a>.
               </p>
             </Seccion>
 
@@ -137,7 +137,7 @@ export default function PrivacidadPage() {
                 <li><strong className="text-[#0a0a0a]">Actualización:</strong> mantener tus datos al día.</li>
               </ul>
               <p>
-                Para ejercer cualquiera de estos derechos, escribinos a <a href="mailto:bahiashops.estudio@gmail.com" className="underline underline-offset-2 hover:text-[#e60000]">bahiashops.estudio@gmail.com</a>. Responderemos en un plazo de 10 días hábiles, conforme lo establece la ley.
+                Para ejercer cualquiera de estos derechos, escribinos a <a href="mailto:bahiashops.estudio@gmail.com" className="underline underline-offset-2 hover:text-[#4164fe]">bahiashops.estudio@gmail.com</a>. Responderemos en un plazo de 10 días hábiles, conforme lo establece la ley.
               </p>
             </Seccion>
 
@@ -169,8 +169,8 @@ export default function PrivacidadPage() {
               </p>
               <div className="mt-3 p-4 rounded-2xl bg-[#0a0a0a]/[0.03] text-[15px] leading-relaxed text-[#0a0a0a]/80">
                 <p><strong className="text-[#0a0a0a]">Bahía Shops</strong></p>
-                <p>Email: <a href="mailto:bahiashops.estudio@gmail.com" className="underline underline-offset-2 hover:text-[#e60000]">bahiashops.estudio@gmail.com</a></p>
-                <p>Sitio web: <a href="https://bahiashops.com.ar" className="underline underline-offset-2 hover:text-[#e60000]">bahiashops.com.ar</a></p>
+                <p>Email: <a href="mailto:bahiashops.estudio@gmail.com" className="underline underline-offset-2 hover:text-[#4164fe]">bahiashops.estudio@gmail.com</a></p>
+                <p>Sitio web: <a href="https://bahiashops.com.ar" className="underline underline-offset-2 hover:text-[#4164fe]">bahiashops.com.ar</a></p>
                 <p>Bahía Blanca, Buenos Aires, Argentina</p>
               </div>
             </Seccion>
@@ -181,7 +181,7 @@ export default function PrivacidadPage() {
                 <strong className="text-[#0a0a0a]/60">Agencia de Acceso a la Información Pública (AAIP).</strong> La AGENCIA DE ACCESO A LA INFORMACIÓN PÚBLICA, en su carácter de Órgano de Control de la Ley N° 25.326, tiene la atribución de atender las denuncias y reclamos que interpongan quienes resulten afectados en sus derechos por incumplimiento de las normas vigentes en materia de protección de datos personales.
               </p>
               <p>
-                <strong className="text-[#0a0a0a]/60">Defensa del Consumidor.</strong> Para reclamos ingresá <a href="https://www.argentina.gob.ar/produccion/defensadelconsumidor/formulario" target="_blank" rel="noopener noreferrer" className="underline hover:text-[#e60000]">acá</a>. Ley N° 24.240 de Defensa del Consumidor.
+                <strong className="text-[#0a0a0a]/60">Defensa del Consumidor.</strong> Para reclamos ingresá <a href="https://www.argentina.gob.ar/produccion/defensadelconsumidor/formulario" target="_blank" rel="noopener noreferrer" className="underline hover:text-[#4164fe]">acá</a>. Ley N° 24.240 de Defensa del Consumidor.
               </p>
             </div>
 

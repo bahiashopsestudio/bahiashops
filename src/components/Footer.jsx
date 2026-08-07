@@ -6,11 +6,11 @@ import Link from 'next/link'
 export default function Footer() {
   return (
     <footer
-      className="w-full px-4 md:px-8 pt-15 pb-32 mt-10"
+      className="w-full px-4 md:px-8 pt-15 pb-32"
       style={{
         fontFamily: "'Inter', sans-serif",
-        backgroundColor: '#0a0a0a',
-        color: '#f9f6ed',
+        backgroundColor: '#015444',
+        color: '#9cc3ea',
       }}
     >
       <div className="max-w-3xl mx-auto">
@@ -21,13 +21,13 @@ export default function Footer() {
           {/* Columna izquierda: marca + contacto */}
           <div>
             <p className="text-lg font-bold tracking-tight">Bahía Shops</p>
-            <p className="text-sm mt-1" style={{ color: 'rgba(249,246,237,0.5)' }}>
+            <p className="text-sm mt-1" style={{ color: '#9cc3ea' }}>
               Tu comercio local, online.
             </p>
-            <p className="text-sm mt-3" style={{ color: 'rgba(249,246,237,0.6)' }}>
+            <p className="text-sm mt-3" style={{ color: '#9cc3ea' }}>
               <a
                 href="mailto:hola@bahiashops.com"
-                className="underline underline-offset-2 hover:text-[#f9f6ed] transition-colors"
+                className="underline underline-offset-2 hover:text-[#9cc3ea] transition-colors"
               >
                 hola@bahiashops.com.ar
               </a>
@@ -35,16 +35,16 @@ export default function Footer() {
           </div>
 
           {/* Columna derecha: links */}
-          <div className="flex flex-col gap-2 text-sm" style={{ color: 'rgba(249,246,237,0.6)' }}>
+          <div className="flex flex-col gap-2 text-sm" style={{ color: '#9cc3ea' }}>
             <Link
               href="/terminos"
-              className="hover:text-[#f9f6ed] transition-colors underline-offset-2 hover:underline"
+              className="hover:text-[#9cc3ea] transition-colors underline-offset-2 hover:underline"
             >
               Términos y Condiciones
             </Link>
             <Link
               href="/privacidad"
-              className="hover:text-[#f9f6ed] transition-colors underline-offset-2 hover:underline"
+              className="hover:text-[#9cc3ea] transition-colors underline-offset-2 hover:underline"
             >
               Política de Privacidad
             </Link>
@@ -53,7 +53,7 @@ export default function Footer() {
                 href="https://instagram.com/bahiashops"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hover:text-[#f9f6ed] transition-colors"
+                className="hover:text-[#9cc3ea] transition-colors"
               >
                 Instagram
               </a>
@@ -61,7 +61,7 @@ export default function Footer() {
                 href="https://tiktok.com/@bahiashops"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hover:text-[#f9f6ed] transition-colors"
+                className="hover:text-[#9cc3ea] transition-colors"
               >
                 TikTok
               </a>
@@ -72,22 +72,22 @@ export default function Footer() {
         {/* Separador */}
         <div
           className="my-8"
-          style={{ borderTop: '1px solid rgba(249,246,237,0.12)' }}
+          style={{ borderTop: '1px solid rgba(156,195,234,0.35)' }}
         />
 
         {/* Bloque legal obligatorio */}
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 text-xs" style={{ color: 'rgba(249,246,237,0.4)' }}>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 text-xs" style={{ color: '#9cc3ea' }}>
 
           {/* Botón de arrepentimiento — Resolución 424/2020 */}
           <a
             href="mailto:bahiashops.estudio@gmail.com?subject=Solicitud%20de%20arrepentimiento%20-%20Ley%2024.240"
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-medium transition-colors"
             style={{
-              backgroundColor: 'rgba(249,246,237,0.1)',
-              color: '#f9f6ed',
+              backgroundColor: 'rgba(156,195,234,0.16)',
+              color: '#9cc3ea',
             }}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(249,246,237,0.18)'}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(249,246,237,0.1)'}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(156,195,234,0.26)'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(156,195,234,0.16)'}
           >
             Botón de arrepentimiento
           </a>
@@ -97,7 +97,7 @@ export default function Footer() {
             href="https://www.argentina.gob.ar/produccion/defensadelconsumidor/formulario"
             target="_blank"
             rel="noopener noreferrer"
-            className="hover:text-[#f9f6ed] transition-colors underline underline-offset-2"
+            className="hover:text-[#9cc3ea] transition-colors underline underline-offset-2"
           >
             Defensa del Consumidor
           </a>
@@ -106,7 +106,7 @@ export default function Footer() {
         {/* Copyright */}
         <p
           className="mt-6 text-xs"
-          style={{ color: 'rgba(249,246,237,0.25)' }}
+          style={{ color: '#9cc3ea' }}
         >
           © {new Date().getFullYear()} Bahía Shops. Bahía Blanca, Argentina.
         </p>

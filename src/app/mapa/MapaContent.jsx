@@ -11,10 +11,16 @@ import VolverAtras from '@/components/VolverAtras'
 import 'leaflet/dist/leaflet.css'
 
 const CENTRO_BB = [-38.7183, -62.2663]
-const COLOR_LOCAL = '#e60000'
+const COLOR_LOCAL = '#ff1010'
 const COLOR_CASA = '#9cc3ea'
 
 const MENU_CATEGORIAS = ['moda','belleza-y-cuidado-personal','gastronomia','hogar-deco-y-jardin','diseno-y-artesanias','tecnologia','salud-y-bienestar','arte-e-ilustracion']
+
+function iniciales(nombre) {
+  if (!nombre) return ''
+  const palabras = nombre.trim().split(/\s+/)
+  return palabras.slice(0, 2).map(p => p[0].toUpperCase()).join('')
+}
 
 function crearIconoPin(color) {
   const r = parseInt(color.slice(1, 3), 16)
@@ -91,7 +97,7 @@ export default function MapaContent({ vendedores = [], categorias = [] }) {
 
             {/* Mapa */}
             {listo && iconoLocal && iconoCasa ? (
-              <div className="rounded-2xl overflow-hidden h-[500px] md:h-[600px]">
+              <div className="relative z-0 rounded-2xl overflow-hidden h-[500px] md:h-[600px]">
                 <MapContainer
                   center={CENTRO_BB}
                   zoom={13}
@@ -131,14 +137,14 @@ export default function MapaContent({ vendedores = [], categorias = [] }) {
                               {v.logo_url ? (
                                 <img src={v.logo_url} alt="" style={{ width: '40px', height: '40px', borderRadius: '8px', objectFit: 'cover' }} />
                               ) : (
-                                <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: '#F5F2EC', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                  <span style={{ fontSize: '10px', color: 'rgba(10,10,10,0.2)' }}>logo</span>
+                                <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: '#4164fe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  <span style={{ fontSize: '13px', fontWeight: 700, color: 'white' }}>{iniciales(v.nombre_negocio)}</span>
                                 </div>
                               )}
                               <div>
                                 <div style={{ fontWeight: 700, fontSize: '14px', color: '#0a0a0a' }}>{v.nombre_negocio}</div>
                                 {nombreBarrio && (
-                                  <div style={{ fontSize: '11px', color: 'rgba(10,10,10,0.35)', marginTop: '1px' }}>{nombreBarrio}</div>
+                                  <div style={{ fontSize: '11px', fontWeight: 500, color: '#4164fe', marginTop: '1px' }}>{nombreBarrio}</div>
                                 )}
                               </div>
                             </div>
@@ -147,16 +153,15 @@ export default function MapaContent({ vendedores = [], categorias = [] }) {
                                 {v.descripcion_corta}
                               </p>
                             )}
-                            <button
-                                onClick={() => window.location.href = `/tienda/${v.slug}`}
+                            <Link
+                                href={`/tienda/${v.slug}`}
                                 style={{
-                                    display: 'block', width: '100%', textAlign: 'center', padding: '8px 0',
-                                    background: '#0a0a0a', color: 'white', borderRadius: '999px',
-                                    fontSize: '12px', fontWeight: 500, border: 'none', cursor: 'pointer',
+                                    display: 'inline-block', color: '#4164fe',
+                                    fontSize: '12px', fontWeight: 600, textDecoration: 'none',
                                 }}
                                 >
                                 Ver tienda →
-                            </button>
+                            </Link>
                           </div>
                         </Popup>
                       </Marker>
@@ -174,7 +179,7 @@ export default function MapaContent({ vendedores = [], categorias = [] }) {
             <div className="flex flex-wrap items-center justify-between mt-4 gap-4">
               <div className="flex gap-5">
                 <div className="flex items-center gap-2">
-                  <div className="w-[8px] h-[8px] rounded-full bg-[#e60000] shrink-0" />
+                  <div className="w-[8px] h-[8px] rounded-full bg-[#ff1010] shrink-0" />
                   <span className="text-[11px] font-light text-[#0a0a0a]/35">Local con dirección ({locales.length})</span>
                 </div>
                 <div className="flex items-center gap-2">

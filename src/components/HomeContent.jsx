@@ -47,7 +47,7 @@ const VALORES = [
 const COLECCION = {
   titulo: 'SPA en casa',
   descripcion: 'Todo lo que necesitás para un momento de relax sin salir.',
-  color: '#d4edda',
+  color: '#fac0f0',
   productos: [
     { id: 20, nombre: 'Sales de baño relajantes', vendedor: 'Aroma Casa', precio: 3200 },
     { id: 21, nombre: 'Vela de soja eucalipto', vendedor: 'Aroma Casa', precio: 4500 },
@@ -98,7 +98,7 @@ export default function HomeContent({ categorias, recientes, elegidos, vendedore
         href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&display=swap"
       />
 
-      <div className="min-h-screen bg-[#F5F2EC]" style={{ fontFamily: "'Inter', sans-serif" }}>
+      <div className="min-h-screen bg-white" style={{ fontFamily: "'Inter', sans-serif" }}>
 
         {menuOpen && (
           <MenuTakeover
@@ -214,18 +214,18 @@ export default function HomeContent({ categorias, recientes, elegidos, vendedore
 
 
           {/* ═══ CTA FINAL ═══ */}
-          <section className="bg-[#0a0a0a] text-white py-20 md:py-28 px-4 md:px-8">
+          <section className="bg-[#4164fe] text-white py-20 md:py-28 px-4 md:px-8">
             <div className="max-w-2xl mx-auto text-center">
               <h2 className="text-2xl md:text-4xl font-black tracking-tight mb-4">
                 ¿Querés vender en Bahía Shops?
               </h2>
-              <p className="text-white/40 text-base md:text-lg mb-8 leading-relaxed font-light">
+              <p className="text-white text-base md:text-lg mb-8 leading-relaxed font-light">
                 Sin locales caros, sin intermediarios. Registrá tu emprendimiento,
                 subí tus productos y empezá a vender hoy.
               </p>
               <Link
                 href="/vendedor/nuevo"
-                className="inline-block bg-[#e60000] text-white px-8 py-3.5 rounded-full text-sm font-medium hover:bg-[#cc0000] transition"
+                className="inline-block bg-[#015444] text-white px-8 py-3.5 rounded-full text-sm font-medium hover:bg-[#014237] transition"
               >
                 Empezá a vender
               </Link>
@@ -244,9 +244,9 @@ export default function HomeContent({ categorias, recientes, elegidos, vendedore
 
 function MapaSection({ vendedores = [] }) {
   return (
-    <section className="py-12 md:py-20 px-4 md:px-8">
+    <section className="py-10 md:py-14 px-4 md:px-8">
       <div className="max-w-5xl mx-auto">
-        <p className="text-[9px] font-medium tracking-[3px] uppercase text-[#0a0a0a]/25 mb-4">
+        <p className="text-center text-[9px] font-medium tracking-[3px] uppercase text-[#0a0a0a]/25 mb-4">
           Cerca tuyo
         </p>
 
@@ -266,7 +266,7 @@ function MapaSection({ vendedores = [] }) {
 
         <div className="flex gap-5 mt-4 justify-center">
           <div className="flex items-center gap-2">
-            <div className="w-[8px] h-[8px] rounded-full bg-[#e60000] shrink-0" />
+            <div className="w-[8px] h-[8px] rounded-full bg-[#ff1010] shrink-0" />
             <span className="text-[11px] font-light text-[#0a0a0a]/35">Local con dirección</span>
           </div>
           <div className="flex items-center gap-2">
@@ -332,7 +332,7 @@ function CtaAnimado() {
   return (
     <section
       ref={sectionRef}
-      className="py-20 md:py-28 px-4 md:px-8 text-center"
+      className="py-14 md:py-20 px-4 md:px-8 text-center"
     >
       <div className="max-w-3xl mx-auto">
         <div className="text-3xl md:text-5xl font-black text-[#0a0a0a] tracking-tight leading-[1.1]">
@@ -404,7 +404,7 @@ function CtaAnimado() {
         >
           <Link
             href="/vendedor/nuevo"
-            className="inline-block bg-[#e60000] text-white px-7 py-3 rounded-full text-sm font-medium hover:bg-[#cc0000] transition"
+            className="inline-block bg-[#3c1b0c] text-white px-7 py-3 rounded-full text-sm font-medium hover:bg-[#261007] transition"
           >
             Empezar a vender
           </Link>
@@ -657,7 +657,7 @@ function ValoresCarrusel() {
   }
 
   return (
-    <section className="py-6 md:py-10 px-4 md:px-8">
+    <section className="py-5 md:py-7 px-4 md:px-8">
       <div className="max-w-6xl mx-auto">
         <h2 className="text-xl md:text-2xl font-black text-[#0a0a0a] tracking-tight mb-6">
           Lo que nos mueve

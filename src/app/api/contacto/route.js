@@ -27,7 +27,7 @@ export async function POST(request) {
         reply_to: email,
         html: `
           <div style="font-family: sans-serif; max-width: 500px;">
-            <h2 style="color: #8B7EC8;">Nuevo mensaje de contacto</h2>
+            <h2 style="color: #4164fe;">Nuevo mensaje de contacto</h2>
             <p><strong>De:</strong> ${email}</p>
             <hr style="border: none; border-top: 1px solid #eee; margin: 16px 0;" />
             <p style="white-space: pre-wrap;">${mensaje}</p>

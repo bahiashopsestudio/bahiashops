@@ -233,7 +233,7 @@ export default function PaginaProducto() {
                     ${formatearPrecio(producto.precio)}
                   </span>
                   {hayOferta && (
-                    <span className="ml-3 bg-[#e60000] text-white text-xs font-medium px-2.5 py-1 rounded-full">
+                    <span className="ml-3 bg-[#4164fe] text-white text-xs font-medium px-2.5 py-1 rounded-full">
                       Oferta
                     </span>
                   )}

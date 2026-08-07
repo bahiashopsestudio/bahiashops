@@ -240,7 +240,7 @@ export default function CategoriaPage() {
                                 ${formatearPrecio(p.precio_anterior)}
                               </span>
                             )}
-                            <span className={`text-sm font-semibold ${enOferta ? 'text-[#e60000]' : 'text-[#0a0a0a]'}`}>
+                            <span className={`text-sm font-semibold ${enOferta ? 'text-[#4164fe]' : 'text-[#0a0a0a]'}`}>
                               ${formatearPrecio(p.precio)}
                             </span>
                           </div>

@@ -4,7 +4,7 @@ import Link from 'next/link'
 
 export default function MenuTakeover({ categorias = [], onClose }) {
   return (
-    <div className="fixed inset-0 z-[60] bg-[#9cc3ea] flex flex-col" style={{ fontFamily: "'Inter', sans-serif" }}>
+    <div className="fixed inset-0 z-[60] bg-[#4164fe] flex flex-col" style={{ fontFamily: "'Inter', sans-serif" }}>
       <div className="flex justify-between items-center px-6 md:px-10 pt-6">
         <Link href="/" onClick={onClose} className="text-xs font-extrabold tracking-[3px] uppercase text-[#0a0a0a]">
           Bahía Shops

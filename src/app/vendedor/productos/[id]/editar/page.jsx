@@ -42,7 +42,7 @@ function SortableFoto({ foto, index, onQuitar }) {
         </span>
       )}
       <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={() => onQuitar(index)}
-        className="absolute -top-2 -right-2 w-[22px] h-[22px] rounded-full border-none bg-[#e60000] text-white cursor-pointer leading-none text-sm">
+        className="absolute -top-2 -right-2 w-[22px] h-[22px] rounded-full border-none bg-[#dc2626] text-white cursor-pointer leading-none text-sm">
         ×
       </button>
     </div>

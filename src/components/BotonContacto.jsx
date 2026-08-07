@@ -83,7 +83,7 @@ export default function BotonContacto() {
       {/* Botón flotante */}
       <button
         onClick={() => setAbierto(true)}
-        className="fixed z-40 w-12 h-12 rounded-full bg-[#e60000] hover:bg-[#cc0000] text-white shadow-lg flex items-center justify-center transition cursor-pointer bottom-20 right-4 lg:bottom-6 lg:right-6"
+        className="fixed z-40 w-12 h-12 rounded-full bg-[#9cc3ea] hover:bg-[#74a8d8] text-[#0a0a0a] shadow-lg flex items-center justify-center transition cursor-pointer bottom-20 right-4 lg:bottom-6 lg:right-6"
         aria-label="Contacto"
       >
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -136,7 +136,7 @@ export default function BotonContacto() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="tu@email.com"
-                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#8B7EC8]"
+                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#4164fe]"
                   />
                 </div>
 
@@ -147,7 +147,7 @@ export default function BotonContacto() {
                     onChange={(e) => setMensaje(e.target.value)}
                     placeholder="Contanos qué necesitás, qué te gustaría ver, o si algo no funciona bien..."
                     rows={4}
-                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#8B7EC8] resize-none"
+                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#4164fe] resize-none"
                   />
                 </div>
 
@@ -155,7 +155,7 @@ export default function BotonContacto() {
                   onClick={enviar}
                   disabled={enviando}
                   className="w-full py-3 rounded-xl text-sm font-semibold text-white transition cursor-pointer"
-                  style={{ background: enviando ? '#999' : '#8B7EC8' }}
+                  style={{ background: enviando ? '#999' : '#4164fe' }}
                 >
                   {enviando ? 'Enviando...' : 'Enviar mensaje'}
                 </button>

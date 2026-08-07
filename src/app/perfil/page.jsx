@@ -150,12 +150,12 @@ export default function PerfilPage() {
                   href={`/tienda/${vendedorSlug}`}
                   className="flex items-center gap-3 px-5 py-4 border-t border-[#0a0a0a]/5 hover:bg-red-50 transition"
                 >
-                  <span className="w-5 h-5 flex items-center justify-center shrink-0 text-[#e60000]">
+                  <span className="w-5 h-5 flex items-center justify-center shrink-0 text-[#4164fe]">
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
                     </svg>
                   </span>
-                  <span className="flex-1 text-sm text-[#e60000] font-medium">Ver mi tienda pública</span>
+                  <span className="flex-1 text-sm text-[#4164fe] font-medium">Ver mi tienda pública</span>
                 </Link>
               )}
             </div>
@@ -164,7 +164,7 @@ export default function PerfilPage() {
             <button
               type="button"
               onClick={cerrarSesion}
-              className="w-full py-3.5 border border-[#0a0a0a]/10 rounded-full text-sm text-[#0a0a0a]/40 font-light hover:border-[#e60000]/30 hover:text-[#e60000] transition cursor-pointer"
+              className="w-full py-3.5 border border-[#0a0a0a]/10 rounded-full text-sm text-[#0a0a0a]/40 font-light hover:border-[#4164fe]/30 hover:text-[#4164fe] transition cursor-pointer"
             >
               Cerrar sesión
             </button>

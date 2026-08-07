@@ -188,7 +188,7 @@ export default function FavoritosPage() {
                                   ${Number(prod.precio_anterior).toLocaleString('es-AR')}
                                 </span>
                               )}
-                              <span className={`text-sm font-semibold ${enOferta ? 'text-[#e60000]' : 'text-[#0a0a0a]'}`}>
+                              <span className={`text-sm font-semibold ${enOferta ? 'text-[#4164fe]' : 'text-[#0a0a0a]'}`}>
                                 ${Number(prod.precio).toLocaleString('es-AR')}
                               </span>
                             </div>

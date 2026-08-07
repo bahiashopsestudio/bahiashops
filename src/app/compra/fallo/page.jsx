@@ -41,7 +41,7 @@ function FalloContenido() {
         <div className="pt-20 pb-24 px-4">
           <div className="max-w-lg mx-auto text-center">
             <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mx-auto mt-8 mb-6">
-              <svg className="w-8 h-8 text-[#e60000]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-8 h-8 text-[#dc2626]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
               </svg>
             </div>

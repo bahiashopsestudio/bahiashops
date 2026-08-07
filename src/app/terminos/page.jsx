@@ -36,7 +36,7 @@ export default function TerminosPage() {
             {/* 1 */}
             <Seccion titulo="1. Aceptación de los Términos">
               <p>
-                Al acceder, registrarte o utilizar el sitio web bahiashops.com.ar (en adelante, "Bahía Shops", "la Plataforma" o "el Sitio"), aceptás estos Términos y Condiciones de Uso (en adelante, "Términos") y nuestra <Link href="/privacidad" className="underline underline-offset-2 hover:text-[#e60000]">Política de Privacidad</Link>. Si no estás de acuerdo, no utilices la Plataforma.
+                Al acceder, registrarte o utilizar el sitio web bahiashops.com.ar (en adelante, "Bahía Shops", "la Plataforma" o "el Sitio"), aceptás estos Términos y Condiciones de Uso (en adelante, "Términos") y nuestra <Link href="/privacidad" className="underline underline-offset-2 hover:text-[#4164fe]">Política de Privacidad</Link>. Si no estás de acuerdo, no utilices la Plataforma.
               </p>
               <p>
                 Bahía Shops se reserva el derecho de modificar estos Términos en cualquier momento. Las modificaciones serán publicadas en esta misma página con la fecha de actualización. El uso continuado de la Plataforma después de la publicación de cambios implica la aceptación de los nuevos Términos.
@@ -66,7 +66,7 @@ export default function TerminosPage() {
                 Para comprar o vender en Bahía Shops es necesario registrarse y crear una cuenta. Podés hacerlo mediante tu cuenta de Google o con email y contraseña. Al registrarte te comprometés a proporcionar información veraz, actual y completa, y a mantenerla actualizada.
               </p>
               <p>
-                Tu cuenta es personal e intransferible. Sos responsable de mantener la confidencialidad de tus credenciales y de todas las actividades que se realicen bajo tu cuenta. Ante cualquier uso no autorizado, debés notificarnos de inmediato a <a href="mailto:bahiashops.estudio@gmail.com" className="underline underline-offset-2 hover:text-[#e60000]">bahiashops.estudio@gmail.com</a>.
+                Tu cuenta es personal e intransferible. Sos responsable de mantener la confidencialidad de tus credenciales y de todas las actividades que se realicen bajo tu cuenta. Ante cualquier uso no autorizado, debés notificarnos de inmediato a <a href="mailto:bahiashops.estudio@gmail.com" className="underline underline-offset-2 hover:text-[#4164fe]">bahiashops.estudio@gmail.com</a>.
               </p>
             </Seccion>
 
@@ -140,7 +140,7 @@ export default function TerminosPage() {
                 De acuerdo con el artículo 34 de la Ley N° 24.240 de Defensa del Consumidor y el artículo 1.110 del Código Civil y Comercial de la Nación, el comprador tiene derecho a revocar la aceptación de la compra dentro de los 10 (diez) días corridos contados desde la recepción del producto o la celebración del contrato, lo que ocurra último.
               </p>
               <p>
-                Para ejercer este derecho, el comprador puede utilizar el botón de arrepentimiento disponible en el Sitio (accesible desde el pie de página) o enviar un email a <a href="mailto:bahiashops.estudio@gmail.com" className="underline underline-offset-2 hover:text-[#e60000]">bahiashops.estudio@gmail.com</a>. Dentro de las 24 horas, Bahía Shops informará al comprador un número de código de identificación del trámite, conforme lo dispuesto por la Resolución 424/2020 de la Secretaría de Comercio Interior.
+                Para ejercer este derecho, el comprador puede utilizar el botón de arrepentimiento disponible en el Sitio (accesible desde el pie de página) o enviar un email a <a href="mailto:bahiashops.estudio@gmail.com" className="underline underline-offset-2 hover:text-[#4164fe]">bahiashops.estudio@gmail.com</a>. Dentro de las 24 horas, Bahía Shops informará al comprador un número de código de identificación del trámite, conforme lo dispuesto por la Resolución 424/2020 de la Secretaría de Comercio Interior.
               </p>
               <p>
                 El comprador deberá poner el producto a disposición del vendedor en las mismas condiciones en que lo recibió. Los gastos de devolución corren por cuenta del vendedor.
@@ -204,8 +204,8 @@ export default function TerminosPage() {
               </p>
               <div className="mt-3 p-4 rounded-2xl bg-[#0a0a0a]/[0.03] text-[15px] leading-relaxed text-[#0a0a0a]/80">
                 <p><strong className="text-[#0a0a0a]">Bahía Shops</strong></p>
-                <p>Email: <a href="mailto:bahiashops.estudio@gmail.com" className="underline underline-offset-2 hover:text-[#e60000]">bahiashops.estudio@gmail.com</a></p>
-                <p>Sitio web: <a href="https://bahiashops.com.ar" className="underline underline-offset-2 hover:text-[#e60000]">bahiashops.com.ar</a></p>
+                <p>Email: <a href="mailto:bahiashops.estudio@gmail.com" className="underline underline-offset-2 hover:text-[#4164fe]">bahiashops.estudio@gmail.com</a></p>
+                <p>Sitio web: <a href="https://bahiashops.com.ar" className="underline underline-offset-2 hover:text-[#4164fe]">bahiashops.com.ar</a></p>
                 <p>Bahía Blanca, Buenos Aires, Argentina</p>
               </div>
             </Seccion>
@@ -213,7 +213,7 @@ export default function TerminosPage() {
             {/* Bloque legal obligatorio */}
             <div className="mt-12 pt-8 border-t border-[#0a0a0a]/10 text-xs text-[#0a0a0a]/40 leading-relaxed space-y-3">
               <p>
-                <strong className="text-[#0a0a0a]/60">Defensa del Consumidor.</strong> Para reclamos ingresá <a href="https://www.argentina.gob.ar/produccion/defensadelconsumidor/formulario" target="_blank" rel="noopener noreferrer" className="underline hover:text-[#e60000]">acá</a>. Ley N° 24.240 de Defensa del Consumidor.
+                <strong className="text-[#0a0a0a]/60">Defensa del Consumidor.</strong> Para reclamos ingresá <a href="https://www.argentina.gob.ar/produccion/defensadelconsumidor/formulario" target="_blank" rel="noopener noreferrer" className="underline hover:text-[#4164fe]">acá</a>. Ley N° 24.240 de Defensa del Consumidor.
               </p>
               <p>
                 Los contratos de adhesión celebrados en el marco de relaciones de consumo serán exhibidos conforme lo dispuesto por la Resolución 270/2020 de la Secretaría de Comercio Interior, bajo el nombre "Contratos de adhesión — Ley N° 24.240 de Defensa del Consumidor".

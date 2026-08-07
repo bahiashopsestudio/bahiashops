@@ -167,7 +167,7 @@ export default function RegistroPage() {
                   </div>
 
                   {error && (
-                    <div className="bg-red-50 text-[#e60000] text-sm p-3 rounded-xl mb-4 font-light">
+                    <div className="bg-red-50 text-[#dc2626] text-sm p-3 rounded-xl mb-4 font-light">
                       {error}
                     </div>
                   )}

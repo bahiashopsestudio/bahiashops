@@ -193,7 +193,7 @@ export default function Buscador({ placeholder = '¿Qué estás buscando?', most
         {mostrarFlecha && (
           <button
             onClick={() => irABuscar()}
-            className="absolute right-2 w-9 h-9 rounded-full bg-[#e60000] border-2 border-bg-[#e60000] text-white hover:bg-white hover:text-[#fe6337] flex items-center justify-center transition cursor-pointer"
+            className="absolute right-2 w-9 h-9 rounded-full bg-[#4164fe] border-2 border-bg-[#4164fe] text-white hover:bg-white hover:text-[#4164fe] flex items-center justify-center transition cursor-pointer"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
@@ -218,7 +218,7 @@ export default function Buscador({ placeholder = '¿Qué estás buscando?', most
               {sugerenciaFuzzy && (
                 <button
                   onClick={() => usarSugerencia(sugerenciaFuzzy)}
-                  className="mt-2 text-sm text-[#8B7EC8] hover:text-[#7a6db7] transition cursor-pointer text-left"
+                  className="mt-2 text-sm text-[#4164fe] hover:text-[#3150d9] transition cursor-pointer text-left"
                 >
                   Quizás quisiste decir: <span className="font-semibold">{sugerenciaFuzzy}</span>
                 </button>
@@ -257,7 +257,7 @@ export default function Buscador({ placeholder = '¿Qué estás buscando?', most
           {!buscando && sugerencias.length > 0 && (
             <button
               onClick={() => irABuscar()}
-              className="w-full px-4 py-3 text-sm text-[#8B7EC8] font-medium hover:bg-gray-50 transition text-center border-t border-gray-100 cursor-pointer"
+              className="w-full px-4 py-3 text-sm text-[#4164fe] font-medium hover:bg-gray-50 transition text-center border-t border-gray-100 cursor-pointer"
             >
               Ver todos los resultados
             </button>

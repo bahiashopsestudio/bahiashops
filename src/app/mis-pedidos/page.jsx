@@ -17,8 +17,8 @@ const ESTADOS = {
   franja: { label: 'Franja asignada', color: 'bg-blue-50 text-blue-600' },
   por_salir: { label: 'Por salir', color: 'bg-indigo-50 text-indigo-600' },
   despachado: { label: 'Despachado', color: 'bg-green-50 text-green-700' },
-  cancelado: { label: 'Cancelado', color: 'bg-red-50 text-[#e60000]' },
-  rechazado: { label: 'Rechazado', color: 'bg-red-50 text-[#e60000]' },
+  cancelado: { label: 'Cancelado', color: 'bg-red-50 text-[#dc2626]' },
+  rechazado: { label: 'Rechazado', color: 'bg-red-50 text-[#dc2626]' },
 }
 
 export default function MisPedidosPage() {

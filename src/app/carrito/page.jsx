@@ -146,7 +146,7 @@ export default function PaginaCarrito() {
                         <button
                           type="button"
                           onClick={() => quitar(local.vendedorId, item.productoId)}
-                          className="text-[#0a0a0a]/20 hover:text-[#e60000] transition cursor-pointer p-1"
+                          className="text-[#0a0a0a]/20 hover:text-[#dc2626] transition cursor-pointer p-1"
                           aria-label="Quitar"
                         >
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>

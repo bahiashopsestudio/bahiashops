@@ -27,7 +27,6 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
 
   // Colores según estado
   const showDark = isSolid || scrolled
-  const logoColor = showDark ? '#0a0a0a' : 'white'
   const linkColor = showDark ? 'rgba(10,10,10,0.45)' : 'rgba(255,255,255,0.5)'
   const linkHover = showDark ? 'rgba(10,10,10,1)' : 'rgba(255,255,255,1)'
   const iconColor = showDark ? 'text-[#0a0a0a]/40 hover:text-[#0a0a0a]' : 'text-white/40 hover:text-white'
@@ -48,12 +47,12 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
         <div className="max-w-7xl mx-auto px-6 h-14 flex items-center">
 
           {/* Zona 1: Logo */}
-          <Link
-            href="/"
-            className="text-xs font-extrabold tracking-[3px] uppercase transition-colors shrink-0"
-            style={{ color: logoColor }}
-          >
-            Bahía Shops
+          <Link href="/" className="shrink-0" aria-label="Bahía Shops">
+            <img
+              src={showDark ? '/images/logo-negro-bahia-shops.png' : '/images/logo-blanco-bahia-shops.png'}
+              alt="Bahía Shops"
+              className="h-7 w-auto"
+            />
           </Link>
 
           {/* Zona 2: Navegación principal */}
@@ -91,7 +90,7 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 1 0-7.5 0v4.5m11.356-1.993 1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 0 1-1.12-1.243l1.264-12A1.125 1.125 0 0 1 5.513 7.5h12.974c.576 0 1.059.435 1.119 1.007Z" />
               </svg>
               {CANT_CARRITO > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-[#e60000] text-white text-[8px] font-bold w-3.5 h-3.5 rounded-full flex items-center justify-center">
+                <span className="absolute -top-1.5 -right-1.5 bg-[#4164fe] text-white text-[8px] font-bold w-3.5 h-3.5 rounded-full flex items-center justify-center">
                   {CANT_CARRITO}
                 </span>
               )}
@@ -130,7 +129,7 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 1 0-7.5 0v4.5m11.356-1.993 1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 0 1-1.12-1.243l1.264-12A1.125 1.125 0 0 1 5.513 7.5h12.974c.576 0 1.059.435 1.119 1.007Z" />
             </svg>
             {CANT_CARRITO > 0 && (
-              <span className="absolute -top-1 -right-1 bg-[#e60000] text-white text-[8px] font-bold w-3.5 h-3.5 rounded-full flex items-center justify-center">
+              <span className="absolute -top-1 -right-1 bg-[#4164fe] text-white text-[8px] font-bold w-3.5 h-3.5 rounded-full flex items-center justify-center">
                 {CANT_CARRITO}
               </span>
             )}
@@ -152,8 +151,12 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
         style={{ fontFamily: "'Inter', sans-serif" }}
       >
         <div className="flex items-center justify-between h-full px-4">
-          <Link href="/" className="text-xs font-extrabold tracking-[3px] uppercase text-[#0a0a0a]">
-            Bahía Shops
+          <Link href="/" className="shrink-0" aria-label="Bahía Shops">
+            <img
+              src="/images/logo-negro-bahia-shops.png"
+              alt="Bahía Shops"
+              className="h-7 w-auto"
+            />
           </Link>
           <div className="flex items-center gap-1.5">
             <Link href="/carrito" className="relative p-2 rounded-full hover:bg-[#0a0a0a]/5 transition" aria-label="Carrito">
@@ -161,7 +164,7 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 1 0-7.5 0v4.5m11.356-1.993 1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 0 1-1.12-1.243l1.264-12A1.125 1.125 0 0 1 5.513 7.5h12.974c.576 0 1.059.435 1.119 1.007Z" />
               </svg>
               {CANT_CARRITO > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 bg-[#e60000] text-white text-[10px] font-bold w-[18px] h-[18px] rounded-full flex items-center justify-center">
+                <span className="absolute -top-0.5 -right-0.5 bg-[#4164fe] text-white text-[10px] font-bold w-[18px] h-[18px] rounded-full flex items-center justify-center">
                   {CANT_CARRITO}
                 </span>
               )}
@@ -199,7 +202,7 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 1 0-7.5 0v4.5m11.356-1.993 1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 0 1-1.12-1.243l1.264-12A1.125 1.125 0 0 1 5.513 7.5h12.974c.576 0 1.059.435 1.119 1.007Z" />
             </svg>
             {CANT_CARRITO > 0 && (
-              <span className="absolute -top-1 right-1 bg-[#e60000] text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+              <span className="absolute -top-1 right-1 bg-[#4164fe] text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
                 {CANT_CARRITO}
               </span>
             )}

@@ -78,10 +78,10 @@ export default function Loading() {
           <g className="lg-beat" filter="url(#goo)">
             <g className="lg-orbit">
               <g className="lg-a">
-                <circle className="lg-ca" cx="450" cy="450" r="68" fill="#138EFF" />
+                <circle className="lg-ca" cx="450" cy="450" r="68" fill="#4164FE" />
               </g>
               <g className="lg-b">
-                <circle className="lg-cb" cx="450" cy="450" r="68" fill="#138EFF" />
+                <circle className="lg-cb" cx="450" cy="450" r="68" fill="#4164FE" />
               </g>
             </g>
           </g>
