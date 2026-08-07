@@ -83,7 +83,7 @@ export default function BotonContacto() {
       {/* Botón flotante */}
       <button
         onClick={() => setAbierto(true)}
-        className="fixed z-40 w-12 h-12 rounded-full bg-[#9cc3ea] hover:bg-[#74a8d8] text-[#0a0a0a] shadow-lg flex items-center justify-center transition cursor-pointer bottom-20 right-4 lg:bottom-6 lg:right-6"
+        className="fixed z-40 w-12 h-12 rounded-full bg-[#4164fe] hover:bg-[#3151d3] text-white shadow-lg flex items-center justify-center transition cursor-pointer bottom-20 right-4 lg:bottom-6 lg:right-6"
         aria-label="Contacto"
       >
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
