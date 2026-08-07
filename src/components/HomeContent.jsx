@@ -231,21 +231,6 @@ export default function HomeContent({ categorias, recientes, elegidos, vendedore
               </Link>
             </div>
           </section>
-
-
-          {/* ── Footer ── */}
-          <footer className="bg-[#0a0a0a] text-white/25 text-xs pt-8 pb-24 px-6">
-            <div className="max-w-5xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-              <div className="font-light">© 2026 Bahía Shops — Bahía Blanca, Argentina</div>
-              <div className="flex gap-6 font-light">
-                <a href="/privacidad" className="hover:text-white/60 transition">Privacidad</a>
-                <a href="/terminos" className="hover:text-white/60 transition">Términos</a>
-                <a href="https://instagram.com/bahiashops" target="_blank" rel="noopener noreferrer" className="hover:text-white/60 transition">Instagram</a>
-                <a href="https://tiktok.com/@bahiashops" target="_blank" rel="noopener noreferrer" className="hover:text-white/60 transition">TikTok</a>
-              </div>
-            </div>
-          </footer>
-
         </main>
       </div>
     </>

@@ -2,6 +2,7 @@ import { Inter, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { CarritoProvider } from "@/context/CarritoContext";
 import BotonContacto from '@/components/BotonContacto';
+import Footer from '@/components/Footer';
 
 const inter = Inter({
   variable: "--font-inter",
@@ -27,6 +28,7 @@ export default function RootLayout({ children }) {
       <body className="min-h-full flex flex-col">
         <CarritoProvider>
           {children}
+          <Footer />
           <BotonContacto />
         </CarritoProvider>
       </body>

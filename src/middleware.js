@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server'
 
 // ──────────────────────────────────────────────
 // Cambiá esto a false cuando quieras abrir el sitio al público
-const COMING_SOON = true
+const COMING_SOON = false
 // ──────────────────────────────────────────────
 
 // Rutas que siempre quedan accesibles (sin login)
