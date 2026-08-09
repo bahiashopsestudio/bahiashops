@@ -68,14 +68,14 @@ export default function MapaHome({ vendedores = [] }) {
 
   if (!listo || !iconoLocal || !iconoCasa) {
     return (
-      <div className="bg-[#ECEAE3] rounded-2xl h-[320px] md:h-[400px] flex items-center justify-center">
+      <div className="bg-[#ECEAE3] h-full w-full flex items-center justify-center">
         <span className="text-[#0a0a0a]/15 text-sm font-light">Cargando mapa...</span>
       </div>
     )
   }
 
   return (
-    <div className="relative z-0 rounded-2xl overflow-hidden h-[320px] md:h-[400px]">
+    <div className="relative z-0 h-full w-full">
       <MapContainer
         center={CENTRO_BB}
         zoom={13}

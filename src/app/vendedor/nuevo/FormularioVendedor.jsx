@@ -64,6 +64,61 @@ export default function FormularioVendedor({ userId }) {
   const [categorias, setCategorias] = useState([])
   const [categoriaId, setCategoriaId] = useState('')
 
+  // ── Sellos ──
+  const [sellos, setSellos] = useState([])
+  const [sellosSeleccionados, setSellosSeleccionados] = useState([])
+
+  // ── Flujo Alimentos ──
+  const [alimentosCamino, setAlimentosCamino] = useState(null)
+  const [leadNombre, setLeadNombre] = useState('')
+  const [leadWhatsapp, setLeadWhatsapp] = useState('')
+  const [leadQueHace, setLeadQueHace] = useState('')
+  const [leadEmail, setLeadEmail] = useState('')
+  const [leadEnviado, setLeadEnviado] = useState(false)
+  const [enviandoLead, setEnviandoLead] = useState(false)
+
+  const esAlimentos = categoriaId === '12'
+
+  async function enviarLeadGastronomia() {
+    if (!leadNombre.trim() || !leadQueHace.trim()) {
+      alert('Completá tu nombre y qué hacés.')
+      return
+    }
+    setEnviandoLead(true)
+    try {
+      await supabase.from('leads_gastronomia').insert({
+        nombre: leadNombre.trim(),
+        whatsapp: leadWhatsapp ? '+549' + leadWhatsapp.replace(/\D/g, '') : null,
+        que_hace: leadQueHace.trim(),
+        email: leadEmail.trim() || null,
+      })
+      await fetch('/api/lead-gastronomia', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nombre: leadNombre.trim(),
+          whatsapp: leadWhatsapp ? '+549' + leadWhatsapp.replace(/\D/g, '') : null,
+          queHace: leadQueHace.trim(),
+          email: leadEmail.trim() || null,
+        }),
+      })
+      setLeadEnviado(true)
+    } catch (err) {
+      console.error('Error enviando lead:', err)
+      alert('Hubo un error. Probá de nuevo.')
+    } finally {
+      setEnviandoLead(false)
+    }
+  }
+
+  function toggleSello(selloId) {
+    setSellosSeleccionados((actuales) =>
+      actuales.includes(selloId)
+        ? actuales.filter((id) => id !== selloId)
+        : [...actuales, selloId]
+    )
+  }
+
   const [horarios, setHorarios] = useState(HORARIOS_INICIALES)
   const [notasHorarios, setNotasHorarios] = useState('')
   const [tiempoDespacho, setTiempoDespacho] = useState('')
@@ -80,15 +135,29 @@ export default function FormularioVendedor({ userId }) {
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    async function cargarUbicaciones() {
+    async function cargarDatos() {
       const { data: locs } = await supabase.from('localidades').select('id, nombre').order('nombre')
       const { data: brs } = await supabase.from('barrios').select('id, nombre, localidad_id').order('nombre')
-      const { data: cats } = await supabase.from('categorias').select('id, nombre').order('nombre')
+
+      // Todas las categorías (las inactivas se activan al ser elegidas)
+      const { data: cats } = await supabase
+        .from('categorias')
+        .select('id, nombre, activa')
+        .order('orden')
+
+      // Sellos activos
+      const { data: slls } = await supabase
+        .from('sellos')
+        .select('id, nombre')
+        .eq('activa', true)
+        .order('orden')
+
       if (locs) setLocalidades(locs)
       if (brs) setBarrios(brs)
       if (cats) setCategorias(cats)
+      if (slls) setSellos(slls)
     }
-    cargarUbicaciones()
+    cargarDatos()
   }, [])
 
   const barriosDeLaLocalidad = localidadId ? barrios.filter((b) => b.localidad_id === Number(localidadId)) : []
@@ -154,28 +223,62 @@ export default function FormularioVendedor({ userId }) {
     setError(null); setGuardando(true)
     const slug = generarSlug(nombreNegocio)
 
-    const { error: errorInsert } = await supabase.from('vendedores').insert({
-      usuario_id: userId, categoria_id: categoriaId ? Number(categoriaId) : null,
-      nombre_negocio: nombreNegocio, slug, descripcion_corta: descripcionCorta,
-      descripcion_larga: descripcionLarga || null, instagram,
-      plataforma_sitio: plataformaSitio || null, sitio_web: tienePlataforma ? sitioWeb : null,
-      red_social_secundaria_tipo: redSecundariaTipo || null,
-      red_social_secundaria_url: tieneRedSecundaria ? redSecundariaUrl : null,
-      telefono_contacto: armarTelefonoCompleto(whatsapp),
-      email_contacto: usarOtroEmail ? emailContacto : null,
-      recibe_publico: recibePublico, localidad_id: localidadId ? Number(localidadId) : null,
-      direccion: recibePublico ? direccion : null, barrio_id: barrioId ? Number(barrioId) : null,
-      latitud: recibePublico ? latitud : null, longitud: recibePublico ? longitud : null,
-      barrio_detectado_automaticamente: barrioAuto, horarios_estructurados: horarios,
-      notas_horarios: notasHorarios || null, tiempo_despacho: tiempoDespacho || null,
-      metodos_entrega_default: metodosEntrega,
-    })
+    // Insertar vendedor
+    const { data: vendedorNuevo, error: errorInsert } = await supabase
+      .from('vendedores')
+      .insert({
+        usuario_id: userId, categoria_id: categoriaId ? Number(categoriaId) : null,
+        nombre_negocio: nombreNegocio, slug, descripcion_corta: descripcionCorta,
+        descripcion_larga: descripcionLarga || null, instagram,
+        plataforma_sitio: plataformaSitio || null, sitio_web: tienePlataforma ? sitioWeb : null,
+        red_social_secundaria_tipo: redSecundariaTipo || null,
+        red_social_secundaria_url: tieneRedSecundaria ? redSecundariaUrl : null,
+        telefono_contacto: armarTelefonoCompleto(whatsapp),
+        email_contacto: usarOtroEmail ? emailContacto : null,
+        recibe_publico: recibePublico, localidad_id: localidadId ? Number(localidadId) : null,
+        direccion: recibePublico ? direccion : null, barrio_id: barrioId ? Number(barrioId) : null,
+        latitud: recibePublico ? latitud : null, longitud: recibePublico ? longitud : null,
+        barrio_detectado_automaticamente: barrioAuto, horarios_estructurados: horarios,
+        notas_horarios: notasHorarios || null, tiempo_despacho: tiempoDespacho || null,
+        metodos_entrega_default: metodosEntrega,
+      })
+      .select('id')
+      .single()
 
     if (errorInsert) {
       if (errorInsert.code === '23505') setError('Ya tenés un emprendimiento creado con esta cuenta. Por ahora cada usuario puede tener uno solo.')
       else setError(errorInsert.message)
       setGuardando(false); return
     }
+
+    // Activar categoría si estaba inactiva
+    if (vendedorNuevo && categoriaId) {
+      const catElegida = categorias.find((c) => c.id === Number(categoriaId))
+      if (catElegida && !catElegida.activa) {
+        await supabase
+          .from('categorias')
+          .update({ activa: true })
+          .eq('id', Number(categoriaId))
+      }
+    }
+
+    // Guardar sellos seleccionados
+    if (vendedorNuevo && sellosSeleccionados.length > 0) {
+      const filasSellos = sellosSeleccionados.map((selloId) => ({
+        vendedor_id: vendedorNuevo.id,
+        sello_id: selloId,
+      }))
+
+      const { error: errorSellos } = await supabase
+        .from('vendedor_sellos')
+        .insert(filasSellos)
+
+      if (errorSellos) {
+        console.error('Error al guardar sellos:', errorSellos.message)
+        // No bloqueamos el registro por esto — el vendedor ya se creó
+      }
+    }
+
     router.push('/')
   }
 
@@ -201,15 +304,132 @@ export default function FormularioVendedor({ userId }) {
           <label className="flex flex-col gap-1">
             <span className="text-sm text-[#0a0a0a]/60 font-light">Categoría / rubro *</span>
             <span className="text-[11px] text-[#0a0a0a]/25 font-light">El rubro principal de tu emprendimiento.</span>
-            <select required value={categoriaId} onChange={(e) => setCategoriaId(e.target.value)} className={selectClasses}>
+            <select required value={categoriaId} onChange={(e) => { setCategoriaId(e.target.value); setAlimentosCamino(null); setLeadEnviado(false) }} className={selectClasses}>
               <option value="">Elegí tu rubro</option>
               {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
             </select>
           </label>
 
+          {/* ── Flujo Alimentos y bebidas ── */}
+          {esAlimentos && !alimentosCamino && !leadEnviado && (
+            <div className="rounded-2xl border border-[#0a0a0a]/5 p-5 flex flex-col gap-3">
+              <p className="text-sm text-[#0a0a0a]/60 font-light m-0">
+                ¿Qué tipo de productos alimenticios vendés?
+              </p>
+              <button type="button" onClick={() => setAlimentosCamino('envasados')}
+                className="w-full p-4 border border-[#0a0a0a]/10 rounded-xl text-left cursor-pointer bg-white hover:border-[#0a0a0a]/30 transition-all">
+                <span className="block text-sm font-medium text-[#0a0a0a]">Productos envasados y no perecederos</span>
+                <span className="block text-[11px] text-[#0a0a0a]/40 font-light mt-1">
+                  Conservas, bebidas embotelladas, snacks, especias, yerba, café, chocolates...
+                </span>
+              </button>
+              <button type="button" onClick={() => setAlimentosCamino('cocinero')}
+                className="w-full p-4 border border-[#0a0a0a]/10 rounded-xl text-left cursor-pointer bg-white hover:border-[#0a0a0a]/30 transition-all">
+                <span className="block text-sm font-medium text-[#0a0a0a]">Soy cocinero/a, pastelero/a o gastronómico/a</span>
+                <span className="block text-[11px] text-[#0a0a0a]/40 font-light mt-1">
+                  Comidas preparadas, repostería, catering, tortas, viandas...
+                </span>
+              </button>
+            </div>
+          )}
+
+          {esAlimentos && alimentosCamino === 'envasados' && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-800">
+              ✓ Los productos envasados y no perecederos están habilitados para la venta en Bahía Shops. Continuá con el registro.
+            </div>
+          )}
+
+          {esAlimentos && alimentosCamino === 'cocinero' && !leadEnviado && (
+            <div className="rounded-2xl border border-[#0a0a0a]/5 p-5 flex flex-col gap-4">
+              <div>
+                <p className="text-sm font-medium text-[#0a0a0a] m-0">¡Nos encanta que quieras sumarte!</p>
+                <p className="text-sm text-[#0a0a0a]/40 font-light mt-1 mb-0">
+                  Estamos preparando planes especiales para profesionales que prestan servicios. Dejanos tus datos y te contactamos cuando estén listos.
+                </p>
+              </div>
+              <label className="flex flex-col gap-1">
+                <span className="text-sm text-[#0a0a0a]/60 font-light">Tu nombre *</span>
+                <input type="text" required value={leadNombre}
+                  onChange={(e) => setLeadNombre(e.target.value)}
+                  placeholder="Nombre y apellido" className={inputClasses} />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-sm text-[#0a0a0a]/60 font-light">¿Qué hacés? *</span>
+                <input type="text" required value={leadQueHace}
+                  onChange={(e) => setLeadQueHace(e.target.value)}
+                  placeholder="Ej: Pastelería artesanal, viandas saludables..." className={inputClasses} />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-sm text-[#0a0a0a]/60 font-light">WhatsApp</span>
+                <div className="flex gap-2 items-stretch">
+                  <span className="px-3 py-2.5 border border-gray-300 rounded-lg bg-[#F5F2EC] text-[#0a0a0a]/40 flex items-center text-sm font-light">
+                    +54 9
+                  </span>
+                  <input type="tel" value={leadWhatsapp}
+                    onChange={(e) => setLeadWhatsapp(e.target.value.replace(/\D/g, ''))}
+                    placeholder="291 555 1234" className={`${inputClasses} flex-1`} />
+                </div>
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-sm text-[#0a0a0a]/60 font-light">Email</span>
+                <input type="email" value={leadEmail}
+                  onChange={(e) => setLeadEmail(e.target.value)}
+                  placeholder="tucorreo@ejemplo.com" className={inputClasses} />
+              </label>
+              <button type="button" onClick={enviarLeadGastronomia} disabled={enviandoLead}
+                className={`w-full px-6 py-2.5 border-none rounded-full text-sm text-white font-medium transition-colors ${
+                  enviandoLead ? 'bg-[#0a0a0a]/30 cursor-not-allowed' : 'bg-[#0a0a0a] cursor-pointer hover:bg-[#1a1a1a]'
+                }`}>
+                {enviandoLead ? 'Enviando...' : 'Enviar mis datos'}
+              </button>
+            </div>
+          )}
+
+          {esAlimentos && leadEnviado && (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-center">
+              <p className="text-lg font-black text-emerald-800 m-0">¡Gracias!</p>
+              <p className="text-sm text-emerald-700 mt-2 mb-0">
+                Recibimos tus datos. Te vamos a contactar cuando los planes para gastronómicos estén listos.
+              </p>
+            </div>
+          )}
+
+          {/* ── Resto del formulario (oculto si eligió Camino B) ── */}
+          {(!esAlimentos || alimentosCamino === 'envasados') && (
+          <>
+
+          {/* ── Sellos ── */}
+          <div className="flex flex-col gap-2">
+            <span className="text-sm text-[#0a0a0a]/60 font-light">
+              Sellos <span className="text-[#0a0a0a]/25">(opcional)</span>
+            </span>
+            <span className="text-[11px] text-[#0a0a0a]/25 font-light">
+              ¿Tu emprendimiento tiene alguno de estos sellos? Elegí los que apliquen.
+            </span>
+            <div className="flex flex-wrap gap-2">
+              {sellos.map((s) => {
+                const activo = sellosSeleccionados.includes(s.id)
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => toggleSello(s.id)}
+                    className={`px-3 py-1.5 rounded-full text-sm transition-all cursor-pointer border ${
+                      activo
+                        ? 'bg-[#0a0a0a] text-white border-[#0a0a0a]'
+                        : 'bg-white text-[#0a0a0a]/60 border-[#0a0a0a]/10 hover:border-[#0a0a0a]/30'
+                    }`}
+                  >
+                    {s.nombre}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
           <label className="flex flex-col gap-1">
             <span className="text-sm text-[#0a0a0a]/60 font-light">
-              Descripción corta * <span className="text-[#0a0a0a]/25">(una línea)</span>
+              Descripción corta * <span className="text-[#0a0a0a]/25">(una línea, es lo primero que van a leer los compradores sobre tu emprendimiento)</span>
             </span>
             <input type="text" required maxLength={140} value={descripcionCorta}
               onChange={(e) => setDescripcionCorta(e.target.value)} className={inputClasses} />
@@ -299,6 +519,9 @@ export default function FormularioVendedor({ userId }) {
               <input type="email" required placeholder="contacto@bahiashops.com.ar" value={emailContacto}
                 onChange={(e) => setEmailContacto(e.target.value)} className={inputClasses} />
             </label>
+          )}
+
+          </>
           )}
         </>
       )}

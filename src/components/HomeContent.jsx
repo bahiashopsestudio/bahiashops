@@ -2,20 +2,15 @@
 
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
-import dynamic from 'next/dynamic'
+import { useCarrito } from '@/context/CarritoContext'
 import Navbar from '@/components/Navbar'
-import Buscador from '@/components/Buscador'
 import BotonFavorito from '@/components/BotonFavorito'
 import MenuTakeover from '@/components/MenuTakeover'
-
-const MapaHome = dynamic(() => import('@/components/MapaHome'), {
-  ssr: false,
-  loading: () => (
-    <div className="bg-[#ECEAE3] rounded-2xl h-[320px] md:h-[400px] flex items-center justify-center">
-      <span className="text-[#0a0a0a]/15 text-sm font-light">Cargando mapa...</span>
-    </div>
-  ),
-})
+import ProductosDestacados from '@/components/ProductosDestacados'
+import MapaDestacado from '@/components/MapaDestacado'
+import BarraScrollCustom from '@/components/BarraScrollCustom'
+import SomosBahia from '@/components/SomosBahia'
+import ValoresCompra from '@/components/ValoresCompra'
 
 
 // ═══════════════════════════════════════════════════════════
@@ -24,13 +19,16 @@ const MapaHome = dynamic(() => import('@/components/MapaHome'), {
 
 const MENU_CATEGORIAS = [
   'moda',
-  'belleza-y-cuidado-personal',
-  'gastronomia',
-  'hogar-deco-y-jardin',
-  'diseno-y-artesanias',
-  'tecnologia',
-  'salud-y-bienestar',
-  'arte-e-ilustracion',
+  'belleza-y-bienestar',
+  'joyeria-y-accesorios',
+  'hogar-y-deco',
+  'artes-y-oficios',
+  'bebes-y-maternidad',
+  'juegos-y-juguetes',
+  'mascotas',
+  'libros',
+  'deporte',
+  'vintage',
 ]
 
 const VALORES = [
@@ -43,20 +41,6 @@ const VALORES = [
   { tipo: 'imagen', src: '/images/foto-valores-4.jpg' },
   { tipo: 'texto', titulo: 'Accesible', descripcion: 'Sin locales caros, sin intermediarios.' },
 ]
-
-const COLECCION = {
-  titulo: 'SPA en casa',
-  descripcion: 'Todo lo que necesitás para un momento de relax sin salir.',
-  color: '#fac0f0',
-  productos: [
-    { id: 20, nombre: 'Sales de baño relajantes', vendedor: 'Aroma Casa', precio: 3200 },
-    { id: 21, nombre: 'Vela de soja eucalipto', vendedor: 'Aroma Casa', precio: 4500 },
-    { id: 22, nombre: 'Jabón exfoliante avena', vendedor: 'Natural BB', precio: 2800 },
-    { id: 23, nombre: 'Toalla de algodón orgánico', vendedor: 'Hilo Sur', precio: 9500 },
-    { id: 24, nombre: 'Aceite esencial lavanda', vendedor: 'Natural BB', precio: 6200 },
-  ],
-}
-
 
 // ═══════════════════════════════════════════════════════════
 // HELPERS
@@ -75,12 +59,30 @@ function getImageUrl(media) {
 // COMPONENTE PRINCIPAL
 // ═══════════════════════════════════════════════════════════
 
-export default function HomeContent({ categorias, recientes, elegidos, vendedoresMapa = [] }) {
+export default function HomeContent({ categorias, recientes, elegidos, vendedoresMapa = [], destacados = [] }) {
   const [menuOpen, setMenuOpen] = useState(false)
+  const { agregar } = useCarrito()
 
   const menuCats = MENU_CATEGORIAS
     .map(slug => categorias.find(c => c.slug === slug))
     .filter(Boolean)
+
+  function agregarElegidoAlCarrito(prod) {
+    agregar(
+      {
+        productoId: prod.id,
+        nombre: prod.nombre,
+        precio: Number(prod.precio),
+        foto: getImageUrl(prod.media),
+        variante: null,
+        cantidad: 1,
+      },
+      {
+        id: prod.vendedor?.id,
+        nombre: prod.vendedor?.nombre_negocio || 'Local',
+      }
+    )
+  }
 
   useEffect(() => {
     if (menuOpen) {
@@ -97,8 +99,12 @@ export default function HomeContent({ categorias, recientes, elegidos, vendedore
         rel="stylesheet"
         href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&display=swap"
       />
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,100..900&family=Poppins:wght@300;400;500&display=swap"
+      />
 
-      <div className="min-h-screen bg-white" style={{ fontFamily: "'Inter', sans-serif" }}>
+      <div className="min-h-screen bg-[#faf9f7]" style={{ fontFamily: "'Inter', sans-serif" }}>
 
         {menuOpen && (
           <MenuTakeover
@@ -113,59 +119,134 @@ export default function HomeContent({ categorias, recientes, elegidos, vendedore
 
           {/* ═══ HERO ═══ */}
           <section className="relative h-screen overflow-hidden">
-            <div
-              className="absolute inset-0 bg-cover bg-center"
-              style={{ backgroundImage: "url('/images/herohome.jpg')" }}
+            <video
+              autoPlay
+              muted
+              loop
+              playsInline
+              className="absolute inset-0 w-full h-full object-cover"
+              src="/hero-video.mp4"
             />
-            <div className="absolute inset-0 bg-black/50" />
-
-            <div className="relative z-10 flex flex-col items-center justify-center h-full px-6 text-center">
-              <h1 className="text-white text-4xl md:text-6xl font-black tracking-tight leading-[1.05]">
-                Lo que buscás
-                <br />
-                está en tu ciudad.
+            <div
+              className="absolute inset-0"
+              style={{
+                background:
+                  'linear-gradient(to right, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.25) 50%, rgba(0,0,0,0.05) 100%)',
+              }}
+            />
+            <div
+              className="relative z-10 h-full flex flex-col justify-center items-start"
+              style={{ maxWidth: '480px', padding: '56px 48px' }}
+            >
+              <h1
+                className="text-[28px] md:text-[42px]"
+                style={{
+                  fontFamily: 'Fraunces, serif',
+                  fontWeight: 500,
+                  color: '#fff',
+                  letterSpacing: '-0.02em',
+                  lineHeight: 1.12,
+                  marginBottom: '16px',
+                }}
+              >
+                Lo que buscás ya está en tu ciudad.
               </h1>
-              <p className="text-white/40 text-sm md:text-base font-light mt-4 tracking-wide">
-                Marketplace local de Bahía Blanca
+
+              <p
+                style={{
+                  fontFamily: 'Poppins, sans-serif',
+                  fontWeight: 300,
+                  fontSize: '15px',
+                  color: 'rgba(255,255,255,0.9)',
+                  lineHeight: 1.6,
+                  maxWidth: '390px',
+                  marginBottom: '28px',
+                }}
+              >
+                Un espacio para descubrir, comprar y conectar con negocios de Bahía Blanca.
               </p>
 
-              <div className="mt-8 w-full max-w-md mx-auto">
-                <Buscador
-                  placeholder="Buscá productos, tiendas..."
-                  mostrarFlecha
-                />
-              </div>
+              <Link
+                href="/vendedor/nuevo"
+                className="inline-block"
+                style={{
+                  fontFamily: 'Inter, sans-serif',
+                  fontWeight: 500,
+                  fontSize: '14px',
+                  background: '#fff',
+                  color: '#0a0a0a',
+                  padding: '14px 28px',
+                  borderRadius: '4px',
+                  marginBottom: '20px',
+                }}
+              >
+                Registrate gratis para vender
+              </Link>
 
-              <div className="absolute bottom-8 animate-bounce">
-                <svg className="w-6 h-6 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-                </svg>
-              </div>
+              <p
+                className="md:whitespace-nowrap"
+                style={{
+                  fontFamily: 'Inter, sans-serif',
+                  fontWeight: 300,
+                  fontSize: '13px',
+                  color: 'rgba(255,255,255,0.7)',
+                }}
+              >
+                ¿Querés encontrar productos en bahía?{' '}
+                <Link
+                  href="/registro"
+                  style={{
+                    fontFamily: 'Inter, sans-serif',
+                    fontWeight: 400,
+                    color: 'rgba(255,255,255,0.85)',
+                    textDecoration: 'underline',
+                    textUnderlineOffset: '3px',
+                  }}
+                >
+                  Registrate para comprar
+                </Link>
+              </p>
             </div>
           </section>
-
-
-          {/* ═══ MAPA ═══ */}
-          <MapaSection vendedores={vendedoresMapa} />
-
-
-          {/* ═══ VALORES ═══ */}
-          <ValoresCarrusel />
 
 
           {/* ═══ RECIÉN LLEGADOS ═══ */}
           <RecienLlegados productos={recientes} />
 
 
-          {/* ═══ CTA ANIMADO ═══ */}
-          <CtaAnimado />
+          {/* ═══ MAPA ═══ */}
+          <MapaDestacado vendedores={vendedoresMapa} />
+
+
+          {/* ═══ VALORES ═══ */}
+          <ValoresCarrusel />
+
+
+          {/* ═══ CTA VENDER ═══ */}
+          <CtaVender />
+
+
+          {/* ═══ PRODUCTOS DESTACADOS ═══ */}
+          <ProductosDestacados categorias={categorias} productos={destacados} />
+
+
+          {/* ═══ SOMOS BAHÍA ═══ */}
+          <SomosBahia />
 
 
           {/* ═══ ELEGIDOS ═══ */}
           {elegidos.length > 0 && (
             <section className="pt-10 pb-10 md:pt-12 md:pb-12 px-4 md:px-8">
               <div className="max-w-6xl mx-auto">
-                <h2 className="text-xl md:text-2xl font-black text-[#0a0a0a] tracking-tight">
+                <h2
+                  style={{
+                    fontFamily: 'Fraunces, serif',
+                    fontWeight: 500,
+                    fontSize: '28px',
+                    color: '#0a0a0a',
+                    letterSpacing: '-0.02em',
+                  }}
+                >
                   Elegidos de la semana
                 </h2>
                 <div className="columns-2 md:columns-3 gap-4 space-y-4 mt-6">
@@ -187,13 +268,39 @@ export default function HomeContent({ categorias, recientes, elegidos, vendedore
                             )}
                           </div>
                           <div className="px-0.5 mt-2">
-                            <p className="text-sm font-medium text-[#0a0a0a] group-hover:text-[#0a0a0a]/50 transition">{prod.nombre}</p>
-                            <p className="text-xs text-[#0a0a0a]/30 font-light">{prod.vendedor?.nombre_negocio}</p>
-                            <p className="text-sm font-semibold text-[#0a0a0a] mt-1">
+                            <p
+                              className="whitespace-nowrap overflow-hidden text-ellipsis"
+                              style={{ fontFamily: "'Inter', sans-serif", fontWeight: 400, fontSize: '13.5px', color: '#0a0a0a' }}
+                            >
+                              {prod.nombre}
+                            </p>
+                            <p
+                              style={{ fontFamily: "'Inter', sans-serif", fontWeight: 300, fontSize: '12px', color: '#aaa', marginTop: '2px' }}
+                            >
+                              {prod.barrioNombre || ''}
+                            </p>
+                            <p
+                              style={{ fontFamily: "'Inter', sans-serif", fontWeight: 500, fontSize: '14px', color: '#0a0a0a', marginTop: '4px' }}
+                            >
                               ${Number(prod.precio).toLocaleString('es-AR')}
                             </p>
                           </div>
                         </Link>
+                        <button
+                          type="button"
+                          onClick={() => agregarElegidoAlCarrito(prod)}
+                          className="w-full bg-[#0a0a0a] text-white border border-[#0a0a0a] hover:bg-transparent hover:text-[#0a0a0a] transition-colors cursor-pointer"
+                          style={{
+                            fontFamily: "'Inter', sans-serif",
+                            fontSize: '12px',
+                            fontWeight: 500,
+                            borderRadius: '4px',
+                            padding: '8px 16px',
+                            marginTop: '10px',
+                          }}
+                        >
+                          Agregar al carrito
+                        </button>
                         <div className="absolute top-2 right-2">
                           <BotonFavorito
                             productoId={prod.id}
@@ -209,28 +316,8 @@ export default function HomeContent({ categorias, recientes, elegidos, vendedore
           )}
 
 
-          {/* ═══ COLECCIÓN CURADA ═══ */}
-          <ColeccionCurada coleccion={COLECCION} />
-
-
-          {/* ═══ CTA FINAL ═══ */}
-          <section className="bg-[#4164fe] text-white py-20 md:py-28 px-4 md:px-8">
-            <div className="max-w-2xl mx-auto text-center">
-              <h2 className="text-2xl md:text-4xl font-black tracking-tight mb-4">
-                ¿Querés vender en Bahía Shops?
-              </h2>
-              <p className="text-white text-base md:text-lg mb-8 leading-relaxed font-light">
-                Sin locales caros, sin intermediarios. Registrá tu emprendimiento,
-                subí tus productos y empezá a vender hoy.
-              </p>
-              <Link
-                href="/vendedor/nuevo"
-                className="inline-block bg-[#015444] text-white px-8 py-3.5 rounded-full text-sm font-medium hover:bg-[#014237] transition"
-              >
-                Empezá a vender
-              </Link>
-            </div>
-          </section>
+          {/* ═══ VALORES DE COMPRA ═══ */}
+          <ValoresCompra />
         </main>
       </div>
     </>
@@ -239,209 +326,54 @@ export default function HomeContent({ categorias, recientes, elegidos, vendedore
 
 
 // ═══════════════════════════════════════════════════════════
-// SECCIÓN MAPA
-// ═══════════════════════════════════════════════════════════
-
-function MapaSection({ vendedores = [] }) {
-  return (
-    <section className="py-10 md:py-14 px-4 md:px-8">
-      <div className="max-w-5xl mx-auto">
-        <p className="text-center text-[9px] font-medium tracking-[3px] uppercase text-[#0a0a0a]/25 mb-4">
-          Cerca tuyo
-        </p>
-
-        <div className="text-center">
-          <h2 className="text-3xl md:text-5xl font-black text-[#0a0a0a] tracking-tight leading-[1.05] mb-3">
-            Encontrá quién vende
-            <br />
-            en tu barrio.
-          </h2>
-          <p className="text-sm md:text-base font-light text-[#0a0a0a]/40 leading-relaxed max-w-lg mx-auto mb-8">
-            Cada punto es un vendedor real de Bahía Blanca. Algunos tienen local
-            a la calle, otros trabajan desde sus casas — pero todos están en tu ciudad.
-          </p>
-        </div>
-
-        <MapaHome vendedores={vendedores} />
-
-        <div className="flex gap-5 mt-4 justify-center">
-          <div className="flex items-center gap-2">
-            <div className="w-[8px] h-[8px] rounded-full bg-[#ff1010] shrink-0" />
-            <span className="text-[11px] font-light text-[#0a0a0a]/35">Local con dirección</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-[8px] h-[8px] rounded-full bg-[#9cc3ea] shrink-0" />
-            <span className="text-[11px] font-light text-[#0a0a0a]/35">Trabaja desde casa</span>
-          </div>
-        </div>
-
-        <div className="mt-8 text-center">
-          <Link
-            href="/vendedor/nuevo"
-            className="inline-block bg-[#0a0a0a] text-[#F5F2EC] px-7 py-3 rounded-full text-sm font-medium hover:bg-[#2a2a2a] transition"
-          >
-            Sumar mi negocio
-          </Link>
-        </div>
-      </div>
-    </section>
-  )
-}
-
-
-// ═══════════════════════════════════════════════════════════
 // CTA ANIMADO
 // ═══════════════════════════════════════════════════════════
 
-function CtaAnimado() {
-  const sectionRef = useRef(null)
-  const [visible, setVisible] = useState(false)
-  const [counts, setCounts] = useState({ vendedores: 0, productos: 0, barrios: 0 })
-  const hasAnimated = useRef(false)
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && !hasAnimated.current) {
-          hasAnimated.current = true
-          setVisible(true)
-          animateCount('vendedores', 11, 1200)
-          animateCount('productos', 48, 1400)
-          animateCount('barrios', 6, 800)
-        }
-      },
-      { threshold: 0.3 }
-    )
-
-    if (sectionRef.current) observer.observe(sectionRef.current)
-    return () => observer.disconnect()
-  }, [])
-
-  function animateCount(key, target, duration) {
-    const start = Date.now()
-    function step() {
-      const elapsed = Date.now() - start
-      const progress = Math.min(elapsed / duration, 1)
-      const eased = 1 - Math.pow(1 - progress, 3)
-      setCounts(prev => ({ ...prev, [key]: Math.round(eased * target) }))
-      if (progress < 1) requestAnimationFrame(step)
-    }
-    requestAnimationFrame(step)
-  }
-
+function CtaVender() {
   return (
-    <section
-      ref={sectionRef}
-      className="py-14 md:py-20 px-4 md:px-8 text-center"
-    >
-      <div className="max-w-3xl mx-auto">
-        <div className="text-3xl md:text-5xl font-black text-[#0a0a0a] tracking-tight leading-[1.1]">
-          <span
-            className="transition-all duration-700"
-            style={{
-              opacity: visible ? 1 : 0,
-              transform: visible ? 'translateY(0)' : 'translateY(16px)',
-              transitionDelay: '0ms',
-              display: 'inline',
-            }}
-          >
-            ¿Tenés{' '}
-          </span>
-          <span
-            className="transition-all duration-700"
-            style={{
-              opacity: visible ? 1 : 0,
-              transform: visible ? 'translateY(0)' : 'translateY(16px)',
-              transitionDelay: '250ms',
-              display: 'inline',
-            }}
-          >
-            un{' '}
-          </span>
-          <span
-            className="transition-all duration-700"
-            style={{
-              opacity: visible ? 1 : 0,
-              transform: visible ? 'translateY(0)' : 'translateY(16px)',
-              transitionDelay: '500ms',
-              display: 'inline',
-            }}
-          >
-            emprendimiento?
-          </span>
-          <br />
-          <span
-            className="transition-all duration-700"
-            style={{
-              opacity: visible ? 1 : 0,
-              transform: visible ? 'translateY(0)' : 'translateY(16px)',
-              transitionDelay: '800ms',
-              display: 'inline',
-            }}
-          >
-            Sumate.
-          </span>
-        </div>
+    <section style={{ background: '#41252a', padding: '72px 32px' }} className="text-center">
+      <div className="max-w-2xl mx-auto">
+        <h2
+          className="text-[24px] md:text-[32px]"
+          style={{
+            fontFamily: 'Fraunces, serif',
+            fontWeight: 500,
+            color: '#ffffff',
+            letterSpacing: '-0.02em',
+            lineHeight: 1.15,
+            marginBottom: '12px',
+          }}
+        >
+          Para cualquier proyecto en la ciudad
+        </h2>
 
         <p
-          className="text-sm md:text-base font-light text-[#0a0a0a]/40 mt-5 leading-relaxed transition-all duration-700"
           style={{
-            opacity: visible ? 1 : 0,
-            transform: visible ? 'translateY(0)' : 'translateY(12px)',
-            transitionDelay: '1200ms',
+            fontFamily: 'Poppins, sans-serif',
+            fontWeight: 300,
+            fontSize: '14px',
+            color: 'rgba(255,255,255,0.8)',
+            lineHeight: 1.65,
+            marginBottom: '24px',
           }}
         >
-          Registrá tu negocio, subí tus productos y empezá a vender. Así de simple.
+          No importa si vendés ropa o artículos para mascotas: en Bahía Shops mostramos todos
+          los productos que nuestros vecinos necesitan cerca suyo.
         </p>
 
-        <div
-          className="mt-7 transition-all duration-700"
+        <Link
+          href="/vendedor/nuevo"
+          className="inline-block bg-white text-[#0a0a0a] border border-white hover:bg-transparent hover:text-white transition-colors cursor-pointer"
           style={{
-            opacity: visible ? 1 : 0,
-            transform: visible ? 'translateY(0)' : 'translateY(12px)',
-            transitionDelay: '1500ms',
+            fontFamily: "'Inter', sans-serif",
+            fontSize: '13px',
+            fontWeight: 500,
+            borderRadius: '4px',
+            padding: '12px 24px',
           }}
         >
-          <Link
-            href="/vendedor/nuevo"
-            className="inline-block bg-[#3c1b0c] text-white px-7 py-3 rounded-full text-sm font-medium hover:bg-[#261007] transition"
-          >
-            Empezar a vender
-          </Link>
-        </div>
-
-        <div
-          className="flex justify-center gap-12 md:gap-16 mt-12 transition-all duration-700"
-          style={{
-            opacity: visible ? 1 : 0,
-            transitionDelay: '1800ms',
-          }}
-        >
-          <div className="text-center">
-            <div className="text-3xl md:text-4xl font-black text-[#0a0a0a] tracking-tight">
-              {counts.vendedores}
-            </div>
-            <div className="text-[10px] font-light text-[#0a0a0a]/30 mt-1 tracking-wide">
-              vendedores
-            </div>
-          </div>
-          <div className="text-center">
-            <div className="text-3xl md:text-4xl font-black text-[#0a0a0a] tracking-tight">
-              {counts.productos}
-            </div>
-            <div className="text-[10px] font-light text-[#0a0a0a]/30 mt-1 tracking-wide">
-              productos
-            </div>
-          </div>
-          <div className="text-center">
-            <div className="text-3xl md:text-4xl font-black text-[#0a0a0a] tracking-tight">
-              {counts.barrios}
-            </div>
-            <div className="text-[10px] font-light text-[#0a0a0a]/30 mt-1 tracking-wide">
-              barrios
-            </div>
-          </div>
-        </div>
+          Sumate gratis para vender
+        </Link>
       </div>
     </section>
   )
@@ -454,178 +386,87 @@ function CtaAnimado() {
 
 function RecienLlegados({ productos }) {
   const scrollRef = useRef(null)
-  const [canScrollLeft, setCanScrollLeft] = useState(false)
-  const [canScrollRight, setCanScrollRight] = useState(true)
-
-  function updateArrows() {
-    const el = scrollRef.current
-    if (!el) return
-    setCanScrollLeft(el.scrollLeft > 2)
-    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 2)
-  }
-
-  useEffect(() => {
-    const el = scrollRef.current
-    if (!el) return
-    el.addEventListener('scroll', updateArrows)
-    updateArrows()
-    return () => el.removeEventListener('scroll', updateArrows)
-  }, [])
-
-  function scroll(direction) {
-    scrollRef.current?.scrollBy({ left: direction * 280, behavior: 'smooth' })
-  }
 
   return (
     <section className="pt-8 pb-6 md:pt-10 md:pb-8 px-4 md:px-8">
       <div className="max-w-6xl mx-auto">
-        <h2 className="text-xl md:text-2xl font-black text-[#0a0a0a] tracking-tight mb-6">
+        <h2
+          style={{
+            fontFamily: 'Fraunces, serif',
+            fontWeight: 500,
+            fontSize: '28px',
+            color: '#0a0a0a',
+            letterSpacing: '-0.02em',
+            marginBottom: '24px',
+          }}
+        >
           Recién llegados
         </h2>
 
-        <div className="relative">
-          {productos.length > 3 && (
-            <button
-              onClick={() => scroll(-1)}
-              className={`absolute left-0 top-1/2 -translate-y-1/2 z-10 w-9 h-9 flex items-center justify-center cursor-pointer transition-all bg-white/90 backdrop-blur-sm shadow-md rounded-full ${canScrollLeft ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-              aria-label="Anterior"
-            >
-              <svg className="w-4 h-4 text-[#0a0a0a]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
-              </svg>
-            </button>
-          )}
-
-          <div
-            ref={scrollRef}
-            className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory"
-            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-          >
-            {productos.map((prod) => {
-              const imageUrl = getImageUrl(prod.media)
-              return (
-                <div key={prod.id} className="shrink-0 w-48 md:w-56 snap-start relative">
-                  <Link href={`/producto/${prod.id}`} className="block group">
-                    <div className="aspect-square bg-[#ECEAE3] rounded-xl overflow-hidden flex items-center justify-center">
-                      {imageUrl ? (
-                        <img src={imageUrl} alt={prod.nombre} className="w-full h-full object-cover" />
-                      ) : (
-                        <span className="text-[#0a0a0a]/20 text-xs font-light">foto</span>
-                      )}
-                    </div>
-                    <div className="mt-2.5">
-                      <p className="text-sm font-medium text-[#0a0a0a] group-hover:text-[#0a0a0a]/50 transition truncate">{prod.nombre}</p>
-                      <p className="text-xs text-[#0a0a0a]/30 mt-0.5 font-light">{prod.vendedor?.nombre_negocio}</p>
-                      <p className="text-sm font-semibold text-[#0a0a0a] mt-1">
-                        ${Number(prod.precio).toLocaleString('es-AR')}
-                      </p>
-                    </div>
-                  </Link>
-                  <div className="absolute top-2 right-2">
-                    <BotonFavorito
-                      productoId={prod.id}
-                      className="w-8 h-8 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center text-gray-500"
-                    />
-                  </div>
-                </div>
-              )
-            })}
-
-            {productos.length < 4 && (
-              <Link href="/vendedor/nuevo" className="shrink-0 w-48 md:w-56 snap-start">
-                <div className="aspect-square bg-white rounded-xl overflow-hidden flex flex-col items-center justify-center border-2 border-dashed border-[#0a0a0a]/10 hover:border-[#0a0a0a]/30 transition group p-4">
-                  <svg className="w-8 h-8 text-[#0a0a0a]/15 group-hover:text-[#0a0a0a]/40 transition mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349M3.75 21V9.349m0 0a3.001 3.001 0 0 0 3.75-.615A2.993 2.993 0 0 0 9.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 0 0 2.25 1.016c.896 0 1.7-.393 2.25-1.015a3.001 3.001 0 0 0 3.75.614m-16.5 0a3.004 3.004 0 0 1-.621-4.72l1.189-1.19A1.5 1.5 0 0 1 5.378 3h13.243a1.5 1.5 0 0 1 1.06.44l1.19 1.189a3 3 0 0 1-.621 4.72M6.75 18h3.75a.75.75 0 0 0 .75-.75V13.5a.75.75 0 0 0-.75-.75H6.75a.75.75 0 0 0-.75.75v3.75c0 .414.336.75.75.75Z" />
-                  </svg>
-                  <p className="text-sm font-medium text-[#0a0a0a]/25 group-hover:text-[#0a0a0a]/50 transition text-center">
-                    ¿Vendés en Bahía?
-                  </p>
-                  <p className="text-xs text-[#0a0a0a]/15 mt-1 text-center font-light">
-                    Sumá tus productos
-                  </p>
-                </div>
-              </Link>
-            )}
-          </div>
-
-          {productos.length > 3 && (
-            <button
-              onClick={() => scroll(1)}
-              className={`absolute right-0 top-1/2 -translate-y-1/2 z-10 w-9 h-9 flex items-center justify-center cursor-pointer transition-all bg-white/90 backdrop-blur-sm shadow-md rounded-full ${canScrollRight ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-              aria-label="Siguiente"
-            >
-              <svg className="w-4 h-4 text-[#0a0a0a]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-              </svg>
-            </button>
-          )}
-        </div>
-      </div>
-    </section>
-  )
-}
-
-
-function ColeccionCurada({ coleccion }) {
-  const scrollRef = useRef(null)
-
-  function scroll(direction) {
-    scrollRef.current?.scrollBy({ left: direction * 260, behavior: 'smooth' })
-  }
-
-  return (
-    <section
-      className="rounded-2xl mx-4 md:mx-8 py-10 md:py-8 px-6 md:px-10 mb-8 overflow-hidden"
-      style={{ backgroundColor: coleccion.color, color: '#000' }}
-    >
-      <div>
-        <h2 className="text-xl md:text-2xl font-black tracking-tight">{coleccion.titulo}</h2>
-        <p className="text-sm opacity-50 mt-1 font-light">{coleccion.descripcion}</p>
-      </div>
-
-      <div className="relative mt-6">
-        <button
-          onClick={() => scroll(-1)}
-          className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-9 h-9 hidden md:flex items-center justify-center cursor-pointer transition-all bg-white/90 backdrop-blur-sm shadow-md rounded-full opacity-0 hover:opacity-100"
-          aria-label="Anterior"
-        >
-          <svg className="w-4 h-4 text-[#0a0a0a]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
-          </svg>
-        </button>
-
         <div
           ref={scrollRef}
-          className="flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory"
+          className="no-scrollbar flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory"
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
-          {coleccion.productos.map((prod) => (
-            <Link
-              key={prod.id}
-              href={`/producto/${prod.id}`}
-              className="shrink-0 w-48 md:w-56 snap-start group"
-            >
-              <div className="aspect-square bg-white/30 rounded-xl overflow-hidden flex items-center justify-center">
-                <span className="opacity-30 text-xs font-light">foto</span>
+          {productos.map((prod) => {
+            const imageUrl = getImageUrl(prod.media)
+            return (
+              <div key={prod.id} className="shrink-0 w-48 md:w-56 snap-start relative">
+                <Link href={`/producto/${prod.id}`} className="block group">
+                  <div className="aspect-square bg-[#ECEAE3] rounded-xl overflow-hidden flex items-center justify-center">
+                    {imageUrl ? (
+                      <img src={imageUrl} alt={prod.nombre} className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-[#0a0a0a]/20 text-xs font-light">foto</span>
+                    )}
+                  </div>
+                  <div className="mt-2.5">
+                    <p
+                      className="whitespace-nowrap overflow-hidden text-ellipsis"
+                      style={{ fontFamily: "'Inter', sans-serif", fontWeight: 400, fontSize: '13.5px', color: '#0a0a0a' }}
+                    >
+                      {prod.nombre}
+                    </p>
+                    <p
+                      style={{ fontFamily: "'Inter', sans-serif", fontWeight: 300, fontSize: '12px', color: '#aaa', marginTop: '2px' }}
+                    >
+                      {prod.vendedor?.nombre_negocio}
+                    </p>
+                    <p
+                      style={{ fontFamily: "'Inter', sans-serif", fontWeight: 500, fontSize: '14px', color: '#0a0a0a', marginTop: '4px' }}
+                    >
+                      ${Number(prod.precio).toLocaleString('es-AR')}
+                    </p>
+                  </div>
+                </Link>
+                <div className="absolute top-2 right-2">
+                  <BotonFavorito
+                    productoId={prod.id}
+                    className="w-8 h-8 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center text-gray-500"
+                  />
+                </div>
               </div>
-              <div className="mt-2.5">
-                <p className="text-sm font-medium group-hover:opacity-70 transition truncate">{prod.nombre}</p>
-                <p className="text-xs opacity-40 mt-0.5 font-light">{prod.vendedor}</p>
-                <p className="text-sm font-semibold mt-1">${prod.precio.toLocaleString('es-AR')}</p>
+            )
+          })}
+
+          {productos.length < 4 && (
+            <Link href="/vendedor/nuevo" className="shrink-0 w-48 md:w-56 snap-start">
+              <div className="aspect-square bg-white rounded-xl overflow-hidden flex flex-col items-center justify-center border-2 border-dashed border-[#0a0a0a]/10 hover:border-[#0a0a0a]/30 transition group p-4">
+                <svg className="w-8 h-8 text-[#0a0a0a]/15 group-hover:text-[#0a0a0a]/40 transition mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349M3.75 21V9.349m0 0a3.001 3.001 0 0 0 3.75-.615A2.993 2.993 0 0 0 9.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 0 0 2.25 1.016c.896 0 1.7-.393 2.25-1.015a3.001 3.001 0 0 0 3.75.614m-16.5 0a3.004 3.004 0 0 1-.621-4.72l1.189-1.19A1.5 1.5 0 0 1 5.378 3h13.243a1.5 1.5 0 0 1 1.06.44l1.19 1.189a3 3 0 0 1-.621 4.72M6.75 18h3.75a.75.75 0 0 0 .75-.75V13.5a.75.75 0 0 0-.75-.75H6.75a.75.75 0 0 0-.75.75v3.75c0 .414.336.75.75.75Z" />
+                </svg>
+                <p className="text-sm font-medium text-[#0a0a0a]/25 group-hover:text-[#0a0a0a]/50 transition text-center">
+                  ¿Vendés en Bahía?
+                </p>
+                <p className="text-xs text-[#0a0a0a]/15 mt-1 text-center font-light">
+                  Sumá tus productos
+                </p>
               </div>
             </Link>
-          ))}
+          )}
         </div>
 
-        <button
-          onClick={() => scroll(1)}
-          className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-9 h-9 hidden md:flex items-center justify-center cursor-pointer transition-all bg-white/90 backdrop-blur-sm shadow-md rounded-full opacity-0 hover:opacity-100"
-          aria-label="Siguiente"
-        >
-          <svg className="w-4 h-4 text-[#0a0a0a]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-          </svg>
-        </button>
+        <BarraScrollCustom scrollRef={scrollRef} deps={[productos.length]} style={{ marginTop: '20px' }} />
       </div>
     </section>
   )
@@ -634,85 +475,74 @@ function ColeccionCurada({ coleccion }) {
 
 function ValoresCarrusel() {
   const scrollRef = useRef(null)
-  const [canScrollLeft, setCanScrollLeft] = useState(false)
-  const [canScrollRight, setCanScrollRight] = useState(true)
-
-  function updateArrows() {
-    const el = scrollRef.current
-    if (!el) return
-    setCanScrollLeft(el.scrollLeft > 2)
-    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 2)
-  }
-
-  useEffect(() => {
-    const el = scrollRef.current
-    if (!el) return
-    el.addEventListener('scroll', updateArrows)
-    updateArrows()
-    return () => el.removeEventListener('scroll', updateArrows)
-  }, [])
-
-  function scroll(direction) {
-    scrollRef.current?.scrollBy({ left: direction * 280, behavior: 'smooth' })
-  }
 
   return (
     <section className="py-5 md:py-7 px-4 md:px-8">
       <div className="max-w-6xl mx-auto">
-        <h2 className="text-xl md:text-2xl font-black text-[#0a0a0a] tracking-tight mb-6">
+        <h2
+          style={{
+            fontFamily: 'Fraunces, serif',
+            fontWeight: 500,
+            fontSize: '28px',
+            color: '#0a0a0a',
+            letterSpacing: '-0.02em',
+            marginBottom: '24px',
+          }}
+        >
           Lo que nos mueve
         </h2>
 
-        <div className="relative">
-          <button
-            onClick={() => scroll(-1)}
-            className={`absolute left-0 top-1/2 -translate-y-1/2 z-10 w-9 h-9 flex items-center justify-center cursor-pointer transition-all bg-white/90 backdrop-blur-sm shadow-md rounded-full ${canScrollLeft ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-            aria-label="Anterior"
-          >
-            <svg className="w-4 h-4 text-[#0a0a0a]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
-            </svg>
-          </button>
-
-          <div
-            ref={scrollRef}
-            className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory"
-            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-          >
-            {VALORES.map((item, i) =>
-              item.tipo === 'texto' ? (
-                <div
-                  key={i}
-                  className="shrink-0 w-60 md:w-72 bg-white rounded-xl p-6 snap-start"
+        <div
+          ref={scrollRef}
+          className="no-scrollbar flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        >
+          {VALORES.map((item, i) =>
+            item.tipo === 'texto' ? (
+              <div
+                key={i}
+                className="shrink-0 w-60 md:w-72 bg-white rounded-xl p-6 snap-start"
+              >
+                <h3
+                  style={{
+                    fontFamily: 'Fraunces, serif',
+                    fontWeight: 500,
+                    fontSize: '18px',
+                    color: '#0a0a0a',
+                    letterSpacing: '-0.02em',
+                    marginBottom: '8px',
+                  }}
                 >
-                  <h3 className="text-lg font-black text-[#0a0a0a] mb-2 tracking-tight">{item.titulo}</h3>
-                  <p className="text-sm text-[#0a0a0a]/40 leading-relaxed font-light">{item.descripcion}</p>
-                </div>
-              ) : (
-                <div
-                  key={i}
-                  className="shrink-0 w-44 md:w-56 rounded-xl overflow-hidden snap-start bg-[#ECEAE3]"
+                  {item.titulo}
+                </h3>
+                <p
+                  style={{
+                    fontFamily: 'Poppins, sans-serif',
+                    fontWeight: 300,
+                    fontSize: '13.5px',
+                    color: '#888',
+                    lineHeight: 1.65,
+                  }}
                 >
-                  <img
-                    src={item.src}
-                    alt="Imagen de marca"
-                    className="w-full h-full object-cover min-h-[160px] md:min-h-[200px]"
-                  />
-                </div>
-              )
-            )}
-          </div>
-
-          <button
-            onClick={() => scroll(1)}
-            className={`absolute right-0 top-1/2 -translate-y-1/2 z-10 w-9 h-9 flex items-center justify-center cursor-pointer transition-all bg-white/90 backdrop-blur-sm shadow-md rounded-full ${canScrollRight ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-            aria-label="Siguiente"
-          >
-            <svg className="w-4 h-4 text-[#0a0a0a]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-            </svg>
-          </button>
+                  {item.descripcion}
+                </p>
+              </div>
+            ) : (
+              <div
+                key={i}
+                className="shrink-0 w-44 md:w-56 rounded-xl overflow-hidden snap-start bg-[#ECEAE3]"
+              >
+                <img
+                  src={item.src}
+                  alt="Imagen de marca"
+                  className="w-full h-full object-cover min-h-[160px] md:min-h-[200px]"
+                />
+              </div>
+            )
+          )}
         </div>
+
+        <BarraScrollCustom scrollRef={scrollRef} style={{ marginTop: '20px' }} />
       </div>
     </section>
   )

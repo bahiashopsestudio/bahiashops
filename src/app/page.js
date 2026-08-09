@@ -24,11 +24,11 @@ export default async function Home() {
     .limit(12)
 
   // ── Elegidos de la semana (destacados) ──
-  const { data: elegidos } = await supabase
+  const { data: elegidosRaw } = await supabase
     .from('productos')
     .select(`
       id, nombre, precio, precio_anterior,
-      vendedor:vendedores(id, nombre_negocio, slug),
+      vendedor:vendedores(id, nombre_negocio, slug, barrio_id),
       media:producto_media(url, es_principal, orden)
     `)
     .eq('estado', 'activo')
@@ -42,12 +42,40 @@ export default async function Home() {
     .not('latitud', 'is', null)
     .not('longitud', 'is', null)
 
+  // ── Productos destacados (para el carrusel filtrable por categoría) ──
+  const { data: destacadosRaw } = await supabase
+    .from('productos')
+    .select(`
+      id, nombre, precio, categoria_id, creado_en,
+      vendedor:vendedores(id, nombre_negocio, barrio_id),
+      media:producto_media(url, es_principal, orden)
+    `)
+    .eq('estado', 'activo')
+    .order('destacado', { ascending: false })
+    .order('creado_en', { ascending: false })
+    .limit(200)
+
+  const { data: barrios } = await supabase
+    .from('barrios')
+    .select('id, nombre')
+
+  const barriosMap = new Map((barrios || []).map((b) => [b.id, b.nombre]))
+
+  const conBarrio = (p) => ({
+    ...p,
+    barrioNombre: p.vendedor?.barrio_id ? barriosMap.get(p.vendedor.barrio_id) || null : null,
+  })
+
+  const elegidos = (elegidosRaw || []).map(conBarrio)
+  const destacados = (destacadosRaw || []).map(conBarrio)
+
   return (
     <HomeContent
       categorias={categorias || []}
       recientes={recientes || []}
-      elegidos={elegidos || []}
+      elegidos={elegidos}
       vendedoresMapa={vendedoresMapa || []}
+      destacados={destacados}
     />
   )
 }

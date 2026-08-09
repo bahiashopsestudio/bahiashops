@@ -5,14 +5,19 @@ import Link from 'next/link'
 
 export default function Footer() {
   return (
-    <footer
-      className="w-full px-4 md:px-8 pt-15 pb-32"
-      style={{
-        fontFamily: "'Inter', sans-serif",
-        backgroundColor: '#015444',
-        color: '#9cc3ea',
-      }}
-    >
+    <>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500&display=swap"
+      />
+      <footer
+        className="w-full px-4 md:px-8 pt-15 pb-32"
+        style={{
+          fontFamily: "'Inter', sans-serif",
+          backgroundColor: '#015444',
+          color: '#9cc3ea',
+        }}
+      >
       <div className="max-w-3xl mx-auto">
 
         {/* Fila principal */}
@@ -20,11 +25,13 @@ export default function Footer() {
 
           {/* Columna izquierda: marca + contacto */}
           <div>
-            <p className="text-lg font-bold tracking-tight">Bahía Shops</p>
-            <p className="text-sm mt-1" style={{ color: '#9cc3ea' }}>
-              Tu comercio local, online.
+            <p style={{ fontFamily: "'Inter', sans-serif", fontWeight: 600, fontSize: '18px', letterSpacing: '-0.01em' }}>
+              Bahía Shops
             </p>
-            <p className="text-sm mt-3" style={{ color: '#9cc3ea' }}>
+            <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 300, fontSize: '14px', color: '#9cc3ea', marginTop: '4px' }}>
+              Lo que buscás ya está en tu ciudad.
+            </p>
+            <p style={{ fontFamily: "'Inter', sans-serif", fontWeight: 400, fontSize: '13px', color: '#9cc3ea', marginTop: '12px' }}>
               <a
                 href="mailto:hola@bahiashops.com"
                 className="underline underline-offset-2 hover:text-[#9cc3ea] transition-colors"
@@ -35,7 +42,10 @@ export default function Footer() {
           </div>
 
           {/* Columna derecha: links */}
-          <div className="flex flex-col gap-2 text-sm" style={{ color: '#9cc3ea' }}>
+          <div
+            className="flex flex-col gap-2"
+            style={{ fontFamily: "'Inter', sans-serif", fontWeight: 400, fontSize: '13px', color: '#9cc3ea' }}
+          >
             <Link
               href="/terminos"
               className="hover:text-[#9cc3ea] transition-colors underline-offset-2 hover:underline"
@@ -76,13 +86,19 @@ export default function Footer() {
         />
 
         {/* Bloque legal obligatorio */}
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 text-xs" style={{ color: '#9cc3ea' }}>
+        <div
+          className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6"
+          style={{ fontFamily: "'Inter', sans-serif", fontWeight: 400, fontSize: '12px', color: '#9cc3ea' }}
+        >
 
           {/* Botón de arrepentimiento — Resolución 424/2020 */}
           <a
             href="mailto:bahiashops.estudio@gmail.com?subject=Solicitud%20de%20arrepentimiento%20-%20Ley%2024.240"
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-medium transition-colors"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full transition-colors"
             style={{
+              fontFamily: "'Inter', sans-serif",
+              fontWeight: 500,
+              fontSize: '12px',
               backgroundColor: 'rgba(156,195,234,0.16)',
               color: '#9cc3ea',
             }}
@@ -105,13 +121,13 @@ export default function Footer() {
 
         {/* Copyright */}
         <p
-          className="mt-6 text-xs"
-          style={{ color: '#9cc3ea' }}
+          style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 300, fontSize: '12px', color: '#9cc3ea', marginTop: '24px' }}
         >
           © {new Date().getFullYear()} Bahía Shops. Bahía Blanca, Argentina.
         </p>
 
       </div>
-    </footer>
+      </footer>
+    </>
   )
 }

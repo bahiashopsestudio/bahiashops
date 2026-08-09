@@ -7,7 +7,7 @@ import MenuTakeover from '@/components/MenuTakeover'
 import VolverAtras from '@/components/VolverAtras'
 import FormularioDireccion from '@/components/FormularioDireccion'
 
-const MENU_CATEGORIAS = ['moda','belleza-y-cuidado-personal','gastronomia','hogar-deco-y-jardin','diseno-y-artesanias','tecnologia','salud-y-bienestar','arte-e-ilustracion']
+const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage']
 
 export default function MisDireccionesPage() {
   const supabase = createClient()

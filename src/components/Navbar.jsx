@@ -18,8 +18,8 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
 
   useEffect(() => {
     function handleScroll() {
-      setScrolled(window.scrollY > 80)
-      setShowPill(window.scrollY > 400)
+      setScrolled(window.scrollY > 60)
+      setShowPill(window.scrollY > 60)
     }
     window.addEventListener('scroll', handleScroll, { passive: true })
     return () => window.removeEventListener('scroll', handleScroll)
@@ -27,7 +27,7 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
 
   // Colores según estado
   const showDark = isSolid || scrolled
-  const linkColor = showDark ? 'rgba(10,10,10,0.45)' : 'rgba(255,255,255,0.5)'
+  const linkColor = showDark ? 'rgba(10,10,10,0.45)' : 'rgba(255,255,255,1)'
   const linkHover = showDark ? 'rgba(10,10,10,1)' : 'rgba(255,255,255,1)'
   const iconColor = showDark ? 'text-[#0a0a0a]/40 hover:text-[#0a0a0a]' : 'text-white/40 hover:text-white'
 
@@ -57,23 +57,23 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
 
           {/* Zona 2: Navegación principal */}
           <div className="flex items-center gap-5 ml-12">
-            <Link href="/mapa" className="text-[13px] font-light transition-colors" style={{ color: linkColor }}>
+            <Link href="/mapa" className="text-[13px] font-normal transition-colors" style={{ color: linkColor }}>
               Mapa
             </Link>
-            <button onClick={onToggleMenu} className="text-[13px] font-light transition-colors cursor-pointer" style={{ color: linkColor }}>
+            <button onClick={onToggleMenu} className="text-[13px] font-normal transition-colors cursor-pointer" style={{ color: linkColor }}>
               Categorías
             </button>
-            <Link href="/" className="text-[13px] font-light transition-colors" style={{ color: linkColor }}>
+            <Link href="/" className="text-[13px] font-normal transition-colors" style={{ color: linkColor }}>
               Descubrí
             </Link>
           </div>
 
           {/* Zona 3: Secciones */}
           <div className="flex items-center gap-5 ml-auto mr-6">
-            <Link href="/" className="text-[13px] font-light transition-colors" style={{ color: linkColor }}>
+            <Link href="/" className="text-[13px] font-normal transition-colors" style={{ color: linkColor }}>
               Historias
             </Link>
-            <Link href="/sobre-nosotros" className="text-[13px] font-light transition-colors" style={{ color: linkColor }}>
+            <Link href="/sobre-nosotros" className="text-[13px] font-normal transition-colors" style={{ color: linkColor }}>
               Quiénes somos
             </Link>
           </div>

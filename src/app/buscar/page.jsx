@@ -11,7 +11,7 @@ import VolverAtras from '@/components/VolverAtras'
 import Buscador from '@/components/Buscador'
 import BotonFavorito from '@/components/BotonFavorito'
 
-const MENU_CATEGORIAS = ['moda','belleza-y-cuidado-personal','gastronomia','hogar-deco-y-jardin','diseno-y-artesanias','tecnologia','salud-y-bienestar','arte-e-ilustracion']
+const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage']
 
 function getImageUrl(media) {
   if (!media?.length) return null

@@ -75,3 +75,7 @@ body {
   background: var(--brand-soft);
   color: var(--ink);
 }
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

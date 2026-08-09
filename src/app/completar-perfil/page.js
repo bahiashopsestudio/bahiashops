@@ -7,7 +7,7 @@ import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
 import ProfileForm from './ProfileForm'
 
-const MENU_CATEGORIAS = ['moda','belleza-y-cuidado-personal','gastronomia','hogar-deco-y-jardin','diseno-y-artesanias','tecnologia','salud-y-bienestar','arte-e-ilustracion']
+const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage']
 
 export default function CompletarPerfilPage() {
   const supabase = createClient()

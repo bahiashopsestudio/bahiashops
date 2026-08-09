@@ -1,5 +1,4 @@
 'use client';
-
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import imageCompression from 'browser-image-compression';
@@ -17,7 +16,14 @@ import Navbar from '@/components/Navbar';
 import MenuTakeover from '@/components/MenuTakeover';
 import VolverAtras from '@/components/VolverAtras';
 
-const MENU_CATEGORIAS = ['moda','belleza-y-cuidado-personal','gastronomia','hogar-deco-y-jardin','diseno-y-artesanias','tecnologia','salud-y-bienestar','arte-e-ilustracion'];
+const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','hogar-y-deco','artes-y-oficios','joyeria-y-accesorios','deporte','libros','vintage'];
+
+const OPCIONES_GENERO = [
+  { valor: 'mujer', label: 'Mujer' },
+  { valor: 'hombre', label: 'Hombre' },
+  { valor: 'ninos', label: 'Niños' },
+  { valor: 'sin_genero', label: 'Sin género' },
+];
 
 const inputClasses =
   'w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:border-[#0a0a0a] focus:ring-1 focus:ring-[#0a0a0a]/20 transition-colors';
@@ -26,7 +32,6 @@ const selectClasses = `${inputClasses} bg-white`;
 function SortableFoto({ foto, index, onQuitar }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: foto.preview });
-
   return (
     <div
       ref={setNodeRef}
@@ -54,24 +59,47 @@ export default function NuevoProductoPage() {
   const router = useRouter();
 
   const [datos, setDatos] = useState({
-    nombre: '', descripcion: '', subcategoria_id: '', marca: '',
+    nombre: '', descripcion: '', marca: '',
     precio: '', precio_anterior: '', tiempo_preparacion: '',
   });
 
-  const [subcategorias, setSubcategorias] = useState([]);
-  const [categoriaVendedor, setCategoriaVendedor] = useState(null);
-  const [categoria, setCategoria] = useState(null);
-  const [nombreNegocio, setNombreNegocio] = useState('');
+  // ── Categorías y subcategorías ──
+  const [todasCategorias, setTodasCategorias] = useState([]);
+  const [categoriaPrincipalId, setCategoriaPrincipalId] = useState('');
+  const [subcategoriasPrincipal, setSubcategoriasPrincipal] = useState([]);
+  const [subcategoriaPrincipalId, setSubcategoriaPrincipalId] = useState('');
+  const [subcategoriaPersonalizada, setSubcategoriaPersonalizada] = useState('');
+
+  const [categoriaSecundariaId, setCategoriaSecundariaId] = useState('');
+  const [subcategoriasSecundaria, setSubcategoriasSecundaria] = useState([]);
+  const [subcategoriaSecundariaId, setSubcategoriaSecundariaId] = useState('');
+  const [subcategoriaSecundariaPersonalizada, setSubcategoriaSecundariaPersonalizada] = useState('');
+
+  // ── Género ──
+  const [genero, setGenero] = useState([]);
+
+  // ── Sellos ──
+  const [todosSellos, setTodosSellos] = useState([]);
+  const [sellosSeleccionados, setSellosSeleccionados] = useState([]);
+
+  // ── Vendedor ──
   const [vendedorId, setVendedorId] = useState(null);
+  const [nombreNegocio, setNombreNegocio] = useState('');
+  const [categoria, setCategoria] = useState(null);
+
+  // ── Fotos ──
   const [fotos, setFotos] = useState([]);
   const [comprimiendo, setComprimiendo] = useState(false);
+
+  // ── Variantes ──
   const [nombrePropiedad, setNombrePropiedad] = useState('');
   const [valores, setValores] = useState([]);
   const [valorNuevo, setValorNuevo] = useState('');
+
+  // ── UI ──
   const [guardandoProducto, setGuardandoProducto] = useState(false);
   const [mostrarPrevia, setMostrarPrevia] = useState(false);
   const [bloqueoModeracion, setBloqueoModeracion] = useState(null);
-
   const [menuOpen, setMenuOpen] = useState(false);
   const [categorias, setCategorias] = useState([]);
 
@@ -80,55 +108,101 @@ export default function NuevoProductoPage() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
+  // ── Cargar datos iniciales ──
   useEffect(() => {
-    if (menuOpen) { document.body.style.overflow = 'hidden' } else { document.body.style.overflow = '' }
-    return () => { document.body.style.overflow = '' }
-  }, [menuOpen]);
-
-  useEffect(() => {
-    async function cargarCats() {
-      const { data } = await supabase.from('categorias').select('id, nombre, slug').eq('activa', true).order('orden');
-      if (data) setCategorias(data);
-    }
-    cargarCats();
-  }, []);
-
-  useEffect(() => {
-    async function cargarVendedor() {
+    async function cargarDatosIniciales() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const { data, error } = await supabase
+
+      // Vendedor
+      const { data: vendedor, error } = await supabase
         .from('vendedores')
         .select('id, categoria_id, nombre_negocio')
         .eq('usuario_id', user.id)
         .single();
-      if (error) console.error('Error cargando el vendedor:', error);
-      else {
-        setVendedorId(data.id);
-        setCategoriaVendedor(data.categoria_id);
-        setNombreNegocio(data.nombre_negocio || '');
-      }
+      if (error) { console.error('Error cargando el vendedor:', error); return; }
+
+      setVendedorId(vendedor.id);
+      setNombreNegocio(vendedor.nombre_negocio || '');
+      if (vendedor.categoria_id) setCategoriaPrincipalId(String(vendedor.categoria_id));
+
+      // Categorías activas (para navegación)
+      const { data: cats } = await supabase
+        .from('categorias')
+        .select('id, nombre, slug')
+        .eq('activa', true)
+        .order('orden');
+      if (cats) setCategorias(cats);
+
+      // Todas las categorías (para selectores de producto)
+      const { data: todasCats } = await supabase
+        .from('categorias')
+        .select('id, nombre')
+        .order('orden');
+      if (todasCats) setTodasCategorias(todasCats);
+
+      // Sellos disponibles
+      const { data: sellos } = await supabase
+        .from('sellos')
+        .select('id, nombre')
+        .eq('activa', true)
+        .order('orden');
+      if (sellos) setTodosSellos(sellos);
+
+      // Sellos del vendedor (preseleccionados)
+      const { data: sellosVendedor } = await supabase
+        .from('vendedor_sellos')
+        .select('sello_id')
+        .eq('vendedor_id', vendedor.id);
+      if (sellosVendedor) setSellosSeleccionados(sellosVendedor.map((s) => s.sello_id));
     }
-    cargarVendedor();
+    cargarDatosIniciales();
   }, []);
 
+  // ── Cargar subcategorías cuando cambia la categoría principal ──
   useEffect(() => {
-    if (!categoriaVendedor) { setSubcategorias([]); setCategoria(null); return; }
-    async function cargarSubcategorias() {
-      const { data, error } = await supabase.from('subcategorias').select('id, nombre')
-        .eq('categoria_id', categoriaVendedor).eq('activa', true).order('orden');
-      if (error) console.error('Error cargando subcategorías:', error);
-      else setSubcategorias(data);
+    if (!categoriaPrincipalId) { setSubcategoriasPrincipal([]); setSubcategoriaPrincipalId(''); return; }
+    async function cargar() {
+      const { data } = await supabase
+        .from('subcategorias')
+        .select('id, nombre')
+        .eq('categoria_id', Number(categoriaPrincipalId))
+        .eq('activa', true)
+        .order('orden');
+      if (data) setSubcategoriasPrincipal(data);
     }
     async function cargarCategoria() {
-      const { data } = await supabase.from('categorias').select('nombre, slug')
-        .eq('id', categoriaVendedor).single();
+      const { data } = await supabase
+        .from('categorias')
+        .select('nombre, slug')
+        .eq('id', Number(categoriaPrincipalId))
+        .single();
       if (data) setCategoria(data);
     }
-    cargarSubcategorias();
+    cargar();
     cargarCategoria();
-  }, [categoriaVendedor]);
+    setSubcategoriaPrincipalId('');
+    setSubcategoriaPersonalizada('');
+  }, [categoriaPrincipalId]);
 
+  // ── Cargar subcategorías cuando cambia la categoría secundaria ──
+  useEffect(() => {
+    if (!categoriaSecundariaId) { setSubcategoriasSecundaria([]); setSubcategoriaSecundariaId(''); return; }
+    async function cargar() {
+      const { data } = await supabase
+        .from('subcategorias')
+        .select('id, nombre')
+        .eq('categoria_id', Number(categoriaSecundariaId))
+        .eq('activa', true)
+        .order('orden');
+      if (data) setSubcategoriasSecundaria(data);
+    }
+    cargar();
+    setSubcategoriaSecundariaId('');
+    setSubcategoriaSecundariaPersonalizada('');
+  }, [categoriaSecundariaId]);
+
+  // ── Moderación ──
   useEffect(() => {
     const timer = setTimeout(() => {
       const texto = `${datos.nombre} ${datos.descripcion} ${datos.marca}`;
@@ -138,6 +212,7 @@ export default function NuevoProductoPage() {
     return () => clearTimeout(timer);
   }, [datos.nombre, datos.descripcion, datos.marca]);
 
+  // ── Escape para cerrar previa ──
   useEffect(() => {
     if (!mostrarPrevia) return;
     function onKey(e) { if (e.key === 'Escape') setMostrarPrevia(false); }
@@ -146,7 +221,32 @@ export default function NuevoProductoPage() {
     return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = ''; };
   }, [mostrarPrevia]);
 
+  // ── Helpers ──
+  const subcategoriaPrincipalEsOtra = subcategoriasPrincipal.find(
+    (s) => s.id === Number(subcategoriaPrincipalId)
+  )?.nombre === 'Otra';
+
+  const subcategoriaSecundariaEsOtra = subcategoriasSecundaria.find(
+    (s) => s.id === Number(subcategoriaSecundariaId)
+  )?.nombre === 'Otra';
+
+  const categoriasParaSecundaria = todasCategorias.filter(
+    (c) => String(c.id) !== categoriaPrincipalId
+  );
+
   function actualizarCampo(campo, valor) { setDatos({ ...datos, [campo]: valor }); }
+
+  function toggleGenero(valor) {
+    setGenero((prev) =>
+      prev.includes(valor) ? prev.filter((g) => g !== valor) : [...prev, valor]
+    );
+  }
+
+  function toggleSello(selloId) {
+    setSellosSeleccionados((prev) =>
+      prev.includes(selloId) ? prev.filter((id) => id !== selloId) : [...prev, selloId]
+    );
+  }
 
   function formatearPrecio(valor) {
     if (!valor) return '';
@@ -202,17 +302,26 @@ export default function NuevoProductoPage() {
     setMostrarPrevia(true);
   }
 
+  // ── Guardar producto ──
   async function guardarProducto() {
     if (!datos.nombre.trim()) { alert('Poné un nombre al producto.'); return; }
     if (!datos.descripcion.trim()) { alert('Escribí una descripción.'); return; }
     if (!datos.precio) { alert('El precio es obligatorio.'); return; }
     if (fotos.length === 0) { alert('Subí al menos una foto.'); return; }
     if (!vendedorId) { alert('No se pudo identificar tu cuenta de vendedor. Recargá la página.'); return; }
+    if (!categoriaPrincipalId) { alert('Elegí una categoría para el producto.'); return; }
 
     const tieneNombre = nombrePropiedad.trim() !== '';
     const tieneValores = valores.length > 0;
     if (tieneNombre !== tieneValores) { alert('Si cargás variantes, completá el nombre (ej: Talle) y al menos una opción.'); return; }
     if (datos.precio_anterior && Number(datos.precio_anterior) <= Number(datos.precio)) { alert('El precio anterior tiene que ser mayor al precio actual.'); return; }
+
+    if (subcategoriaPrincipalEsOtra && !subcategoriaPersonalizada.trim()) {
+      alert('Escribí qué subcategoría es (elegiste "Otra").'); return;
+    }
+    if (subcategoriaSecundariaEsOtra && !subcategoriaSecundariaPersonalizada.trim()) {
+      alert('Escribí qué subcategoría secundaria es (elegiste "Otra").'); return;
+    }
 
     const textoARevisar = `${datos.nombre} ${datos.descripcion} ${datos.marca}`;
     const moderacion = revisarPublicacion(textoARevisar);
@@ -220,6 +329,7 @@ export default function NuevoProductoPage() {
 
     setGuardandoProducto(true);
     try {
+      // Subir fotos
       const urls = [];
       for (let i = 0; i < fotos.length; i++) {
         const foto = fotos[i];
@@ -230,28 +340,66 @@ export default function NuevoProductoPage() {
         urls.push(dataUrl.publicUrl);
       }
 
-      const { data: productoCreado, error: errorProducto } = await supabase.from('productos').insert({
-        vendedor_id: vendedorId, categoria_id: categoriaVendedor,
-        subcategoria_id: datos.subcategoria_id ? Number(datos.subcategoria_id) : null,
-        nombre: datos.nombre.trim(), descripcion: datos.descripcion.trim(),
-        marca: datos.marca.trim() || null, precio: Number(datos.precio),
-        precio_anterior: datos.precio_anterior ? Number(datos.precio_anterior) : null,
-        tiempo_preparacion: datos.tiempo_preparacion || null, estado: 'en_revision',
-        tiene_variantes: tieneNombre && tieneValores,
-        propiedad_1_nombre: tieneNombre ? nombrePropiedad.trim() : null,
-        moderacion_avisos: moderacion.avisos,
-      }).select().single();
+      // Insertar producto
+      const { data: productoCreado, error: errorProducto } = await supabase
+        .from('productos')
+        .insert({
+          vendedor_id: vendedorId,
+          categoria_id: Number(categoriaPrincipalId),
+          subcategoria_id: subcategoriaPrincipalId ? Number(subcategoriaPrincipalId) : null,
+          subcategoria_personalizada: subcategoriaPrincipalEsOtra ? subcategoriaPersonalizada.trim() : null,
+          categoria_secundaria_id: categoriaSecundariaId ? Number(categoriaSecundariaId) : null,
+          subcategoria_secundaria_id: subcategoriaSecundariaId ? Number(subcategoriaSecundariaId) : null,
+          subcategoria_secundaria_personalizada: subcategoriaSecundariaEsOtra ? subcategoriaSecundariaPersonalizada.trim() : null,
+          genero: genero.length > 0 ? genero : null,
+          nombre: datos.nombre.trim(),
+          descripcion: datos.descripcion.trim(),
+          marca: datos.marca.trim() || null,
+          precio: Number(datos.precio),
+          precio_anterior: datos.precio_anterior ? Number(datos.precio_anterior) : null,
+          tiempo_preparacion: datos.tiempo_preparacion || null,
+          estado: 'en_revision',
+          tiene_variantes: tieneNombre && tieneValores,
+          propiedad_1_nombre: tieneNombre ? nombrePropiedad.trim() : null,
+          moderacion_avisos: moderacion.avisos,
+        })
+        .select()
+        .single();
       if (errorProducto) throw new Error('Error al guardar el producto: ' + errorProducto.message);
 
       const productoId = productoCreado.id;
-      const mediaItems = urls.map((url, index) => ({ producto_id: productoId, url, tipo: 'foto', orden: index, es_principal: index === 0 }));
+
+      // Guardar fotos
+      const mediaItems = urls.map((url, index) => ({
+        producto_id: productoId, url, tipo: 'foto', orden: index, es_principal: index === 0,
+      }));
       const { error: errorMedia } = await supabase.from('producto_media').insert(mediaItems);
       if (errorMedia) throw new Error('El producto se guardó pero hubo un error con las fotos: ' + errorMedia.message);
 
+      // Guardar variantes
       if (tieneNombre && tieneValores) {
         const variantesItems = valores.map((valor) => ({ producto_id: productoId, propiedad_1_valor: valor }));
         const { error: errorVariantes } = await supabase.from('producto_variantes').insert(variantesItems);
         if (errorVariantes) throw new Error('El producto se guardó pero hubo un error con las variantes: ' + errorVariantes.message);
+      }
+
+      // Guardar sellos del producto
+      if (sellosSeleccionados.length > 0) {
+        const filasSellos = sellosSeleccionados.map((selloId) => ({
+          producto_id: productoId,
+          sello_id: selloId,
+        }));
+        const { error: errorSellos } = await supabase.from('producto_sellos').insert(filasSellos);
+        if (errorSellos) console.error('Error al guardar sellos del producto:', errorSellos.message);
+      }
+
+      // Activar categoría si estaba inactiva
+      const catPrincipal = todasCategorias.find((c) => c.id === Number(categoriaPrincipalId));
+      if (catPrincipal) {
+        await supabase.from('categorias').update({ activa: true }).eq('id', catPrincipal.id);
+      }
+      if (categoriaSecundariaId) {
+        await supabase.from('categorias').update({ activa: true }).eq('id', Number(categoriaSecundariaId));
       }
 
       alert('¡Producto guardado! Queda en revisión hasta que lo apruebes.');
@@ -264,7 +412,7 @@ export default function NuevoProductoPage() {
     }
   }
 
-  const menuCats = MENU_CATEGORIAS.map(s => categorias.find(c => c.slug === s)).filter(Boolean);
+  const menuCats = MENU_CATEGORIAS.map((s) => categorias.find((c) => c.slug === s)).filter(Boolean);
   const guardarDeshabilitado = guardandoProducto || bloqueoModeracion !== null;
 
   const productoParaPrevia = {
@@ -291,6 +439,7 @@ export default function NuevoProductoPage() {
             <h1 className="text-2xl md:text-3xl font-black text-[#0a0a0a] tracking-tight mb-1">Nuevo producto</h1>
             <p className="text-sm text-[#0a0a0a]/30 font-light mb-6">{nombreNegocio}</p>
 
+            {/* ───── DATOS BÁSICOS ───── */}
             <section className="rounded-2xl border border-[#0a0a0a]/5 p-5">
               <h2 className="text-lg font-black text-[#0a0a0a] tracking-tight mb-4">Datos básicos</h2>
 
@@ -326,16 +475,145 @@ export default function NuevoProductoPage() {
                 )}
               </div>
 
-              {subcategorias.length > 0 && (
+              {/* ── Categoría principal ── */}
+              <div className="mb-4">
+                <label htmlFor="categoriaPrincipal" className="block text-sm text-[#0a0a0a]/60 font-light mb-1">
+                  Categoría *
+                </label>
+                <span className="block text-[11px] text-[#0a0a0a]/25 font-light mb-1">
+                  Prellenada con la de tu emprendimiento. Podés cambiarla si este producto va en otra.
+                </span>
+                <select id="categoriaPrincipal" value={categoriaPrincipalId}
+                  onChange={(e) => setCategoriaPrincipalId(e.target.value)}
+                  required className={selectClasses}>
+                  <option value="">Elegí una categoría</option>
+                  {todasCategorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                </select>
+              </div>
+
+              {/* ── Subcategoría principal ── */}
+              {subcategoriasPrincipal.length > 0 && (
                 <div className="mb-4">
-                  <label htmlFor="subcategoria" className="block text-sm text-[#0a0a0a]/60 font-light mb-1">Subcategoría</label>
-                  <select id="subcategoria" value={datos.subcategoria_id}
-                    onChange={(e) => actualizarCampo('subcategoria_id', e.target.value)} className={selectClasses}>
+                  <label htmlFor="subcategoriaPrincipal" className="block text-sm text-[#0a0a0a]/60 font-light mb-1">
+                    Subcategoría
+                  </label>
+                  <select id="subcategoriaPrincipal" value={subcategoriaPrincipalId}
+                    onChange={(e) => { setSubcategoriaPrincipalId(e.target.value); setSubcategoriaPersonalizada(''); }}
+                    className={selectClasses}>
                     <option value="">Elegí una subcategoría (opcional)</option>
-                    {subcategorias.map((sub) => <option key={sub.id} value={sub.id}>{sub.nombre}</option>)}
+                    {subcategoriasPrincipal.map((sub) => (
+                      <option key={sub.id} value={sub.id}>{sub.nombre}</option>
+                    ))}
                   </select>
                 </div>
               )}
+
+              {/* ── Campo "Otra" para subcategoría principal ── */}
+              {subcategoriaPrincipalEsOtra && (
+                <div className="mb-4">
+                  <label htmlFor="subcategoriaPersonalizada" className="block text-sm text-[#0a0a0a]/60 font-light mb-1">
+                    ¿Cuál? *
+                  </label>
+                  <input id="subcategoriaPersonalizada" type="text" value={subcategoriaPersonalizada}
+                    onChange={(e) => setSubcategoriaPersonalizada(e.target.value)}
+                    placeholder="Escribí la subcategoría" className={inputClasses} />
+                </div>
+              )}
+
+              {/* ── Categoría secundaria ── */}
+              <div className="mb-4">
+                <label htmlFor="categoriaSecundaria" className="block text-sm text-[#0a0a0a]/60 font-light mb-1">
+                  Categoría secundaria <span className="text-[#0a0a0a]/25">(opcional)</span>
+                </label>
+                <span className="block text-[11px] text-[#0a0a0a]/25 font-light mb-1">
+                  Si tu producto encaja en otra categoría además de la principal.
+                </span>
+                <select id="categoriaSecundaria" value={categoriaSecundariaId}
+                  onChange={(e) => setCategoriaSecundariaId(e.target.value)}
+                  className={selectClasses}>
+                  <option value="">Sin categoría secundaria</option>
+                  {categoriasParaSecundaria.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                </select>
+              </div>
+
+              {/* ── Subcategoría secundaria ── */}
+              {subcategoriasSecundaria.length > 0 && (
+                <div className="mb-4">
+                  <label htmlFor="subcategoriaSecundaria" className="block text-sm text-[#0a0a0a]/60 font-light mb-1">
+                    Subcategoría secundaria
+                  </label>
+                  <select id="subcategoriaSecundaria" value={subcategoriaSecundariaId}
+                    onChange={(e) => { setSubcategoriaSecundariaId(e.target.value); setSubcategoriaSecundariaPersonalizada(''); }}
+                    className={selectClasses}>
+                    <option value="">Elegí una subcategoría (opcional)</option>
+                    {subcategoriasSecundaria.map((sub) => (
+                      <option key={sub.id} value={sub.id}>{sub.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* ── Campo "Otra" para subcategoría secundaria ── */}
+              {subcategoriaSecundariaEsOtra && (
+                <div className="mb-4">
+                  <label htmlFor="subcategoriaSecundariaPersonalizada" className="block text-sm text-[#0a0a0a]/60 font-light mb-1">
+                    ¿Cuál? *
+                  </label>
+                  <input id="subcategoriaSecundariaPersonalizada" type="text" value={subcategoriaSecundariaPersonalizada}
+                    onChange={(e) => setSubcategoriaSecundariaPersonalizada(e.target.value)}
+                    placeholder="Escribí la subcategoría" className={inputClasses} />
+                </div>
+              )}
+
+              {/* ── Género ── */}
+              <div className="mb-4">
+                <span className="block text-sm text-[#0a0a0a]/60 font-light mb-1">
+                  Género <span className="text-[#0a0a0a]/25">(opcional)</span>
+                </span>
+                <span className="block text-[11px] text-[#0a0a0a]/25 font-light mb-2">
+                  ¿A quién está dirigido este producto? Podés elegir más de uno.
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {OPCIONES_GENERO.map((op) => {
+                    const activo = genero.includes(op.valor);
+                    return (
+                      <button key={op.valor} type="button" onClick={() => toggleGenero(op.valor)}
+                        className={`px-3 py-1.5 rounded-full text-sm transition-all cursor-pointer border ${
+                          activo
+                            ? 'bg-[#0a0a0a] text-white border-[#0a0a0a]'
+                            : 'bg-white text-[#0a0a0a]/60 border-[#0a0a0a]/10 hover:border-[#0a0a0a]/30'
+                        }`}>
+                        {op.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* ── Sellos ── */}
+              <div className="mb-4">
+                <span className="block text-sm text-[#0a0a0a]/60 font-light mb-1">
+                  Sellos <span className="text-[#0a0a0a]/25">(opcional)</span>
+                </span>
+                <span className="block text-[11px] text-[#0a0a0a]/25 font-light mb-2">
+                  Precargados con los de tu emprendimiento. Podés ajustarlos para este producto.
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {todosSellos.map((s) => {
+                    const activo = sellosSeleccionados.includes(s.id);
+                    return (
+                      <button key={s.id} type="button" onClick={() => toggleSello(s.id)}
+                        className={`px-3 py-1.5 rounded-full text-sm transition-all cursor-pointer border ${
+                          activo
+                            ? 'bg-[#0a0a0a] text-white border-[#0a0a0a]'
+                            : 'bg-white text-[#0a0a0a]/60 border-[#0a0a0a]/10 hover:border-[#0a0a0a]/30'
+                        }`}>
+                        {s.nombre}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
               <div className="mb-4">
                 <label htmlFor="marca" className="block text-sm text-[#0a0a0a]/60 font-light mb-1">Marca (opcional)</label>

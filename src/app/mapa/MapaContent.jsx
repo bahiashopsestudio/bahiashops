@@ -14,7 +14,7 @@ const CENTRO_BB = [-38.7183, -62.2663]
 const COLOR_LOCAL = '#ff1010'
 const COLOR_CASA = '#9cc3ea'
 
-const MENU_CATEGORIAS = ['moda','belleza-y-cuidado-personal','gastronomia','hogar-deco-y-jardin','diseno-y-artesanias','tecnologia','salud-y-bienestar','arte-e-ilustracion']
+const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage']
 
 function iniciales(nombre) {
   if (!nombre) return ''

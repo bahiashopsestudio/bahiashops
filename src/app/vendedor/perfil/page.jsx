@@ -41,7 +41,7 @@ const CONFIG = {
 const TIPOS_VALIDOS = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_BYTES = 3 * 1024 * 1024;
 
-const MENU_CATEGORIAS = ['moda','belleza-y-cuidado-personal','gastronomia','hogar-deco-y-jardin','diseno-y-artesanias','tecnologia','salud-y-bienestar','arte-e-ilustracion'];
+const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage'];
 
 
 function Chevron() {
