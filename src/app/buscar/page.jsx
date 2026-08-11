@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import { Suspense } from 'react'
@@ -10,6 +10,7 @@ import MenuTakeover from '@/components/MenuTakeover'
 import VolverAtras from '@/components/VolverAtras'
 import Buscador from '@/components/Buscador'
 import BotonFavorito from '@/components/BotonFavorito'
+import BarraFiltros from '@/components/BarraFiltros'
 
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage']
 
@@ -24,10 +25,15 @@ function getImageUrl(media) {
 function BuscarContenido() {
   const supabase = createClient()
   const searchParams = useSearchParams()
+  const router = useRouter()
   const q = searchParams.get('q') || ''
+  const generoParam = searchParams.get('genero')
+  const sellosParam = searchParams.get('sellos')
+  const sellosSeleccionados = sellosParam ? sellosParam.split(',').filter(Boolean) : []
 
   const [productos, setProductos] = useState([])
   const [tiendas, setTiendas] = useState([])
+  const [todosSellos, setTodosSellos] = useState([])
   const [cargando, setCargando] = useState(false)
   const [buscado, setBuscado] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -42,6 +48,9 @@ function BuscarContenido() {
     async function cargarCats() {
       const { data } = await supabase.from('categorias').select('id, nombre, slug').eq('activa', true).order('orden')
       if (data) setCategorias(data)
+
+      const { data: sellosData } = await supabase.from('sellos').select('id, nombre, slug').eq('activa', true).order('orden')
+      if (sellosData) setTodosSellos(sellosData)
     }
     cargarCats()
   }, [])
@@ -49,23 +58,30 @@ function BuscarContenido() {
   useEffect(() => {
     if (!q.trim()) { setProductos([]); setTiendas([]); setBuscado(false); return }
     buscar(q.trim())
-  }, [q])
+  }, [q, generoParam])
 
   async function buscar(termino) {
     setCargando(true)
     setBuscado(true)
 
-    const { data: prods } = await supabase
+    let query = supabase
       .from('productos')
       .select(`
-        id, nombre, precio, precio_anterior,
+        id, nombre, precio, precio_anterior, genero,
         vendedor:vendedores(id, nombre_negocio, slug),
-        media:producto_media(url, es_principal, orden)
+        media:producto_media(url, es_principal, orden),
+        producto_sellos ( sello_id )
       `)
       .eq('estado', 'activo')
       .or(`nombre.ilike.%${termino}%,descripcion.ilike.%${termino}%`)
       .order('creado_en', { ascending: false })
-      .limit(20)
+      .limit(50)
+
+    if (generoParam) {
+      query = query.contains('genero', [generoParam])
+    }
+
+    const { data: prods } = await query
 
     const { data: vendedores } = await supabase
       .from('vendedores')
@@ -74,13 +90,38 @@ function BuscarContenido() {
       .ilike('nombre_negocio', `%${termino}%`)
       .limit(5)
 
-    setProductos(prods || [])
+    const limpios = (prods || []).map((p) => ({
+      ...p,
+      selloIds: (p.producto_sellos || []).map((ps) => ps.sello_id),
+    }))
+
+    setProductos(limpios)
     setTiendas(vendedores || [])
     setCargando(false)
   }
 
+  function actualizarFiltros(nuevos) {
+    const nuevosParams = new URLSearchParams(searchParams.toString())
+    if (nuevos.genero) nuevosParams.set('genero', nuevos.genero); else nuevosParams.delete('genero')
+    if (nuevos.sellos?.length) nuevosParams.set('sellos', nuevos.sellos.join(',')); else nuevosParams.delete('sellos')
+    router.replace(`/buscar?${nuevosParams.toString()}`, { scroll: false })
+  }
+
   const menuCats = MENU_CATEGORIAS.map(s => categorias.find(c => c.slug === s)).filter(Boolean)
-  const totalResultados = productos.length + tiendas.length
+
+  // Sellos con al menos un producto en estos resultados (antes de aplicar el filtro de sellos)
+  const sellosIdsPresentes = new Set(productos.flatMap((p) => p.selloIds))
+  const sellosDisponibles = todosSellos.filter((s) => sellosIdsPresentes.has(s.id))
+
+  const sellosSeleccionadosIds = sellosSeleccionados
+    .map((slug) => todosSellos.find((s) => s.slug === slug)?.id)
+    .filter(Boolean)
+
+  const productosMostrados = sellosSeleccionadosIds.length > 0
+    ? productos.filter((p) => sellosSeleccionadosIds.every((id) => p.selloIds.includes(id)))
+    : productos
+
+  const totalResultados = productosMostrados.length + tiendas.length
 
   return (
     <>
@@ -102,6 +143,14 @@ function BuscarContenido() {
             <div className="max-w-xl mb-8">
               <Buscador placeholder="Productos, tiendas..." mostrarFlecha />
             </div>
+
+            {q.trim() && (
+              <BarraFiltros
+                sellos={sellosDisponibles}
+                filtrosActivos={{ sub: null, genero: generoParam, sellos: sellosSeleccionados }}
+                onFiltroChange={actualizarFiltros}
+              />
+            )}
 
             {cargando && (
               <p className="text-[#0a0a0a]/30 text-sm font-light">Buscando...</p>
@@ -147,13 +196,13 @@ function BuscarContenido() {
             )}
 
             {/* Productos */}
-            {productos.length > 0 && (
+            {productosMostrados.length > 0 && (
               <section>
                 <h2 className="text-lg font-black text-[#0a0a0a] tracking-tight mb-4">
-                  Productos {buscado && <span className="text-[#0a0a0a]/20 font-light text-sm ml-1">({productos.length})</span>}
+                  Productos {buscado && <span className="text-[#0a0a0a]/20 font-light text-sm ml-1">({productosMostrados.length})</span>}
                 </h2>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-5">
-                  {productos.map((prod) => {
+                  {productosMostrados.map((prod) => {
                     const imageUrl = getImageUrl(prod.media)
                     const enOferta = prod.precio_anterior && Number(prod.precio_anterior) > Number(prod.precio)
                     return (

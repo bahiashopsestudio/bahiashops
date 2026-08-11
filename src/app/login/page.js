@@ -67,6 +67,7 @@ export default function LoginPage() {
   return (
     <>
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&display=swap" />
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,100..900&display=swap" />
 
       <div className="min-h-screen bg-white" style={{ fontFamily: "'Inter', sans-serif" }}>
         {menuOpen && <MenuTakeover categorias={menuCats} onClose={() => setMenuOpen(false)} />}
@@ -75,15 +76,37 @@ export default function LoginPage() {
         <div className="pt-20 pb-24 px-4">
           <div className="max-w-sm mx-auto mt-8">
 
-            <h1 className="text-2xl font-black text-[#0a0a0a] tracking-tight text-center mb-8">
-              Iniciá sesión
-            </h1>
+            <div className="flex flex-col items-center text-center mb-8">
+              <img
+                src="/images/logo-negro-bahia-shops.png"
+                alt="Bahía Shops"
+                className="h-8 w-auto mb-5"
+              />
+              <h1
+                style={{
+                  fontFamily: 'Fraunces, serif',
+                  fontWeight: 500,
+                  fontSize: '28px',
+                  color: '#0a0a0a',
+                  letterSpacing: '-0.02em',
+                }}
+              >
+                Iniciá sesión
+              </h1>
+            </div>
 
             {/* Google */}
             <button
               type="button"
               onClick={loginConGoogle}
-              className="w-full flex items-center justify-center gap-3 py-3 border border-[#0a0a0a]/10 rounded-full text-sm font-medium text-[#0a0a0a] hover:bg-[#F5F2EC] transition cursor-pointer"
+              className="w-full flex items-center justify-center gap-3 border border-[#0a0a0a]/10 text-[#0a0a0a] hover:border-[#0a0a0a]/30 transition-colors cursor-pointer"
+              style={{
+                fontFamily: "'Inter', sans-serif",
+                fontWeight: 500,
+                fontSize: '14px',
+                borderRadius: '4px',
+                padding: '13px 24px',
+              }}
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
@@ -141,11 +164,18 @@ export default function LoginPage() {
                 type="button"
                 onClick={loginConEmail}
                 disabled={cargando || !email || !password}
-                className={`w-full py-3.5 rounded-full text-sm font-medium transition cursor-pointer ${
+                className={`w-full transition-colors cursor-pointer border ${
                   cargando || !email || !password
-                    ? 'bg-[#0a0a0a]/10 text-[#0a0a0a]/20 cursor-not-allowed'
-                    : 'bg-[#0a0a0a] text-white hover:bg-[#2a2a2a]'
+                    ? 'bg-[#0a0a0a]/10 text-[#0a0a0a]/20 border-transparent cursor-not-allowed'
+                    : 'bg-[#0a0a0a] text-white border-[#0a0a0a] hover:bg-transparent hover:text-[#0a0a0a]'
                 }`}
+                style={{
+                  fontFamily: "'Inter', sans-serif",
+                  fontWeight: 500,
+                  fontSize: '14px',
+                  borderRadius: '4px',
+                  padding: '14px 28px',
+                }}
               >
                 {cargando ? 'Entrando...' : 'Iniciar sesión'}
               </button>

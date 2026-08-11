@@ -11,6 +11,7 @@ import MapaDestacado from '@/components/MapaDestacado'
 import BarraScrollCustom from '@/components/BarraScrollCustom'
 import SomosBahia from '@/components/SomosBahia'
 import ValoresCompra from '@/components/ValoresCompra'
+import ColeccionesDestacadas from '@/components/ColeccionesDestacadas'
 
 
 // ═══════════════════════════════════════════════════════════
@@ -33,13 +34,13 @@ const MENU_CATEGORIAS = [
 
 const VALORES = [
   { tipo: 'imagen', src: '/images/foto-valores-3.jpg' },
-  { tipo: 'texto', titulo: 'Local', descripcion: 'Apoyar a quienes están haciendo cosas valiosas y ofrecen una alternativa de compra real y en tu ciudad.' },
+  { tipo: 'texto', titulo: 'Local', descripcion: 'Creemos en lo que pasa cerca. En los emprendimientos que nacen en Bahía, en quienes producen, crean y venden desde acá. Creemos en la posibilidad de descubrir todo eso sin tener que pensar en encontrarlo lejos.' },
   { tipo: 'imagen', src: '/images/foto-valores-2.jpg' },
-  { tipo: 'texto', titulo: 'Humanos', descripcion: 'Conectá con quienes venden productos únicos, preparados con dedicación y cerca tuyo.' },
+  { tipo: 'texto', titulo: 'Cercanía', descripcion: 'Creamos un espacio para acercar personas, emprendimientos y productos. Porque detrás de cada tienda, de cada emprendimiento, hay alguien con una idea, un proyecto y algo propio para ofrecer.' },
   { tipo: 'imagen', src: '/images/foto-valores-1.jpg' },
-  { tipo: 'texto', titulo: 'Transparente', descripcion: 'Detrás de cada producto hay una historia.' },
+  { tipo: 'texto', titulo: 'Simpleza', descripcion: 'Comprar de forma local no debería ser complicado. Queremos hacer más fácil encontrar, conocer y elegir productos de emprendimientos de la ciudad, desde un mismo lugar.' },
   { tipo: 'imagen', src: '/images/foto-valores-4.jpg' },
-  { tipo: 'texto', titulo: 'Accesible', descripcion: 'Sin locales caros, sin intermediarios.' },
+  { tipo: 'texto', titulo: 'Comunidad', descripcion: 'Bahía Shops crece cuando crecen sus tiendas. Buscamos construir una red que visibilice el trabajo local, genere nuevas oportunidades y fortalezca el ecosistema emprendedor de Bahía Blanca.' },
 ]
 
 // ═══════════════════════════════════════════════════════════
@@ -59,7 +60,7 @@ function getImageUrl(media) {
 // COMPONENTE PRINCIPAL
 // ═══════════════════════════════════════════════════════════
 
-export default function HomeContent({ categorias, recientes, elegidos, vendedoresMapa = [], destacados = [] }) {
+export default function HomeContent({ categorias, recientes, elegidos, vendedoresMapa = [], destacados = [], colecciones = [] }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const { agregar } = useCarrito()
 
@@ -228,6 +229,10 @@ export default function HomeContent({ categorias, recientes, elegidos, vendedore
 
           {/* ═══ PRODUCTOS DESTACADOS ═══ */}
           <ProductosDestacados categorias={categorias} productos={destacados} />
+
+
+          {/* ═══ COLECCIONES ═══ */}
+          <ColeccionesDestacadas colecciones={colecciones} />
 
 
           {/* ═══ SOMOS BAHÍA ═══ */}

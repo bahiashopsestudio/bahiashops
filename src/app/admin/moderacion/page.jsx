@@ -6,6 +6,31 @@ import VistaProducto from '@/components/VistaProducto';
 import { ETIQUETAS_MODERACION } from '@/lib/moderacion';
 import Navbar from '@/components/Navbar';
 
+function IconoSparkle({ activo, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={activo ? 'Se agregará a Tesoros' : 'Marcar como tesoro'}
+      aria-label="Marcar como tesoro"
+      className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg cursor-pointer transition-transform hover:scale-110"
+    >
+      <svg
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        strokeWidth={1.5}
+        stroke="currentColor"
+        fill={activo ? 'currentColor' : 'none'}
+        className="transition-colors"
+        style={{ color: activo ? '#b8a000' : 'rgba(10,10,10,0.2)' }}
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 0 0-2.455 2.456Z" />
+      </svg>
+    </button>
+  );
+}
+
 const MOTIVOS_RECHAZO = [
   'Tiene datos de contacto (teléfono, mail, redes o links)',
   'Las fotos no muestran el producto real',
@@ -27,6 +52,16 @@ export default function ModeracionPage() {
   const [motivoElegido, setMotivoElegido] = useState('');
   const [nota, setNota] = useState('');
   const [previa, setPrevia] = useState(null);
+  const [tesorosMarcados, setTesorosMarcados] = useState(new Set());
+
+  function toggleTesoro(productoId) {
+    setTesorosMarcados((prev) => {
+      const next = new Set(prev);
+      if (next.has(productoId)) next.delete(productoId);
+      else next.add(productoId);
+      return next;
+    });
+  }
 
   useEffect(() => {
     async function iniciar() {
@@ -91,6 +126,19 @@ export default function ModeracionPage() {
       setProcesando(null);
       return;
     }
+
+    if (tesorosMarcados.has(id)) {
+      try {
+        await fetch('/api/admin/tesoros', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ producto_id: id }),
+        });
+      } catch {
+        // Si falla, la aprobación no se revierte: se puede agregar como tesoro después desde /admin/tesoros.
+      }
+    }
+
     setProductos((prev) => prev.filter((p) => p.id !== id));
     setProcesando(null);
   }
@@ -240,16 +288,19 @@ export default function ModeracionPage() {
 
                     {/* Acciones */}
                     <div className="flex flex-col gap-2 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => aprobar(p.id)}
-                        disabled={enAccion}
-                        className={`px-4 py-2 border-none rounded-lg text-white text-sm transition-colors ${
-                          enAccion ? 'bg-gray-300 cursor-not-allowed' : 'bg-emerald-700 cursor-pointer hover:bg-emerald-800'
-                        }`}
-                      >
-                        Aprobar
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <IconoSparkle activo={tesorosMarcados.has(p.id)} onClick={() => toggleTesoro(p.id)} />
+                        <button
+                          type="button"
+                          onClick={() => aprobar(p.id)}
+                          disabled={enAccion}
+                          className={`flex-1 px-4 py-2 border-none rounded-lg text-white text-sm transition-colors ${
+                            enAccion ? 'bg-gray-300 cursor-not-allowed' : 'bg-emerald-700 cursor-pointer hover:bg-emerald-800'
+                          }`}
+                        >
+                          Aprobar
+                        </button>
+                      </div>
                       <button
                         type="button"
                         onClick={() => abrirRechazo(p.id)}

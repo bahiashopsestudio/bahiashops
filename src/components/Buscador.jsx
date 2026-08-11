@@ -71,7 +71,7 @@ function getImageUrl(media) {
 // COMPONENTE BUSCADOR
 // ══════════════════════════════════════════════════════════
 
-export default function Buscador({ placeholder = '¿Qué estás buscando?', mostrarFlecha = false, className = '', dropdownArriba = false, dropdownAnchoPadre = false }) {
+export default function Buscador({ placeholder = '¿Qué estás buscando?', mostrarFlecha = false, className = '', dropdownArriba = false, dropdownAnchoPadre = false, inputStyle = {} }) {
   const supabase = createClient()
   const router = useRouter()
   const ref = useRef(null)
@@ -187,6 +187,7 @@ export default function Buscador({ placeholder = '¿Qué estás buscando?', most
           onFocus={() => { if (sugerencias.length > 0 || sugerenciaFuzzy) setMostrarDropdown(true) }}
           placeholder={placeholder}
           className="w-full pl-12 pr-14 py-3.5 rounded-full bg-white text-sm text-black font-normal placeholder:text-gray-400 focus:outline-none"
+          style={inputStyle}
         />
 
         {/* Botón flecha (opcional, para el hero) */}

@@ -69,6 +69,13 @@ export default async function Home() {
   const elegidos = (elegidosRaw || []).map(conBarrio)
   const destacados = (destacadosRaw || []).map(conBarrio)
 
+  // ── Colecciones activas (cápsulas editoriales) ──
+  const { data: colecciones } = await supabase
+    .from('colecciones')
+    .select('id, nombre, slug, descripcion, imagen_url')
+    .eq('activa', true)
+    .order('orden')
+
   return (
     <HomeContent
       categorias={categorias || []}
@@ -76,6 +83,7 @@ export default async function Home() {
       elegidos={elegidos}
       vendedoresMapa={vendedoresMapa || []}
       destacados={destacados}
+      colecciones={colecciones || []}
     />
   )
 }

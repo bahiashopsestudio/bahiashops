@@ -1,13 +1,14 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useParams } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
 import VolverAtras from '@/components/VolverAtras'
 import BotonFavorito from '@/components/BotonFavorito'
+import BarraFiltros from '@/components/BarraFiltros'
 
 const MENU_CATEGORIAS = [
   'moda', 'belleza-y-bienestar', 'joyeria-y-accesorios',
@@ -16,17 +17,33 @@ const MENU_CATEGORIAS = [
   'deporte', 'vintage',
 ]
 
-export default function CategoriaPage() {
+function fotoPrincipalDe(media) {
+  if (!media?.length) return null
+  const principal = media.find((m) => m.es_principal)
+  if (principal) return principal.url
+  const ordenadas = [...media].sort((a, b) => a.orden - b.orden)
+  return ordenadas[0]?.url || null
+}
+
+function CategoriaContenido() {
   const supabase = createClient()
   const params = useParams()
+  const searchParams = useSearchParams()
+  const router = useRouter()
   const slug = params.slug
 
+  const subParam = searchParams.get('sub')
+  const generoParam = searchParams.get('genero')
+  const sellosParam = searchParams.get('sellos')
+  const sellosSeleccionados = sellosParam ? sellosParam.split(',').filter(Boolean) : []
+
   const [cargando, setCargando] = useState(true)
+  const [cargandoProductos, setCargandoProductos] = useState(true)
   const [categoria, setCategoria] = useState(null)
   const [noExiste, setNoExiste] = useState(false)
   const [subcategorias, setSubcategorias] = useState([])
+  const [todosSellos, setTodosSellos] = useState([])
   const [productos, setProductos] = useState([])
-  const [subActiva, setSubActiva] = useState(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [categorias, setCategorias] = useState([])
 
@@ -39,9 +56,11 @@ export default function CategoriaPage() {
     return () => { document.body.style.overflow = '' }
   }, [menuOpen])
 
+  // ── Categoría, subcategorías, sellos, menú (una vez por slug) ──
   useEffect(() => {
     async function cargar() {
-      // Categorías para el menú
+      setCargando(true)
+
       const { data: cats } = await supabase
         .from('categorias')
         .select('id, nombre, slug')
@@ -49,7 +68,6 @@ export default function CategoriaPage() {
         .order('orden')
       if (cats) setCategorias(cats)
 
-      // Categoría actual
       const { data: cat, error: errorCat } = await supabase
         .from('categorias')
         .select('id, nombre, slug')
@@ -63,40 +81,81 @@ export default function CategoriaPage() {
       }
       setCategoria(cat)
 
-      // Subcategorías
       const { data: subs } = await supabase
         .from('subcategorias')
-        .select('id, nombre')
+        .select('id, nombre, slug')
         .eq('categoria_id', cat.id)
         .eq('activa', true)
         .order('orden')
       setSubcategorias(subs || [])
 
-      // Productos
-      const { data: prods } = await supabase
-        .from('productos')
-        .select(`
-          id, nombre, precio, precio_anterior, subcategoria_id,
-          producto_media ( url, orden ),
-          vendedores ( nombre_negocio )
-        `)
-        .eq('categoria_id', cat.id)
-        .eq('estado', 'activo')
-        .order('creado_en', { ascending: false })
+      const { data: sellosData } = await supabase
+        .from('sellos')
+        .select('id, nombre, slug')
+        .eq('activa', true)
+        .order('orden')
+      setTodosSellos(sellosData || [])
 
-      const limpios = (prods || []).map((p) => ({
-        ...p,
-        fotoPrincipal: [...(p.producto_media || [])].sort((a, b) => a.orden - b.orden)[0]?.url || null,
-      }))
-      setProductos(limpios)
       setCargando(false)
     }
     cargar()
   }, [slug])
 
+  // ── Productos (se refetchean cuando cambia categoría, subcategoría o género) ──
+  useEffect(() => {
+    if (!categoria) return
+
+    async function cargarProductos() {
+      setCargandoProductos(true)
+
+      const subId = subParam
+        ? subcategorias.find((s) => s.slug === subParam)?.id
+        : null
+
+      let query = supabase
+        .from('productos')
+        .select(`
+          id, nombre, precio, precio_anterior, genero,
+          producto_media ( url, es_principal, orden ),
+          vendedores ( nombre_negocio ),
+          producto_sellos ( sello_id )
+        `)
+        .eq('estado', 'activo')
+        .or(`categoria_id.eq.${categoria.id},categoria_secundaria_id.eq.${categoria.id}`)
+        .order('creado_en', { ascending: false })
+
+      if (subId) {
+        query = query.or(`subcategoria_id.eq.${subId},subcategoria_secundaria_id.eq.${subId}`)
+      }
+      if (generoParam) {
+        query = query.contains('genero', [generoParam])
+      }
+
+      const { data: prods } = await query
+
+      const limpios = (prods || []).map((p) => ({
+        ...p,
+        fotoPrincipal: fotoPrincipalDe(p.producto_media),
+        selloIds: (p.producto_sellos || []).map((ps) => ps.sello_id),
+      }))
+      setProductos(limpios)
+      setCargandoProductos(false)
+    }
+    cargarProductos()
+  }, [categoria, subParam, generoParam, subcategorias])
+
   function formatearPrecio(valor) {
     if (!valor) return ''
     return Number(valor).toLocaleString('es-AR')
+  }
+
+  function actualizarFiltros(nuevos) {
+    const nuevosParams = new URLSearchParams(searchParams.toString())
+    if (nuevos.sub) nuevosParams.set('sub', nuevos.sub); else nuevosParams.delete('sub')
+    if (nuevos.genero) nuevosParams.set('genero', nuevos.genero); else nuevosParams.delete('genero')
+    if (nuevos.sellos?.length) nuevosParams.set('sellos', nuevos.sellos.join(',')); else nuevosParams.delete('sellos')
+    const query = nuevosParams.toString()
+    router.replace(`/categoria/${slug}${query ? `?${query}` : ''}`, { scroll: false })
   }
 
   const menuCats = MENU_CATEGORIAS
@@ -131,9 +190,19 @@ export default function CategoriaPage() {
     )
   }
 
-  const productosMostrados = subActiva
-    ? productos.filter((p) => p.subcategoria_id === subActiva)
+  // Sellos con al menos un producto en esta categoría (antes de aplicar el filtro de sellos)
+  const sellosIdsPresentes = new Set(productos.flatMap((p) => p.selloIds))
+  const sellosDisponibles = todosSellos.filter((s) => sellosIdsPresentes.has(s.id))
+
+  const sellosSeleccionadosIds = sellosSeleccionados
+    .map((slug) => todosSellos.find((s) => s.slug === slug)?.id)
+    .filter(Boolean)
+
+  const productosMostrados = sellosSeleccionadosIds.length > 0
+    ? productos.filter((p) => sellosSeleccionadosIds.every((id) => p.selloIds.includes(id)))
     : productos
+
+  const hayFiltrosActivos = !!subParam || !!generoParam || sellosSeleccionados.length > 0
 
   return (
     <>
@@ -156,55 +225,33 @@ export default function CategoriaPage() {
               {categoria.nombre}
             </h1>
             <p className="text-sm text-[#0a0a0a]/30 font-light mb-6">
-              {productosMostrados.length} {productosMostrados.length === 1 ? 'producto' : 'productos'}
+              {cargandoProductos ? 'Buscando...' : `${productosMostrados.length} ${productosMostrados.length === 1 ? 'producto' : 'productos'}`}
             </p>
 
-            {/* Subcategorías */}
-            {subcategorias.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-8">
-                <button
-                  type="button"
-                  onClick={() => setSubActiva(null)}
-                  className={`px-4 py-2 rounded-full text-sm cursor-pointer transition ${
-                    subActiva === null
-                      ? 'bg-[#0a0a0a] text-white'
-                      : 'bg-[#F5F2EC] text-[#0a0a0a]/60 hover:text-[#0a0a0a]'
-                  }`}
-                >
-                  Todos
-                </button>
-                {subcategorias.map((sub) => (
-                  <button
-                    key={sub.id}
-                    type="button"
-                    onClick={() => setSubActiva(sub.id)}
-                    className={`px-4 py-2 rounded-full text-sm cursor-pointer transition ${
-                      subActiva === sub.id
-                        ? 'bg-[#0a0a0a] text-white'
-                        : 'bg-[#F5F2EC] text-[#0a0a0a]/60 hover:text-[#0a0a0a]'
-                    }`}
-                  >
-                    {sub.nombre}
-                  </button>
-                ))}
-              </div>
-            )}
+            <BarraFiltros
+              subcategorias={subcategorias}
+              sellos={sellosDisponibles}
+              filtrosActivos={{ sub: subParam, genero: generoParam, sellos: sellosSeleccionados }}
+              onFiltroChange={actualizarFiltros}
+            />
 
             {/* Productos */}
-            {productosMostrados.length === 0 ? (
+            {!cargandoProductos && productosMostrados.length === 0 ? (
               <div className="text-center py-16 bg-[#F5F2EC] rounded-2xl">
                 {productos.length === 0 ? (
                   <p className="text-[#0a0a0a]/30 font-light">Todavía no hay productos en este rubro. ¡Pronto va a haber!</p>
                 ) : (
                   <>
-                    <p className="text-[#0a0a0a]/30 font-light">No hay productos en esta subcategoría por ahora.</p>
-                    <button
-                      type="button"
-                      onClick={() => setSubActiva(null)}
-                      className="mt-4 px-5 py-2 bg-[#0a0a0a] text-white rounded-full text-sm font-medium hover:bg-[#2a2a2a] transition cursor-pointer"
-                    >
-                      Ver todos
-                    </button>
+                    <p className="text-[#0a0a0a]/30 font-light">No hay productos que coincidan con estos filtros.</p>
+                    {hayFiltrosActivos && (
+                      <button
+                        type="button"
+                        onClick={() => actualizarFiltros({ sub: null, genero: null, sellos: [] })}
+                        className="mt-4 px-5 py-2 bg-[#0a0a0a] text-white rounded-full text-sm font-medium hover:bg-[#2a2a2a] transition cursor-pointer"
+                      >
+                        Limpiar filtros
+                      </button>
+                    )}
                   </>
                 )}
               </div>
@@ -262,5 +309,17 @@ export default function CategoriaPage() {
         </div>
       </div>
     </>
+  )
+}
+
+export default function CategoriaPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-white flex items-center justify-center" style={{ fontFamily: "'Inter', sans-serif" }}>
+        <span className="text-[#0a0a0a]/30 text-sm font-light">Cargando...</span>
+      </div>
+    }>
+      <CategoriaContenido />
+    </Suspense>
   )
 }

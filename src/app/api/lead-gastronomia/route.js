@@ -14,7 +14,7 @@ export async function POST(request) {
     }
 
     await resend.emails.send({
-      from: 'Bahía Shops <onboarding@resend.dev>',
+      from: 'Bahía Shops <hola@bahiashops.com.ar>',
       to: 'bahiashops.estudio@gmail.com',
       subject: `🍳 Nuevo lead gastronómico: ${nombre}`,
       html: `

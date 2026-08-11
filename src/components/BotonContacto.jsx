@@ -83,7 +83,7 @@ export default function BotonContacto() {
       {/* Botón flotante */}
       <button
         onClick={() => setAbierto(true)}
-        className="fixed z-40 w-12 h-12 rounded-full bg-[#4164fe] hover:bg-[#3151d3] text-white shadow-lg flex items-center justify-center transition cursor-pointer bottom-20 right-4 lg:bottom-6 lg:right-6"
+        className="fixed z-[900] w-12 h-12 rounded-full bg-[#0a0a0a] hover:bg-transparent text-white hover:text-[#0a0a0a] border border-[#0a0a0a] shadow-lg flex items-center justify-center transition-colors cursor-pointer bottom-20 right-4 lg:bottom-6 lg:right-6"
         aria-label="Contacto"
       >
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -94,7 +94,7 @@ export default function BotonContacto() {
       {/* Modal */}
       {abierto && (
         <div
-          className="fixed inset-0 z-50 flex items-end lg:items-center justify-center"
+          className="fixed inset-0 z-[950] flex items-end lg:items-center justify-center"
           onClick={() => { if (!enviando) setAbierto(false) }}
         >
           {/* Fondo oscuro */}
