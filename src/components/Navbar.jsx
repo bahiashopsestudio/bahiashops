@@ -375,7 +375,7 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
                   marginBottom: '8px',
                 }}
               >
-                Lo más lindo que hacemos en Bahía
+                Lo más lindo que encontramos en Bahía
               </p>
               <p
                 style={{
