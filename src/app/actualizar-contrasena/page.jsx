@@ -52,6 +52,7 @@ export default function ActualizarContrasenaPage() {
   return (
     <>
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&display=swap" />
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,100..900&family=Poppins:wght@300;400;500&display=swap" />
       <div className="min-h-screen bg-white" style={{ fontFamily: "'Inter', sans-serif" }}>
         {menuOpen && <MenuTakeover categorias={menuCats} onClose={() => setMenuOpen(false)} />}
         <Navbar onToggleMenu={() => setMenuOpen(!menuOpen)} variant="solid" />
@@ -66,22 +67,23 @@ export default function ActualizarContrasenaPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                   </svg>
                 </div>
-                <h1 className="text-2xl font-black text-[#0a0a0a] tracking-tight mb-2">¡Contraseña actualizada!</h1>
-                <p className="text-sm text-[#0a0a0a]/40 font-light mb-8">Ya podés usar tu nueva contraseña para iniciar sesión.</p>
+                <h1 className="text-[24px] mb-2" style={{ fontFamily: 'Fraunces, serif', fontWeight: 500, color: '#0a0a0a' }}>¡Contraseña actualizada!</h1>
+                <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 300, fontSize: '13px', color: 'rgba(10,10,10,0.45)', marginBottom: '32px' }}>Ya podés usar tu nueva contraseña para iniciar sesión.</p>
                 <button
                   type="button"
                   onClick={() => { router.push('/perfil'); router.refresh() }}
-                  className="bg-[#0a0a0a] text-white px-8 py-3.5 rounded-full text-sm font-medium hover:bg-[#2a2a2a] transition cursor-pointer"
+                  className="bg-[#0a0a0a] text-white border border-[#0a0a0a] hover:bg-transparent hover:text-[#0a0a0a] transition-colors cursor-pointer"
+                  style={{ fontFamily: "'Inter', sans-serif", fontWeight: 500, fontSize: '14px', borderRadius: '4px', padding: '14px 28px' }}
                 >
                   Ir a mi perfil
                 </button>
               </div>
             ) : (
               <>
-                <h1 className="text-2xl font-black text-[#0a0a0a] tracking-tight text-center mb-2">
+                <h1 className="text-[24px] text-center mb-2" style={{ fontFamily: 'Fraunces, serif', fontWeight: 500, color: '#0a0a0a' }}>
                   Nueva contraseña
                 </h1>
-                <p className="text-sm text-[#0a0a0a]/30 font-light text-center mb-8">
+                <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 300, fontSize: '13px', color: 'rgba(10,10,10,0.45)', textAlign: 'center', marginBottom: '32px' }}>
                   Elegí una contraseña nueva para tu cuenta.
                 </p>
 
@@ -116,11 +118,12 @@ export default function ActualizarContrasenaPage() {
                     type="button"
                     onClick={actualizar}
                     disabled={cargando || !password || !confirmar}
-                    className={`w-full py-3.5 rounded-full text-sm font-medium transition cursor-pointer ${
+                    className={`w-full transition-colors cursor-pointer border ${
                       cargando || !password || !confirmar
-                        ? 'bg-[#0a0a0a]/10 text-[#0a0a0a]/20 cursor-not-allowed'
-                        : 'bg-[#0a0a0a] text-white hover:bg-[#2a2a2a]'
+                        ? 'bg-[#0a0a0a]/10 text-[#0a0a0a]/20 border-transparent cursor-not-allowed'
+                        : 'bg-[#0a0a0a] text-white border-[#0a0a0a] hover:bg-transparent hover:text-[#0a0a0a]'
                     }`}
+                    style={{ fontFamily: "'Inter', sans-serif", fontWeight: 500, fontSize: '14px', borderRadius: '4px', padding: '14px 28px' }}
                   >
                     {cargando ? 'Actualizando...' : 'Actualizar contraseña'}
                   </button>

@@ -4,10 +4,10 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Buscador from '@/components/Buscador'
 import { createClient } from '@/lib/supabase/client'
+import { useCarrito } from '@/context/CarritoContext'
+import LogoAnimado from '@/components/LogoAnimado'
 
-const CANT_CARRITO = 2
-
-const SELLOS = [
+export const SELLOS = [
   { nombre: 'Hecho en Bahía', slug: 'hecho-en-bahia' },
   { nombre: 'Productos únicos', slug: 'productos-unicos' },
   { nombre: 'Hecho a mano', slug: 'hecho-a-mano' },
@@ -26,7 +26,9 @@ const COLORES_CAPSULAS = ['#f1f29f', '#d4e8f0', '#f0e0d0', '#e8d4f0', '#d0f0e0',
 //   "solid" — páginas con fondo blanco: siempre negro sobre blanco, buscador visible desde el inicio
 
 export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
+  const { cantidadTotal } = useCarrito()
   const [scrolled, setScrolled] = useState(false)
+  const [pasoHero, setPasoHero] = useState(false)
   const [categoriasAbiertas, setCategoriasAbiertas] = useState(false)
   const [todasCategorias, setTodasCategorias] = useState([])
   const [todasCapsulas, setTodasCapsulas] = useState([])
@@ -66,13 +68,15 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
 
   useEffect(() => {
     function umbral() {
-      // Cuando el hero empieza a salir de pantalla: ~100-150px, ajustado
-      // levemente según la altura del viewport.
+      // Umbral chico: cuando el hero empieza a salir de pantalla — dispara
+      // el buscador flotante (aparece con el primer scroll).
       return Math.max(100, Math.min(150, window.innerHeight * 0.15))
     }
 
     function handleScroll() {
       setScrolled(window.scrollY > umbral())
+      // El navbar recién pasa a fondo blanco cuando el hero (100vh) terminó de salir de pantalla.
+      setPasoHero(window.scrollY > window.innerHeight)
     }
 
     handleScroll()
@@ -85,20 +89,19 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
   }, [])
 
   // Estados derivados
-  const showDark = isSolid || scrolled
+  const showDark = isSolid || pasoHero
 
   const linkColor = showDark ? 'rgba(10,10,10,0.6)' : 'rgba(255,255,255,1)'
   const iconColorClass = showDark
     ? 'text-[#0a0a0a] hover:text-[#0a0a0a]/60'
     : 'text-white hover:text-white/70'
-  const sombraFondo = showDark ? 'shadow-[0_1px_3px_rgba(10,10,10,0.06)]' : ''
 
   return (
     <>
       {/* ── NAV DESKTOP ── */}
       <nav
         className={`fixed top-0 left-0 right-0 z-[900] hidden lg:block transition-all duration-300 ${
-          showDark ? `bg-white ${sombraFondo}` : 'bg-transparent'
+          showDark ? 'bg-white' : 'bg-transparent'
         }`}
         style={{ fontFamily: "'Inter', sans-serif" }}
       >
@@ -106,11 +109,7 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
 
           {/* Zona 1: Logo */}
           <Link href="/" className="shrink-0 ml-4" aria-label="Bahía Shops">
-            <img
-              src="/images/logo-nuevo-prueba.svg"
-              alt="Bahía Shops"
-              className="h-11 w-auto"
-            />
+            <LogoAnimado className="h-15 w-auto" color={showDark ? '#0a0a0a' : '#ffffff'} />
           </Link>
 
           {/* Zona 2: Navegación principal */}
@@ -151,9 +150,6 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
 
           {/* Zona 3: Secciones */}
           <div className="flex items-center gap-5 ml-auto mr-6">
-            <Link href="/" className="text-[13px] font-light transition-colors" style={{ color: linkColor }}>
-              Historias
-            </Link>
             <Link href="/sobre-nosotros" className="text-[13px] font-light transition-colors" style={{ color: linkColor }}>
               Quiénes somos
             </Link>
@@ -170,9 +166,9 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
               <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 1 0-7.5 0v4.5m11.356-1.993 1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 0 1-1.12-1.243l1.264-12A1.125 1.125 0 0 1 5.513 7.5h12.974c.576 0 1.059.435 1.119 1.007Z" />
               </svg>
-              {CANT_CARRITO > 0 && (
+              {cantidadTotal > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 bg-[#cc152b] text-white text-[8px] font-bold w-3.5 h-3.5 rounded-full flex items-center justify-center">
-                  {CANT_CARRITO}
+                  {cantidadTotal}
                 </span>
               )}
             </Link>
@@ -181,11 +177,6 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0" />
               </svg>
             </Link>
-            <button onClick={onToggleMenu} className={`ml-1 cursor-pointer transition-colors ${iconColorClass}`} aria-label="Menú">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-              </svg>
-            </button>
           </div>
         </div>
       </nav>
@@ -424,9 +415,9 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 1 0-7.5 0v4.5m11.356-1.993 1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 0 1-1.12-1.243l1.264-12A1.125 1.125 0 0 1 5.513 7.5h12.974c.576 0 1.059.435 1.119 1.007Z" />
             </svg>
-            {CANT_CARRITO > 0 && (
+            {cantidadTotal > 0 && (
               <span className="absolute -top-1 -right-1 bg-[#cc152b] text-white text-[8px] font-bold w-3.5 h-3.5 rounded-full flex items-center justify-center">
-                {CANT_CARRITO}
+                {cantidadTotal}
               </span>
             )}
           </Link>
@@ -440,26 +431,22 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
       {/* ── NAV MOBILE (arriba) ── */}
       <nav
         className={`fixed top-0 left-0 right-0 z-[900] lg:hidden transition-all duration-300 h-20 ${
-          showDark ? `bg-white ${sombraFondo}` : 'bg-transparent'
+          showDark ? 'bg-white' : 'bg-transparent'
         }`}
         style={{ fontFamily: "'Inter', sans-serif" }}
       >
         <div className="flex items-center justify-between h-full px-4">
           <Link href="/" className="shrink-0 ml-2" aria-label="Bahía Shops">
-            <img
-              src="/images/logo-nuevo-prueba.svg"
-              alt="Bahía Shops"
-              className="h-11 w-auto"
-            />
+            <LogoAnimado className="h-15 w-auto" color={showDark ? '#0a0a0a' : '#ffffff'} />
           </Link>
           <div className="flex items-center gap-1.5">
             <Link href="/carrito" className={`relative p-2 rounded-full transition-colors ${iconColorClass}`} aria-label="Carrito">
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 1 0-7.5 0v4.5m11.356-1.993 1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 0 1-1.12-1.243l1.264-12A1.125 1.125 0 0 1 5.513 7.5h12.974c.576 0 1.059.435 1.119 1.007Z" />
               </svg>
-              {CANT_CARRITO > 0 && (
+              {cantidadTotal > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 bg-[#cc152b] text-white text-[10px] font-bold w-[18px] h-[18px] rounded-full flex items-center justify-center">
-                  {CANT_CARRITO}
+                  {cantidadTotal}
                 </span>
               )}
             </Link>
@@ -493,9 +480,9 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 1 0-7.5 0v4.5m11.356-1.993 1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 0 1-1.12-1.243l1.264-12A1.125 1.125 0 0 1 5.513 7.5h12.974c.576 0 1.059.435 1.119 1.007Z" />
             </svg>
-            {CANT_CARRITO > 0 && (
+            {cantidadTotal > 0 && (
               <span className="absolute -top-1 right-1 bg-[#cc152b] text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
-                {CANT_CARRITO}
+                {cantidadTotal}
               </span>
             )}
             <span className="text-[10px] font-light">Carrito</span>

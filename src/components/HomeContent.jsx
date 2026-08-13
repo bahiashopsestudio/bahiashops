@@ -12,6 +12,7 @@ import BarraScrollCustom from '@/components/BarraScrollCustom'
 import SomosBahia from '@/components/SomosBahia'
 import ValoresCompra from '@/components/ValoresCompra'
 import ColeccionesDestacadas from '@/components/ColeccionesDestacadas'
+import { useDragScroll } from '@/hooks/useDragScroll'
 
 
 // ═══════════════════════════════════════════════════════════
@@ -126,7 +127,7 @@ export default function HomeContent({ categorias, recientes, elegidos, vendedore
               loop
               playsInline
               className="absolute inset-0 w-full h-full object-cover"
-              src="/hero-video.mp4"
+              src="/images/hero-bahia-shops.mp4"
             />
             <div
               className="absolute inset-0"
@@ -150,7 +151,7 @@ export default function HomeContent({ categorias, recientes, elegidos, vendedore
                   marginBottom: '16px',
                 }}
               >
-                Lo que buscás ya está en tu ciudad.
+                Lo que buscás ya está en nuestra ciudad
               </h1>
 
               <p
@@ -164,7 +165,7 @@ export default function HomeContent({ categorias, recientes, elegidos, vendedore
                   marginBottom: '28px',
                 }}
               >
-                Un espacio para descubrir, comprar y conectar con negocios de Bahía Blanca.
+                ¡Bienvenidos a Bahía Shops! Un espacio para descubrir, comprar y conectar con negocios de Bahía Blanca.
               </p>
 
               <Link
@@ -181,7 +182,7 @@ export default function HomeContent({ categorias, recientes, elegidos, vendedore
                   marginBottom: '20px',
                 }}
               >
-                Registrate gratis para vender
+                ¡Registrate gratis para vender!
               </Link>
 
               <p
@@ -193,7 +194,7 @@ export default function HomeContent({ categorias, recientes, elegidos, vendedore
                   color: 'rgba(255,255,255,0.7)',
                 }}
               >
-                ¿Querés encontrar productos en bahía?{' '}
+                ¿Querés encontrar productos en Bahía?{' '}
                 <Link
                   href="/registro"
                   style={{
@@ -336,49 +337,72 @@ export default function HomeContent({ categorias, recientes, elegidos, vendedore
 
 function CtaVender() {
   return (
-    <section style={{ background: '#41252a', padding: '72px 32px' }} className="text-center">
-      <div className="max-w-2xl mx-auto">
-        <h2
-          className="text-[24px] md:text-[32px]"
-          style={{
-            fontFamily: 'Fraunces, serif',
-            fontWeight: 500,
-            color: '#ffffff',
-            letterSpacing: '-0.02em',
-            lineHeight: 1.15,
-            marginBottom: '12px',
-          }}
-        >
-          Para cualquier proyecto en la ciudad
-        </h2>
+    <section style={{ background: '#41252a', padding: '48px 24px' }}>
+      <div
+        className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-[1fr_1.3fr_1fr] items-center"
+        style={{ gap: '40px' }}
+      >
+        <div className="hidden lg:block" style={{ aspectRatio: '3 / 4', overflow: 'hidden' }}>
+          <img
+            src="/images/male-producer-his-shop-with-different-goodies.jpg"
+            alt=""
+            className="w-full h-full object-cover"
+          />
+        </div>
 
-        <p
-          style={{
-            fontFamily: 'Poppins, sans-serif',
-            fontWeight: 300,
-            fontSize: '14px',
-            color: 'rgba(255,255,255,0.8)',
-            lineHeight: 1.65,
-            marginBottom: '24px',
-          }}
-        >
-          No importa si vendés ropa o artículos para mascotas: en Bahía Shops mostramos todos
-          los productos que nuestros vecinos necesitan cerca suyo.
-        </p>
+        <div className="text-center">
+          <h2
+            className="text-[26px] md:text-[34px]"
+            style={{
+              fontFamily: 'Fraunces, serif',
+              fontWeight: 500,
+              color: '#ffffff',
+              letterSpacing: '-0.02em',
+              lineHeight: 1.2,
+              marginBottom: '16px',
+            }}
+          >
+            Para cualquier proyecto en la ciudad
+          </h2>
 
-        <Link
-          href="/vendedor/nuevo"
-          className="inline-block bg-white text-[#0a0a0a] border border-white hover:bg-transparent hover:text-white transition-colors cursor-pointer"
-          style={{
-            fontFamily: "'Inter', sans-serif",
-            fontSize: '13px',
-            fontWeight: 500,
-            borderRadius: '4px',
-            padding: '12px 24px',
-          }}
-        >
-          Sumate gratis para vender
-        </Link>
+          <p
+            className="mx-auto"
+            style={{
+              fontFamily: 'Poppins, sans-serif',
+              fontWeight: 300,
+              fontSize: '14px',
+              color: 'rgba(255,255,255,0.85)',
+              lineHeight: 1.65,
+              maxWidth: '400px',
+              marginBottom: '28px',
+            }}
+          >
+            No importa si vendés ropa o artículos para mascotas: en Bahía Shops mostramos todos
+            los productos que nuestros vecinos necesitan cerca suyo.
+          </p>
+
+          <Link
+            href="/vendedor/nuevo"
+            className="inline-block bg-white text-[#0a0a0a] border border-white hover:bg-transparent hover:text-white transition-colors cursor-pointer"
+            style={{
+              fontFamily: "'Inter', sans-serif",
+              fontSize: '13px',
+              fontWeight: 500,
+              borderRadius: '4px',
+              padding: '12px 24px',
+            }}
+          >
+            Sumate gratis para vender
+          </Link>
+        </div>
+
+        <div className="hidden lg:block" style={{ aspectRatio: '3 / 4', overflow: 'hidden' }}>
+          <img
+            src="/images/woman-looking-different-goodies-local-producer.jpg"
+            alt=""
+            className="w-full h-full object-cover"
+          />
+        </div>
       </div>
     </section>
   )
@@ -480,6 +504,7 @@ function RecienLlegados({ productos }) {
 
 function ValoresCarrusel() {
   const scrollRef = useRef(null)
+  useDragScroll(scrollRef)
 
   return (
     <section className="py-5 md:py-7 px-4 md:px-8">
@@ -491,16 +516,28 @@ function ValoresCarrusel() {
             fontSize: '28px',
             color: '#0a0a0a',
             letterSpacing: '-0.02em',
-            marginBottom: '24px',
+            marginTop: '24px',
+            marginBottom: '8px',
           }}
         >
           Lo que nos mueve
         </h2>
+        <p
+          style={{
+            fontFamily: 'Poppins, sans-serif',
+            fontWeight: 300,
+            fontSize: '14px',
+            color: '#888',
+            marginBottom: '36px',
+          }}
+        >
+          Buscamos conectar personas, impulsar emprendimientos y hacer crecer lo local.
+        </p>
 
         <div
           ref={scrollRef}
           className="no-scrollbar flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory"
-          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', cursor: 'grab' }}
         >
           {VALORES.map((item, i) =>
             item.tipo === 'texto' ? (

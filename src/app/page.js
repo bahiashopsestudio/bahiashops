@@ -38,7 +38,7 @@ export default async function Home() {
   // ── Vendedores con ubicación (para el mapa) ──
   const { data: vendedoresMapa } = await supabase
     .from('vendedores')
-    .select('id, nombre_negocio, slug, latitud, longitud, recibe_publico, barrio_id')
+    .select('id, nombre_negocio, slug, latitud, longitud, recibe_publico, barrio_id, logo_url, descripcion_corta')
     .not('latitud', 'is', null)
     .not('longitud', 'is', null)
 

@@ -114,6 +114,7 @@ export default function FavoritosPage() {
   return (
     <>
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&display=swap" />
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,100..900&family=Poppins:wght@300;400;500&display=swap" />
 
       <div className="min-h-screen bg-white" style={{ fontFamily: "'Inter', sans-serif" }}>
 
@@ -128,7 +129,10 @@ export default function FavoritosPage() {
 
             <VolverAtras href="/" texto="Volver al inicio" />
 
-            <h1 className="text-2xl md:text-3xl font-black text-[#0a0a0a] tracking-tight mb-1">
+            <p style={{ fontFamily: "'Inter', sans-serif", fontSize: '10px', textTransform: 'uppercase', letterSpacing: '2px', color: 'rgba(10,10,10,0.3)', marginBottom: '10px' }}>
+              Guardados
+            </p>
+            <h1 className="text-[26px] md:text-[30px]" style={{ fontFamily: 'Fraunces, serif', fontWeight: 500, color: '#0a0a0a', marginBottom: '4px' }}>
               Mis favoritos
             </h1>
 
@@ -137,7 +141,8 @@ export default function FavoritosPage() {
                 <p className="text-[#0a0a0a]/30 font-light mb-6">Iniciá sesión para ver tus productos guardados</p>
                 <Link
                   href="/login"
-                  className="inline-block bg-[#0a0a0a] text-white px-6 py-3 rounded-full text-sm font-medium hover:bg-[#2a2a2a] transition"
+                  className="inline-block bg-[#0a0a0a] text-white border border-[#0a0a0a] hover:bg-transparent hover:text-[#0a0a0a] transition-colors"
+                  style={{ fontFamily: "'Inter', sans-serif", fontWeight: 500, fontSize: '14px', borderRadius: '4px', padding: '14px 28px' }}
                 >
                   Iniciar sesión
                 </Link>
@@ -151,14 +156,15 @@ export default function FavoritosPage() {
                 <p className="text-[#0a0a0a]/20 text-sm font-light mb-6">Tocá el corazón en cualquier producto para guardarlo acá</p>
                 <button
                   onClick={() => router.push('/')}
-                  className="bg-[#0a0a0a] text-white px-6 py-3 rounded-full text-sm font-medium hover:bg-[#2a2a2a] transition cursor-pointer"
+                  className="bg-[#0a0a0a] text-white border border-[#0a0a0a] hover:bg-transparent hover:text-[#0a0a0a] transition-colors cursor-pointer"
+                  style={{ fontFamily: "'Inter', sans-serif", fontWeight: 500, fontSize: '14px', borderRadius: '4px', padding: '14px 28px' }}
                 >
                   Explorar productos
                 </button>
               </div>
             ) : (
               <>
-                <p className="text-sm text-[#0a0a0a]/30 font-light mb-6">
+                <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 300, fontSize: '13px', color: 'rgba(10,10,10,0.45)', marginBottom: '24px' }}>
                   {productos.length} {productos.length === 1 ? 'producto guardado' : 'productos guardados'}
                 </p>
 

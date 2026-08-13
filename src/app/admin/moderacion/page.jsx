@@ -92,13 +92,13 @@ export default function ModeracionPage() {
         vendedores ( nombre_negocio ),
         producto_media ( url, orden ),
         producto_variantes ( propiedad_1_valor ),
-        categorias ( nombre, slug )
+        categorias!categoria_id ( nombre, slug )
       `)
       .eq('estado', 'en_revision')
       .order('creado_en', { ascending: true });
 
     if (error) {
-      console.error('Error cargando la cola:', error);
+      console.error('Error cargando la cola:', JSON.stringify(error));
       return;
     }
 

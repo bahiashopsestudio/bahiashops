@@ -48,6 +48,14 @@ function IconoCuadrados() {
   )
 }
 
+function IconoBombilla() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.5.36.8.95.8 1.58V16h5.4v-.52c0-.63.3-1.22.8-1.58A6 6 0 0 0 12 3Z" />
+    </svg>
+  )
+}
+
 function Tarjeta({ href, disabled, icono, iconoFondo, iconoColor, titulo, desc, badge, badgeTipo, flecha }) {
   const [hover, setHover] = useState(false)
 
@@ -128,6 +136,7 @@ export default function AdminDashboard() {
   const [pendientesModeracion, setPendientesModeracion] = useState(0)
   const [vendedoresNuevos, setVendedoresNuevos] = useState(0)
   const [tesorosActivos, setTesorosActivos] = useState(0)
+  const [ideasPendientes, setIdeasPendientes] = useState(0)
 
   const menuCats = MENU_CATEGORIAS.map((s) => categorias.find((c) => c.slug === s)).filter(Boolean)
 
@@ -178,6 +187,12 @@ export default function AdminDashboard() {
         .select('*', { count: 'exact', head: true })
         .eq('activo', true)
       setTesorosActivos(countTesoros || 0)
+
+      const resIdeas = await fetch('/api/admin/ideas')
+      if (resIdeas.ok) {
+        const { ideas } = await resIdeas.json()
+        setIdeasPendientes(ideas?.length || 0)
+      }
 
       setCargando(false)
     }
@@ -285,6 +300,17 @@ export default function AdminDashboard() {
               badge="Próximamente"
               badgeTipo="proximamente"
               flecha="Próximamente"
+            />
+            <Tarjeta
+              href="/admin/ideas"
+              icono={<IconoBombilla />}
+              iconoFondo="#fef3c7"
+              iconoColor="#92650a"
+              titulo="Ideas pendientes"
+              desc="Cosas para retomar más adelante: pestañas ocultas, funciones a medio pensar, mejoras sueltas."
+              badge={ideasPendientes > 0 ? ideasPendientes : null}
+              badgeTipo="gris"
+              flecha="Ver ideas →"
             />
           </div>
         </div>

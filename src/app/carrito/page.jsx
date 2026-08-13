@@ -66,6 +66,7 @@ export default function PaginaCarrito() {
   return (
     <>
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&display=swap" />
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,100..900&family=Poppins:wght@300;400;500&display=swap" />
 
       <div className="min-h-screen bg-white" style={{ fontFamily: "'Inter', sans-serif" }}>
 
@@ -80,7 +81,10 @@ export default function PaginaCarrito() {
 
             <VolverAtras href="/" texto="Seguir comprando" />
 
-            <h1 className="text-2xl md:text-3xl font-black text-[#0a0a0a] tracking-tight mb-1">
+            <p style={{ fontFamily: "'Inter', sans-serif", fontSize: '10px', textTransform: 'uppercase', letterSpacing: '2px', color: 'rgba(10,10,10,0.3)', marginBottom: '10px' }}>
+              Tu compra
+            </p>
+            <h1 className="text-[26px] md:text-[30px]" style={{ fontFamily: 'Fraunces, serif', fontWeight: 500, color: '#0a0a0a', marginBottom: '4px' }}>
               Tu carrito
             </h1>
 
@@ -89,14 +93,15 @@ export default function PaginaCarrito() {
                 <p className="text-[#0a0a0a]/30 font-light mb-6">Todavía no agregaste nada.</p>
                 <Link
                   href="/"
-                  className="inline-block bg-[#0a0a0a] text-white px-6 py-3 rounded-full text-sm font-medium hover:bg-[#2a2a2a] transition"
+                  className="inline-block bg-[#0a0a0a] text-white border border-[#0a0a0a] hover:bg-transparent hover:text-[#0a0a0a] transition-colors"
+                  style={{ fontFamily: "'Inter', sans-serif", fontWeight: 500, fontSize: '14px', borderRadius: '4px', padding: '14px 28px' }}
                 >
                   Seguir mirando
                 </Link>
               </div>
             ) : (
               <>
-                <p className="text-[#0a0a0a]/30 font-light mb-6">
+                <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 300, fontSize: '13px', color: 'rgba(10,10,10,0.45)', marginBottom: '24px' }}>
                   Tenés productos de {locales.length} {locales.length === 1 ? 'local' : 'locales'}.
                 </p>
 
@@ -173,7 +178,8 @@ export default function PaginaCarrito() {
                       router.push('/carrito/elegir')
                     }
                   }}
-                  className="w-full py-3.5 bg-[#0a0a0a] text-white rounded-full text-sm font-medium hover:bg-[#2a2a2a] transition cursor-pointer mt-2"
+                  className="w-full bg-[#0a0a0a] text-white border border-[#0a0a0a] hover:bg-transparent hover:text-[#0a0a0a] transition-colors cursor-pointer mt-2"
+                  style={{ fontFamily: "'Inter', sans-serif", fontWeight: 500, fontSize: '14px', borderRadius: '4px', padding: '14px 28px' }}
                 >
                   Comprar
                 </button>

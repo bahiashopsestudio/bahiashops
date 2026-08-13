@@ -44,9 +44,29 @@ function VendedorCard({ v, onToggleBloqueo, procesando }) {
       {/* Lado izquierdo */}
       <div className="min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <p style={{ fontFamily: "'Inter', sans-serif", fontSize: '14px', fontWeight: 500, color: '#0a0a0a' }}>
+          <Link
+            href={`/tienda/${v.slug}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ fontFamily: "'Inter', sans-serif", fontSize: '14px', fontWeight: 500, color: '#0a0a0a' }}
+            className="hover:underline"
+          >
             {v.nombre_negocio}
-          </p>
+          </Link>
+          {v.categorias?.nombre && (
+            <span
+              style={{
+                fontSize: '10px',
+                fontWeight: 400,
+                color: 'rgba(10,10,10,0.5)',
+                backgroundColor: 'rgba(10,10,10,0.04)',
+                borderRadius: '999px',
+                padding: '2px 9px',
+              }}
+            >
+              {v.categorias.nombre}
+            </span>
+          )}
           {v.bloqueado && (
             <span
               style={{
@@ -73,6 +93,14 @@ function VendedorCard({ v, onToggleBloqueo, procesando }) {
               }}
             >
               Nuevo
+            </span>
+          )}
+          {v.descripcion_corta && (
+            <span
+              style={{ fontFamily: "'Inter', sans-serif", fontSize: '12px', fontWeight: 300, color: 'rgba(10,10,10,0.4)' }}
+              className="truncate"
+            >
+              · {v.descripcion_corta}
             </span>
           )}
         </div>
@@ -148,6 +176,7 @@ export default function AdminVendedoresPage() {
   const [vendedores, setVendedores] = useState([])
   const [busqueda, setBusqueda] = useState('')
   const [procesandoId, setProcesandoId] = useState(null)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     const supabase = createClient()
@@ -174,7 +203,12 @@ export default function AdminVendedoresPage() {
   async function cargar() {
     const res = await fetch('/api/admin/vendedores')
     const data = await res.json()
-    if (res.ok) setVendedores(data.vendedores || [])
+    if (res.ok) {
+      setVendedores(data.vendedores || [])
+      setError('')
+    } else {
+      setError(data.error || 'No se pudo cargar la lista de vendedores.')
+    }
   }
 
   async function toggleBloqueo(v) {
@@ -248,6 +282,12 @@ export default function AdminVendedoresPage() {
             <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 300, fontSize: '13px', color: 'rgba(10,10,10,0.45)', marginTop: '8px' }}>
               {vendedores.length} {vendedores.length === 1 ? 'vendedor registrado' : 'vendedores registrados'}
             </p>
+
+            {error && (
+              <p style={{ fontFamily: "'Inter', sans-serif", fontSize: '12px', fontWeight: 400, color: '#cc152b', backgroundColor: '#fce4e4', borderRadius: '6px', padding: '10px 14px', marginTop: '16px' }}>
+                {error}
+              </p>
+            )}
 
             <input
               type="text"

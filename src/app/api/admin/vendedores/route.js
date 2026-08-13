@@ -11,9 +11,10 @@ export async function GET() {
   const { data, error } = await admin
     .from('vendedores')
     .select(`
-      id, nombre_negocio, descripcion, mercadopago_conectado, creado_en, bloqueado,
+      id, nombre_negocio, slug, descripcion_corta, mercadopago_conectado, creado_en, bloqueado,
       barrios ( nombre ),
-      usuarios ( email ),
+      categorias ( nombre ),
+      usuarios!vendedores_usuario_id_fkey ( email ),
       productos ( id )
     `)
     .order('creado_en', { ascending: false });

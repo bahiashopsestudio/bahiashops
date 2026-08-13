@@ -53,16 +53,24 @@ export function useDragScroll(scrollRef) {
       }
     }
 
+    function onDragStart(e) {
+      // Las <img> son arrastrables por defecto (HTML5 drag-and-drop) una vez
+      // que terminan de cargar, y eso le roba el gesto al scroll manual.
+      e.preventDefault()
+    }
+
     el.addEventListener('pointerdown', onPointerDown)
     el.addEventListener('pointermove', onPointerMove)
     el.addEventListener('pointerup', endDrag)
     el.addEventListener('pointercancel', endDrag)
+    el.addEventListener('dragstart', onDragStart)
 
     return () => {
       el.removeEventListener('pointerdown', onPointerDown)
       el.removeEventListener('pointermove', onPointerMove)
       el.removeEventListener('pointerup', endDrag)
       el.removeEventListener('pointercancel', endDrag)
+      el.removeEventListener('dragstart', onDragStart)
     }
   }, [scrollRef])
 }

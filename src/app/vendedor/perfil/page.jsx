@@ -189,6 +189,7 @@ export default function PerfilVendedorPage() {
   return (
     <>
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&display=swap" />
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,100..900&family=Poppins:wght@300;400;500&display=swap" />
 
       <div className="min-h-screen bg-white" style={{ fontFamily: "'Inter', sans-serif" }}>
         {menuOpen && <MenuTakeover categorias={menuCats} onClose={() => setMenuOpen(false)} />}
@@ -198,10 +199,13 @@ export default function PerfilVendedorPage() {
           <div className="max-w-xl mx-auto">
             <VolverAtras href="/perfil" texto="Volver a Mi perfil" />
 
-            <h1 className="text-2xl md:text-3xl font-black text-[#0a0a0a] tracking-tight mb-1">
+            <p style={{ fontFamily: "'Inter', sans-serif", fontSize: '10px', textTransform: 'uppercase', letterSpacing: '2px', color: 'rgba(10,10,10,0.3)', marginBottom: '10px' }}>
+              Tu tienda
+            </p>
+            <h1 className="text-[26px] md:text-[30px]" style={{ fontFamily: 'Fraunces, serif', fontWeight: 500, color: '#0a0a0a', marginBottom: '4px' }}>
               Mi negocio
             </h1>
-            <p className="text-sm text-[#0a0a0a]/30 font-light mb-6">
+            <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 300, fontSize: '13px', color: 'rgba(10,10,10,0.45)', marginBottom: '24px' }}>
               {nombreNegocio}
             </p>
 
@@ -287,7 +291,8 @@ export default function PerfilVendedorPage() {
                   </p>
                   <a
                     href="/api/mercadopago/oauth/start"
-                    className="inline-block px-6 py-2.5 text-sm bg-[#009ee3] text-white rounded-full no-underline hover:bg-[#008dd0] transition-colors font-medium"
+                    className="inline-block bg-[#009ee3] text-white no-underline hover:bg-[#008dd0] transition-colors"
+                    style={{ fontFamily: "'Inter', sans-serif", fontWeight: 500, fontSize: '14px', borderRadius: '4px', padding: '14px 28px' }}
                   >
                     Conectar con MercadoPago
                   </a>
@@ -303,7 +308,7 @@ export default function PerfilVendedorPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[1000]">
           <div className="bg-white rounded-2xl w-full max-w-[520px] overflow-hidden">
             <div className="px-6 py-4 border-b border-[#0a0a0a]/5">
-              <p className="font-black text-[#0a0a0a] tracking-tight m-0">
+              <p className="m-0" style={{ fontFamily: 'Fraunces, serif', fontWeight: 500, color: '#0a0a0a' }}>
                 Recortá tu {CONFIG[recorte.destino].etiqueta}
               </p>
               <p className="text-sm text-[#0a0a0a]/30 font-light mt-0.5 mb-0">

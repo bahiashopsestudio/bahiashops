@@ -83,6 +83,7 @@ export default function MisDireccionesPage() {
   return (
     <>
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&display=swap" />
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,100..900&family=Poppins:wght@300;400;500&display=swap" />
 
       <div className="min-h-screen bg-white" style={{ fontFamily: "'Inter', sans-serif" }}>
         {menuOpen && <MenuTakeover categorias={menuCats} onClose={() => setMenuOpen(false)} />}
@@ -93,10 +94,13 @@ export default function MisDireccionesPage() {
 
             <VolverAtras href="/perfil" texto="Volver al perfil" />
 
-            <h1 className="text-2xl md:text-3xl font-black text-[#0a0a0a] tracking-tight mb-1">
+            <p style={{ fontFamily: "'Inter', sans-serif", fontSize: '10px', textTransform: 'uppercase', letterSpacing: '2px', color: 'rgba(10,10,10,0.3)', marginBottom: '10px' }}>
+              Tu cuenta
+            </p>
+            <h1 className="text-[26px] md:text-[30px]" style={{ fontFamily: 'Fraunces, serif', fontWeight: 500, color: '#0a0a0a', marginBottom: '4px' }}>
               Mis direcciones
             </h1>
-            <p className="text-sm text-[#0a0a0a]/30 font-light mb-6">
+            <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 300, fontSize: '13px', color: 'rgba(10,10,10,0.45)', marginBottom: '24px' }}>
               Guardá tus direcciones para usarlas al comprar.
             </p>
 
@@ -106,7 +110,7 @@ export default function MisDireccionesPage() {
                 {/* Si estamos editando esta dirección, mostrar el form */}
                 {editando?.id === dir.id ? (
                   <div className="rounded-2xl border border-[#0a0a0a]/10 p-5 mb-3">
-                    <h2 className="text-lg font-black text-[#0a0a0a] tracking-tight mb-4">Editar dirección</h2>
+                    <h2 className="text-lg mb-4" style={{ fontFamily: 'Fraunces, serif', fontWeight: 500, color: '#0a0a0a' }}>Editar dirección</h2>
                     <FormularioDireccion
                       direccionExistente={dir}
                       onGuardada={alGuardarEditada}
@@ -152,7 +156,7 @@ export default function MisDireccionesPage() {
             {/* Formulario de nueva dirección o botón para abrir */}
             {editando ? null : mostrarForm ? (
               <div className="rounded-2xl border border-[#0a0a0a]/5 p-5 mt-2">
-                <h2 className="text-lg font-black text-[#0a0a0a] tracking-tight mb-4">Nueva dirección</h2>
+                <h2 className="text-lg mb-4" style={{ fontFamily: 'Fraunces, serif', fontWeight: 500, color: '#0a0a0a' }}>Nueva dirección</h2>
                 <FormularioDireccion
                   esPrimera={direcciones.length === 0}
                   onGuardada={alGuardarNueva}

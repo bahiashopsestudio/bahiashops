@@ -70,9 +70,9 @@ export default function BotonFavorito({ productoId, className = '', onToggle }) 
     >
       <svg
         className="w-5 h-5"
-        fill={esFavorito ? '#4164fe' : 'none'}
+        fill={esFavorito ? '#cc152b' : 'none'}
         viewBox="0 0 24 24"
-        stroke={esFavorito ? '#4164fe' : 'currentColor'}
+        stroke={esFavorito ? '#cc152b' : 'currentColor'}
         strokeWidth={1.5}
       >
         <path

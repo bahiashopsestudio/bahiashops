@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { MapContainer, TileLayer, Marker, Tooltip, Popup } from 'react-leaflet'
+import { useEffect, useRef, useState } from 'react'
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
 import L from 'leaflet'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -35,6 +35,74 @@ function crearIconoPin(color) {
       </div>
     `,
   })
+}
+
+function MarcadorVendedor({ v, icono, nombreBarrio }) {
+  const markerRef = useRef(null)
+  const cierreTimeout = useRef(null)
+
+  function abrirPopup() {
+    clearTimeout(cierreTimeout.current)
+    markerRef.current?.openPopup()
+  }
+
+  function cerrarPopupConDemora() {
+    cierreTimeout.current = setTimeout(() => {
+      markerRef.current?.closePopup()
+    }, 150)
+  }
+
+  return (
+    <Marker
+      ref={markerRef}
+      position={[v.latitud, v.longitud]}
+      icon={icono}
+      eventHandlers={{
+        mouseover: abrirPopup,
+        mouseout: cerrarPopupConDemora,
+        popupopen: (e) => {
+          const el = e.popup.getElement()
+          if (!el) return
+          el.addEventListener('mouseenter', abrirPopup)
+          el.addEventListener('mouseleave', cerrarPopupConDemora)
+        },
+      }}
+    >
+      <Popup className="mapa-popup" autoPan={false}>
+        <div style={{ fontFamily: "'Inter', sans-serif", minWidth: '180px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+            {v.logo_url ? (
+              <img src={v.logo_url} alt="" style={{ width: '40px', height: '40px', borderRadius: '8px', objectFit: 'cover' }} />
+            ) : (
+              <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: '#4164fe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ fontSize: '13px', fontWeight: 700, color: 'white' }}>{iniciales(v.nombre_negocio)}</span>
+              </div>
+            )}
+            <div>
+              <div style={{ fontWeight: 700, fontSize: '14px', color: '#0a0a0a' }}>{v.nombre_negocio}</div>
+              {nombreBarrio && (
+                <div style={{ fontSize: '11px', fontWeight: 500, color: '#4164fe', marginTop: '1px' }}>{nombreBarrio}</div>
+              )}
+            </div>
+          </div>
+          {v.descripcion_corta && (
+            <p style={{ fontSize: '12px', color: 'rgba(10,10,10,0.5)', margin: '0 0 10px', lineHeight: '1.4' }}>
+              {v.descripcion_corta}
+            </p>
+          )}
+          <Link
+            href={`/tienda/${v.slug}`}
+            style={{
+              display: 'inline-block', color: '#4164fe',
+              fontSize: '12px', fontWeight: 600, textDecoration: 'none',
+            }}
+          >
+            Ver tienda →
+          </Link>
+        </div>
+      </Popup>
+    </Marker>
+  )
 }
 
 export default function MapaHome({ vendedores = [] }) {
@@ -94,58 +162,12 @@ export default function MapaHome({ vendedores = [] }) {
           const nombreBarrio = v.barrio_id ? barriosMap[v.barrio_id] : null
 
           return (
-            <Marker
+            <MarcadorVendedor
               key={v.id}
-              position={[v.latitud, v.longitud]}
-              icon={v.recibe_publico ? iconoLocal : iconoCasa}
-            >
-              <Tooltip direction="top" offset={[0, -14]} className="mapa-pin-tooltip">
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: '12px', color: 'white' }}>
-                    {v.nombre_negocio}
-                  </div>
-                  {nombreBarrio && (
-                    <div style={{ fontWeight: 400, fontSize: '11px', color: 'rgba(255,255,255,0.65)', marginTop: '1px' }}>
-                      {nombreBarrio}
-                    </div>
-                  )}
-                </div>
-              </Tooltip>
-
-              <Popup className="mapa-popup">
-                <div style={{ fontFamily: "'Inter', sans-serif", minWidth: '180px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-                    {v.logo_url ? (
-                      <img src={v.logo_url} alt="" style={{ width: '40px', height: '40px', borderRadius: '8px', objectFit: 'cover' }} />
-                    ) : (
-                      <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: '#4164fe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <span style={{ fontSize: '13px', fontWeight: 700, color: 'white' }}>{iniciales(v.nombre_negocio)}</span>
-                      </div>
-                    )}
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: '14px', color: '#0a0a0a' }}>{v.nombre_negocio}</div>
-                      {nombreBarrio && (
-                        <div style={{ fontSize: '11px', fontWeight: 500, color: '#4164fe', marginTop: '1px' }}>{nombreBarrio}</div>
-                      )}
-                    </div>
-                  </div>
-                  {v.descripcion_corta && (
-                    <p style={{ fontSize: '12px', color: 'rgba(10,10,10,0.5)', margin: '0 0 10px', lineHeight: '1.4' }}>
-                      {v.descripcion_corta}
-                    </p>
-                  )}
-                  <Link
-                    href={`/tienda/${v.slug}`}
-                    style={{
-                      display: 'inline-block', color: '#4164fe',
-                      fontSize: '12px', fontWeight: 600, textDecoration: 'none',
-                    }}
-                  >
-                    Ver tienda →
-                  </Link>
-                </div>
-              </Popup>
-            </Marker>
+              v={v}
+              icono={v.recibe_publico ? iconoLocal : iconoCasa}
+              nombreBarrio={nombreBarrio}
+            />
           )
         })}
       </MapContainer>
@@ -171,17 +193,6 @@ export default function MapaHome({ vendedores = [] }) {
           height: 10px;
           border-radius: 50%;
           animation: pulso 2s ease-out infinite;
-        }
-        .mapa-pin-tooltip {
-          background: rgba(10,10,10,0.9) !important;
-          border: none !important;
-          border-radius: 8px !important;
-          padding: 8px 12px !important;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important;
-          font-family: 'Inter', sans-serif !important;
-        }
-        .mapa-pin-tooltip::before {
-          border-top-color: rgba(10,10,10,0.9) !important;
         }
         .leaflet-popup.mapa-popup .leaflet-popup-content-wrapper {
           border-radius: 16px !important;
