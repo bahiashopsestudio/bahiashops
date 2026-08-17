@@ -137,8 +137,7 @@ export default function HomeContent({ categorias, recientes, elegidos, vendedore
               }}
             />
             <div
-              className="relative z-10 h-full flex flex-col justify-center items-start"
-              style={{ maxWidth: '480px', padding: '56px 48px' }}
+              className="relative z-10 h-full flex flex-col justify-center items-start max-w-[480px] md:max-w-[580px] py-14 px-5 md:px-12"
             >
               <h1
                 className="text-[28px] md:text-[42px]"
@@ -151,8 +150,24 @@ export default function HomeContent({ categorias, recientes, elegidos, vendedore
                   marginBottom: '16px',
                 }}
               >
-                Lo que buscás ya está en nuestra ciudad
+                Lo que buscás{' '}
+                <br />
+                ya está en nuestra ciudad
               </h1>
+
+              <p
+                style={{
+                  fontFamily: 'Poppins, sans-serif',
+                  fontWeight: 300,
+                  fontSize: '15px',
+                  color: 'rgba(255,255,255,0.9)',
+                  lineHeight: 1.6,
+                  maxWidth: '390px',
+                  marginBottom: '12px',
+                }}
+              >
+                Bahía Blanca está lleno de proyectos y personas por conocer.
+              </p>
 
               <p
                 style={{
@@ -165,7 +180,6 @@ export default function HomeContent({ categorias, recientes, elegidos, vendedore
                   marginBottom: '28px',
                 }}
               >
-                Bahía Blanca está lleno de proyectos y personas por conocer.
                 ¡Bienvenidos a Bahía Shops! Un espacio para descubrir, comprar y conectar con negocios de nuestra ciudad.
               </p>
 

@@ -1,3 +1,5 @@
+import Link from 'next/link'
+
 export default function SomosBahia() {
   return (
     <section className="py-6 md:py-8">
@@ -52,20 +54,32 @@ export default function SomosBahia() {
         {/* ── Foto grande ── */}
         <div style={{ margin: '0 36px', position: 'relative' }}>
           <img
-            src="/somos-bahia.jpg"
+            src="/images/somos-bahia.png"
             alt="Vendedores de Bahía Shops"
-            style={{ width: '100%', height: '300px', objectFit: 'cover', borderRadius: '6px', display: 'block' }}
+            style={{ width: '100%', height: '300px', objectFit: 'cover', objectPosition: 'center 28%', borderRadius: '6px', display: 'block' }}
           />
-          <div style={{ position: 'absolute', left: '16px', bottom: '16px' }}>
+          {/* Degradado: sin esto el texto blanco se pierde sobre la parte
+              clara de la foto. */}
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              borderRadius: '6px',
+              background: 'linear-gradient(to top, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.3) 40%, rgba(0,0,0,0) 70%)',
+              pointerEvents: 'none',
+            }}
+          />
+
+          <div style={{ position: 'absolute', left: '16px', right: '16px', bottom: '16px', maxWidth: '440px' }}>
             <p
               style={{
                 fontFamily: "'Inter', sans-serif",
                 fontWeight: 500,
                 fontSize: '13px',
-                color: 'rgba(255,255,255,0.9)',
+                color: 'rgba(255,255,255,0.95)',
               }}
             >
-              Marina y Tomás
+              Ella es Sofía. Hace cerámica.
             </p>
             <p
               style={{
@@ -75,29 +89,41 @@ export default function SomosBahia() {
                 color: 'rgba(255,255,255,0.9)',
               }}
             >
-              Aroma Casa · Barrio Universitario
+              Bueno… en realidad no existe.
             </p>
           </div>
         </div>
 
         {/* ── Línea inferior ── */}
         <div style={{ padding: '20px 36px 36px' }}>
-          <span style={{ fontFamily: "'Inter', sans-serif", fontWeight: 300, fontSize: '13px', color: '#777' }}>
-            Vendedores reales.{' '}
-          </span>
-          <a
-            href="#"
+          <p
             style={{
               fontFamily: "'Inter', sans-serif",
-              fontWeight: 400,
+              fontWeight: 300,
+              fontSize: '13px',
+              color: '#777',
+              lineHeight: 1.6,
+              marginBottom: '4px',
+            }}
+          >
+            Pero nos encantaría que pronto haya muchas Sofías reales en Bahía Shops.
+          </p>
+          <span style={{ fontFamily: "'Inter', sans-serif", fontWeight: 300, fontSize: '13px', color: '#777' }}>
+            ¿Tenés un emprendimiento?{' '}
+          </span>
+          <Link
+            href="/vendedor/nuevo"
+            style={{
+              fontFamily: "'Inter', sans-serif",
+              fontWeight: 700,
               fontSize: '13px',
               color: '#0a0a0a',
               textDecoration: 'underline',
               textUnderlineOffset: '3px',
             }}
           >
-            Conocé sus historias
-          </a>
+            Contanos tu historia.
+          </Link>
         </div>
       </div>
     </section>
