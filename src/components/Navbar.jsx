@@ -32,8 +32,15 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
   const [categoriasAbiertas, setCategoriasAbiertas] = useState(false)
   const [todasCategorias, setTodasCategorias] = useState([])
   const [todasCapsulas, setTodasCapsulas] = useState([])
+  const [usuario, setUsuario] = useState(null)
 
   const isSolid = variant === 'solid'
+
+  const avatarUrl = usuario?.user_metadata?.avatar_url
+  const nombreUsuario = usuario?.user_metadata?.nombre_completo || usuario?.user_metadata?.full_name || ''
+  const inicialUsuario = nombreUsuario
+    ? nombreUsuario.charAt(0).toUpperCase()
+    : (usuario?.email?.charAt(0).toUpperCase() || 'R')
 
   useEffect(() => {
     const supabase = createClient()
@@ -59,6 +66,15 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
     }
     cargarCategorias()
     cargarCapsulas()
+  }, [])
+
+  useEffect(() => {
+    const supabase = createClient()
+    async function cargarUsuario() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) setUsuario(user)
+    }
+    cargarUsuario()
   }, [])
 
   useEffect(() => {
@@ -103,7 +119,7 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
         className={`fixed top-0 left-0 right-0 z-[900] hidden lg:block transition-all duration-300 ${
           showDark ? 'bg-white' : 'bg-transparent'
         }`}
-        style={{ fontFamily: "'Inter', sans-serif" }}
+        style={{ fontFamily: "'Inter', sans-serif", borderBottom: `1px solid ${showDark ? 'rgba(10,10,10,0.08)' : 'transparent'}` }}
       >
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center">
 
@@ -116,18 +132,23 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
           <div className="flex items-center gap-5 ml-12">
             <button
               onClick={() => setCategoriasAbiertas((v) => !v)}
-              className="inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-2 transition-colors cursor-pointer"
               style={{
                 fontFamily: "'Inter', sans-serif",
                 fontWeight: 500,
                 fontSize: '13px',
-                borderRadius: '999px',
-                padding: '7px 14px',
-                backgroundColor: showDark ? 'rgba(10,10,10,0.06)' : 'rgba(255,255,255,0.16)',
-                color: showDark ? '#0a0a0a' : '#ffffff',
+                borderRadius: '4px',
+                padding: '6px 24px',
+                border: `1px solid ${categoriasAbiertas ? '#0a0a0a' : showDark ? '#0a0a0a' : '#ffffff'}`,
+                backgroundColor: categoriasAbiertas ? '#0a0a0a' : 'transparent',
+                color: categoriasAbiertas ? '#ffffff' : showDark ? '#0a0a0a' : '#ffffff',
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = showDark ? 'rgba(10,10,10,0.1)' : 'rgba(255,255,255,0.26)' }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = showDark ? 'rgba(10,10,10,0.06)' : 'rgba(255,255,255,0.16)' }}
+              onMouseEnter={(e) => {
+                if (!categoriasAbiertas) e.currentTarget.style.backgroundColor = showDark ? 'rgba(10,10,10,0.05)' : 'rgba(255,255,255,0.12)'
+              }}
+              onMouseLeave={(e) => {
+                if (!categoriasAbiertas) e.currentTarget.style.backgroundColor = 'transparent'
+              }}
             >
               Categorías
               {categoriasAbiertas ? (
@@ -421,8 +442,12 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
               </span>
             )}
           </Link>
-          <Link href="/perfil" className="w-7 h-7 rounded-full bg-[#0a0a0a] text-white flex items-center justify-center text-xs font-medium shrink-0">
-            R
+          <Link href="/perfil" className="w-7 h-7 rounded-full overflow-hidden shrink-0 flex items-center justify-center bg-[#0a0a0a] text-white text-xs font-medium">
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="Perfil" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+            ) : (
+              inicialUsuario
+            )}
           </Link>
         </div>
       </div>
@@ -433,7 +458,7 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
         className={`fixed top-0 left-0 right-0 z-[900] lg:hidden transition-all duration-300 h-20 ${
           showDark ? 'bg-white' : 'bg-transparent'
         }`}
-        style={{ fontFamily: "'Inter', sans-serif" }}
+        style={{ fontFamily: "'Inter', sans-serif", borderBottom: `1px solid ${showDark ? 'rgba(10,10,10,0.08)' : 'transparent'}` }}
       >
         <div className="flex items-center justify-between h-full px-4">
           <Link href="/" className="shrink-0 ml-2" aria-label="Bahía Shops">

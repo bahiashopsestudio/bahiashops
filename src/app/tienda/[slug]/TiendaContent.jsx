@@ -101,6 +101,7 @@ export default function TiendaContent({ vendedor, productos }) {
   return (
     <>
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&display=swap" />
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,100..900&family=Poppins:wght@300;400;500&display=swap" />
 
       <div className="min-h-screen bg-white" style={{ fontFamily: "'Inter', sans-serif" }}>
 
@@ -111,7 +112,7 @@ export default function TiendaContent({ vendedor, productos }) {
         <Navbar onToggleMenu={() => setMenuOpen(!menuOpen)} variant="solid" />
 
         {/* ── Portada con botones flotantes ── */}
-        <div className="relative h-56 md:h-80 overflow-hidden mt-14">
+        <div className="relative h-56 md:h-80 overflow-hidden mt-20">
           {vendedor.portada_url ? (
             <img
               src={vendedor.portada_url}
@@ -153,11 +154,17 @@ export default function TiendaContent({ vendedor, productos }) {
 
             <button
               onClick={toggleSeguir}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all cursor-pointer backdrop-blur-md ${
-                siguiendo
-                  ? 'bg-white text-[#0a0a0a] shadow-sm'
-                  : 'bg-black/30 text-white border border-white/30 hover:bg-black/50'
-              }`}
+              className="backdrop-blur-md transition-colors cursor-pointer"
+              style={{
+                fontFamily: "'Inter', sans-serif",
+                fontWeight: 500,
+                fontSize: '13px',
+                borderRadius: '4px',
+                padding: '9px 20px',
+                border: '1px solid #ffffff',
+                backgroundColor: siguiendo ? '#ffffff' : 'rgba(0,0,0,0.25)',
+                color: siguiendo ? '#0a0a0a' : '#ffffff',
+              }}
             >
               {siguiendo ? '✓ Siguiendo' : 'Seguir'}
             </button>
@@ -167,8 +174,8 @@ export default function TiendaContent({ vendedor, productos }) {
 
         {/* ── Vendor identity ── */}
         <div className="max-w-6xl mx-auto px-6">
-          <div className="relative -mt-14 flex items-end gap-5 mb-6 pt-4">
-            <div className="w-28 h-28 rounded-2xl bg-white border-4 border-white overflow-hidden shadow-sm shrink-0">
+          <div className="relative -mt-12 flex items-end gap-5 mb-14 pt-[10px]">
+            <div className="w-32 h-32 md:w-36 md:h-36 rounded-2xl bg-white border-4 border-white overflow-hidden shadow-sm shrink-0">
               {vendedor.logo_url ? (
                 <img src={vendedor.logo_url} alt={vendedor.nombre_negocio} className="w-full h-full object-cover" />
               ) : (
@@ -207,12 +214,6 @@ export default function TiendaContent({ vendedor, productos }) {
 
           {/* ── Productos ── */}
           <section className="mb-10">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-black text-[#0a0a0a] tracking-tight">
-                Productos{productos.length > 0 ? ` (${productos.length})` : ''}
-              </h2>
-            </div>
-
             {productos.length > 0 ? (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-5">
                 {productos.map(prod => {
@@ -266,12 +267,12 @@ export default function TiendaContent({ vendedor, productos }) {
           <div className="grid md:grid-cols-2 gap-4 mb-8">
 
             <div className="bg-[#F5F2EC] rounded-2xl p-6">
-              <h3 className="text-lg font-black text-[#0a0a0a] tracking-tight mb-3">Sobre {vendedor.nombre_negocio}</h3>
-              <p className="text-sm text-[#0a0a0a]/50 leading-relaxed font-light">
+              <h3 className="text-lg mb-3" style={{ fontFamily: 'Fraunces, serif', fontWeight: 500, color: '#0a0a0a' }}>Sobre {vendedor.nombre_negocio}</h3>
+              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 300, fontSize: '13.5px', color: 'rgba(10,10,10,0.5)', lineHeight: 1.65 }}>
                 {vendedor.descripcion_corta}
               </p>
               {vendedor.descripcion_larga && (
-                <p className="text-sm text-[#0a0a0a]/40 leading-relaxed font-light mt-2">
+                <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 300, fontSize: '13.5px', color: 'rgba(10,10,10,0.4)', lineHeight: 1.65, marginTop: '8px' }}>
                   {vendedor.descripcion_larga}
                 </p>
               )}
@@ -316,7 +317,7 @@ export default function TiendaContent({ vendedor, productos }) {
             </div>
 
             <div className="bg-[#F5F2EC] rounded-2xl p-6 flex flex-col">
-              <h3 className="text-lg font-black text-[#0a0a0a] tracking-tight mb-4">Políticas</h3>
+              <h3 className="text-lg mb-4" style={{ fontFamily: 'Fraunces, serif', fontWeight: 500, color: '#0a0a0a' }}>Políticas</h3>
               <div className="flex flex-col flex-1">
                 <Link
                   href="/privacidad"
@@ -352,7 +353,7 @@ export default function TiendaContent({ vendedor, productos }) {
           {/* ── Reseñas placeholder ── */}
           <div className="bg-[#F5F2EC] rounded-2xl p-6 mb-10">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-black text-[#0a0a0a] tracking-tight">Reseñas</h3>
+              <h3 className="text-lg" style={{ fontFamily: 'Fraunces, serif', fontWeight: 500, color: '#0a0a0a' }}>Reseñas</h3>
               <span className="text-[10px] text-[#0a0a0a]/30 font-light px-2.5 py-1 rounded-full bg-[#0a0a0a]/5 tracking-wide">Próximamente</span>
             </div>
             <div className="flex items-center gap-1 mt-3">
@@ -363,7 +364,7 @@ export default function TiendaContent({ vendedor, productos }) {
               ))}
               <span className="text-xs text-[#0a0a0a]/20 ml-1 font-light">Sin reseñas aún</span>
             </div>
-            <p className="text-sm text-[#0a0a0a]/30 mt-3 font-light">
+            <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 300, fontSize: '13.5px', color: 'rgba(10,10,10,0.4)', lineHeight: 1.6, marginTop: '12px' }}>
               Las reseñas estarán disponibles próximamente. Los compradores podrán dejar su opinión después de cada compra.
             </p>
           </div>

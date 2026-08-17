@@ -238,17 +238,31 @@ export default function TesorosPage() {
         <Navbar onToggleMenu={() => setMenuOpen(!menuOpen)} variant="solid" />
 
         <div className="pt-20">
-          {/* ── Header editorial ── */}
-          <div className="max-w-[1100px] mx-auto px-5 pt-12 pb-8 md:px-12 md:pt-[72px] md:pb-12">
-            <p style={{ fontFamily: "'Inter', sans-serif", fontSize: '10px', textTransform: 'uppercase', letterSpacing: '2px', color: 'rgba(10,10,10,0.3)', marginBottom: '14px' }}>
-              Tesoros de Bahía
-            </p>
-            <h1 className="text-[28px] md:text-[38px]" style={{ fontFamily: 'Fraunces, serif', fontWeight: 500, color: '#0a0a0a', lineHeight: 1.2, maxWidth: '560px' }}>
-              Lo más lindo que hacemos en esta ciudad
-            </h1>
-            <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 300, fontSize: '15px', color: 'rgba(10,10,10,0.5)', lineHeight: 1.6, maxWidth: '480px', marginTop: '18px' }}>
-              Una selección personal de objetos que nos emocionan. Elegidos uno por uno, hechos por gente de acá.
-            </p>
+          {/* ── Header editorial con imagen de fondo ── */}
+          <div className="relative overflow-hidden">
+            <img
+              src="/images/woman-looking-different-goodies-local-producer.jpg"
+              alt=""
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+            <div
+              className="absolute inset-0"
+              style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.35) 55%, rgba(0,0,0,0.1) 100%)' }}
+            />
+            <div
+              className="relative max-w-[1100px] mx-auto px-5 pt-12 pb-12 md:px-12 md:pt-[72px] md:pb-16 flex flex-col justify-center"
+              style={{ minHeight: '340px' }}
+            >
+              <p style={{ fontFamily: "'Inter', sans-serif", fontSize: '10px', textTransform: 'uppercase', letterSpacing: '2px', color: 'rgba(255,255,255,0.7)', marginBottom: '14px' }}>
+                Tesoros de Bahía
+              </p>
+              <h1 className="text-[28px] md:text-[38px]" style={{ fontFamily: 'Fraunces, serif', fontWeight: 500, color: '#ffffff', lineHeight: 1.2, maxWidth: '560px' }}>
+                Lo más lindo de la ciudad
+              </h1>
+              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 300, fontSize: '15px', color: 'rgba(255,255,255,0.85)', lineHeight: 1.6, maxWidth: '480px', marginTop: '18px' }}>
+                Una selección personal de objetos que nos emocionan. Elegidos uno por uno, de gente de acá.
+              </p>
+            </div>
           </div>
 
           {!cargando && todos.length === 0 && (
@@ -277,7 +291,7 @@ export default function TesorosPage() {
               <div className="max-w-[1100px] mx-auto px-5 pt-12 pb-8 md:px-12 md:pt-12 md:pb-8">
                 <div className="flex items-center justify-between" style={{ marginBottom: '24px' }}>
                   <p style={{ fontFamily: 'Fraunces, serif', fontWeight: 500, fontSize: '22px', color: '#0a0a0a' }}>
-                    Todos los tesoros
+                    Descubrí tesoros
                   </p>
                   <p style={{ fontFamily: "'Inter', sans-serif", fontWeight: 300, fontSize: '12px', color: 'rgba(10,10,10,0.35)' }}>
                     {todos.length} objetos

@@ -119,9 +119,34 @@ export default function Footer() {
           </a>
         </div>
 
+        {/* Desarrollado por */}
+        <div
+          className="flex flex-wrap items-center gap-1.5"
+          style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 300, fontSize: '12px', color: '#9cc3ea', marginTop: '24px' }}
+        >
+          <span>Desarrollado por</span>
+          <Link
+            href="/local-shops"
+            className="hover:text-[#9cc3ea] transition-colors underline underline-offset-2"
+            style={{ fontFamily: "'Inter', sans-serif", fontWeight: 400 }}
+          >
+            Local Shops
+          </Link>
+          <span>y</span>
+          <a
+            href="https://www.instagram.com/planmaterial/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-[#9cc3ea] transition-colors underline underline-offset-2"
+            style={{ fontFamily: "'Inter', sans-serif", fontWeight: 400 }}
+          >
+            Plan Material
+          </a>
+        </div>
+
         {/* Copyright */}
         <p
-          style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 300, fontSize: '12px', color: '#9cc3ea', marginTop: '24px' }}
+          style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 300, fontSize: '12px', color: '#9cc3ea', marginTop: '8px' }}
         >
           © {new Date().getFullYear()} Bahía Shops. Bahía Blanca, Argentina.
         </p>

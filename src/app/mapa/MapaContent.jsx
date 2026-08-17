@@ -87,7 +87,7 @@ export default function MapaContent({ vendedores = [], categorias = [] }) {
                   marginBottom: '24px',
                 }}
               >
-                Encontrá a distintos vendedores por barrio. Encontrá lo que necesitás cerca tuyo.
+                Encontrá distintos vendedores por barrio. Encontrá lo que necesitás cerca tuyo.
               </h1>
               <p
                 style={{
@@ -123,15 +123,18 @@ export default function MapaContent({ vendedores = [], categorias = [] }) {
           </div>
         </div>
 
-        {/* ── Leyenda ── */}
-        <div className="max-w-6xl mx-auto px-4 md:px-8 py-6 flex gap-5">
-          <div className="flex items-center gap-2">
-            <div className="w-[8px] h-[8px] rounded-full bg-[#ff1010] shrink-0" />
-            <span className="text-[11px] font-light text-[#0a0a0a]/35">Local con dirección ({locales.length})</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-[8px] h-[8px] rounded-full bg-[#9cc3ea] shrink-0" />
-            <span className="text-[11px] font-light text-[#0a0a0a]/35">Trabaja desde casa ({casas.length})</span>
+        {/* ── Leyenda: debajo del mapa, alineada a la derecha en desktop ── */}
+        <div className="flex flex-col lg:flex-row">
+          <div className="hidden lg:block lg:w-1/2 shrink-0" />
+          <div className="w-full lg:w-1/2 px-4 md:px-8 lg:px-6 py-6 flex gap-5 justify-center lg:justify-end">
+            <div className="flex items-center gap-2">
+              <div className="w-[8px] h-[8px] rounded-full bg-[#ff1010] shrink-0" />
+              <span className="text-[11px] font-light text-[#0a0a0a]/35">Local con dirección ({locales.length})</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-[8px] h-[8px] rounded-full bg-[#9cc3ea] shrink-0" />
+              <span className="text-[11px] font-light text-[#0a0a0a]/35">Trabaja desde casa ({casas.length})</span>
+            </div>
           </div>
         </div>
       </div>

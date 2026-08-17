@@ -165,7 +165,8 @@ export default function HomeContent({ categorias, recientes, elegidos, vendedore
                   marginBottom: '28px',
                 }}
               >
-                ¡Bienvenidos a Bahía Shops! Un espacio para descubrir, comprar y conectar con negocios de Bahía Blanca.
+                Bahía Blanca está lleno de proyectos y personas por conocer.
+                ¡Bienvenidos a Bahía Shops! Un espacio para descubrir, comprar y conectar con negocios de nuestra ciudad.
               </p>
 
               <Link
@@ -426,11 +427,22 @@ function RecienLlegados({ productos }) {
             fontSize: '28px',
             color: '#0a0a0a',
             letterSpacing: '-0.02em',
-            marginBottom: '24px',
+            marginBottom: '8px',
           }}
         >
           Recién llegados
         </h2>
+        <p
+          style={{
+            fontFamily: 'Poppins, sans-serif',
+            fontWeight: 300,
+            fontSize: '14px',
+            color: '#888',
+            marginBottom: '24px',
+          }}
+        >
+          Nuevos productos, nuevos emprendimientos y mucho para descubrir. ¡Bienvenidos!
+        </p>
 
         <div
           ref={scrollRef}
