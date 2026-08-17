@@ -11,6 +11,7 @@ export function useDragScroll(scrollRef) {
 
     let dragging = false
     let moved = false
+    let captured = false
     let startX = 0
     let startScrollLeft = 0
 
@@ -22,16 +23,14 @@ export function useDragScroll(scrollRef) {
 
     function onPointerDown(e) {
       if (e.pointerType !== 'mouse' || e.button !== 0) return
+      // Si un arrastre anterior dejó un supresor pendiente que nunca llegó a
+      // consumir su click, lo limpiamos para que no se coma este gesto.
+      el.removeEventListener('click', suppressNextClick, true)
       dragging = true
       moved = false
+      captured = false
       startX = e.clientX
       startScrollLeft = el.scrollLeft
-      try {
-        el.setPointerCapture(e.pointerId)
-      } catch {
-        // Some environments (or synthetic events) may not have an active
-        // pointer to capture — dragging still works via document-level moves.
-      }
       el.style.cursor = 'grabbing'
       el.style.userSelect = 'none'
     }
@@ -39,13 +38,34 @@ export function useDragScroll(scrollRef) {
     function onPointerMove(e) {
       if (!dragging) return
       const dx = e.clientX - startX
-      if (Math.abs(dx) > DRAG_THRESHOLD) moved = true
+      if (!moved && Math.abs(dx) > DRAG_THRESHOLD) {
+        moved = true
+        // La captura va acá y no en el pointerdown: con pointer capture activo
+        // el navegador dispara el click sobre el elemento que capturó, así que
+        // capturar antes de saber si es arrastre haría que el click apunte a
+        // este contenedor y los onClick de los botones internos nunca corran.
+        try {
+          el.setPointerCapture(e.pointerId)
+          captured = true
+        } catch {
+          // Sin captura el arrastre sigue andando mientras el puntero esté
+          // sobre el contenedor.
+        }
+      }
       el.scrollLeft = startScrollLeft - dx
     }
 
-    function endDrag() {
+    function endDrag(e) {
       if (!dragging) return
       dragging = false
+      if (captured) {
+        try {
+          el.releasePointerCapture(e.pointerId)
+        } catch {
+          // El navegador ya libera la captura solo en el pointerup.
+        }
+        captured = false
+      }
       el.style.cursor = 'grab'
       el.style.userSelect = ''
       if (moved) {
