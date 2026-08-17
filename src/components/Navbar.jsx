@@ -274,7 +274,7 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
                 {SELLOS.map((s) => (
                   <Link
                     key={s.slug}
-                    href={`/explorar?valor=${s.slug}`}
+                    href={`/valor/${s.slug}`}
                     onClick={() => setCategoriasAbiertas(false)}
                     className="transition-colors"
                     style={{ fontSize: '13px', fontWeight: 300, color: '#0a0a0a' }}

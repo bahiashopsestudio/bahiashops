@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import Link from 'next/link'
 import { useDragScroll } from '@/hooks/useDragScroll'
 
 const VALORES_TAGS = [
@@ -29,7 +30,7 @@ const VALORES_TAGS = [
     ubicacion: 'Villa Mitre, Bahía Blanca',
   },
   {
-    slug: 'mujeres-emprendedoras',
+    slug: 'de-mujeres-emprendedoras',
     nombre: 'De mujeres emprendedoras',
     boton: 'Ver productos de mujeres emprendedoras',
     quote: 'Armamos este proyecto entre amigas, desde cero.',
@@ -69,7 +70,7 @@ const VALORES_TAGS = [
     ubicacion: 'Centro Sur, Bahía Blanca',
   },
   {
-    slug: 'delivery-bicicleta',
+    slug: 'delivery-en-bicicleta',
     nombre: 'Delivery en bicicleta',
     boton: 'Ver productos con delivery en bicicleta',
     quote: 'Repartimos todos los pedidos en bici, sin excepción.',
@@ -192,8 +193,8 @@ export default function ValoresCompra() {
           >
             {valor.ubicacion}
           </p>
-          <a
-            href="#"
+          <Link
+            href={`/valor/${valor.slug}`}
             className="block w-full text-center bg-[#0a0a0a] text-white border border-[#0a0a0a] hover:bg-transparent hover:text-[#0a0a0a] transition-colors cursor-pointer"
             style={{
               fontFamily: "'Inter', sans-serif",
@@ -204,7 +205,7 @@ export default function ValoresCompra() {
             }}
           >
             {valor.boton}
-          </a>
+          </Link>
         </div>
       </div>
     </section>

@@ -125,7 +125,7 @@ export default function MenuTakeover({ onClose }) {
           {SELLOS.map((s) => (
             <Link
               key={s.slug}
-              href={`/explorar?valor=${s.slug}`}
+              href={`/valor/${s.slug}`}
               onClick={onClose}
               style={{
                 fontFamily: "'Inter', sans-serif",
