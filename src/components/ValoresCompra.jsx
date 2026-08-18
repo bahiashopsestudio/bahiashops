@@ -8,6 +8,7 @@ const VALORES_TAGS = [
   {
     slug: 'hecho-en-bahia',
     nombre: 'Hecho en Bahía',
+    imagen: '/images/3.png',
     boton: 'Ver productos hechos en Bahía',
     quote: 'Todo lo que hacemos nace y se produce acá, en Bahía Blanca.',
     vendedor: 'Aroma Casa',
@@ -16,6 +17,7 @@ const VALORES_TAGS = [
   {
     slug: 'productos-unicos',
     nombre: 'Productos únicos',
+    imagen: '/images/9.png',
     boton: 'Ver productos únicos',
     quote: 'Cada pieza es distinta: no vas a encontrar dos iguales.',
     vendedor: 'Hilo Sur',
@@ -24,6 +26,7 @@ const VALORES_TAGS = [
   {
     slug: 'hecho-a-mano',
     nombre: 'Hecho a mano',
+    imagen: '/images/2.png',
     boton: 'Ver productos hechos a mano',
     quote: 'Todo pasa por nuestras manos, sin líneas de producción.',
     vendedor: 'Natural BB',
@@ -32,6 +35,7 @@ const VALORES_TAGS = [
   {
     slug: 'de-mujeres-emprendedoras',
     nombre: 'De mujeres emprendedoras',
+    imagen: '/images/1.png',
     boton: 'Ver productos de mujeres emprendedoras',
     quote: 'Armamos este proyecto entre amigas, desde cero.',
     vendedor: 'Flor de Ceibo',
@@ -40,6 +44,7 @@ const VALORES_TAGS = [
   {
     slug: 'eco-friendly',
     nombre: 'Eco-friendly',
+    imagen: '/images/4.png',
     boton: 'Ver productos eco-friendly',
     quote: 'Usamos materiales biodegradables en cada envío.',
     vendedor: 'Verde Bahía',
@@ -48,6 +53,7 @@ const VALORES_TAGS = [
   {
     slug: 'vegano',
     nombre: 'Vegano',
+    imagen: '/images/5.png',
     boton: 'Ver productos veganos',
     quote: 'Ningún producto nuestro tiene origen animal.',
     vendedor: 'Sabor Libre',
@@ -56,6 +62,7 @@ const VALORES_TAGS = [
   {
     slug: 'produccion-responsable',
     nombre: 'Producción responsable',
+    imagen: '/images/6.png',
     boton: 'Ver productos producidos responsablemente',
     quote: 'Elegimos proveedores locales y procesos de bajo impacto.',
     vendedor: 'Taller del Sur',
@@ -64,6 +71,7 @@ const VALORES_TAGS = [
   {
     slug: 'segunda-oportunidad',
     nombre: 'Segunda oportunidad',
+    imagen: '/images/7.png',
     boton: 'Ver productos de segundas oportunidades',
     quote: 'Le damos una nueva vida a piezas que ya tienen historia.',
     vendedor: 'Vintage BB',
@@ -72,6 +80,7 @@ const VALORES_TAGS = [
   {
     slug: 'delivery-en-bicicleta',
     nombre: 'Delivery en bicicleta',
+    imagen: '/images/8.png',
     boton: 'Ver productos con delivery en bicicleta',
     quote: 'Repartimos todos los pedidos en bici, sin excepción.',
     vendedor: 'Pedal Market',
@@ -156,11 +165,16 @@ export default function ValoresCompra() {
           transition: 'opacity 200ms ease',
         }}
       >
-        <div
+        <img
+          src={valor.imagen}
+          alt={valor.nombre}
           style={{
             flex: '3 1 0%',
             aspectRatio: '16 / 9',
             width: '100%',
+            minWidth: 0,
+            objectFit: 'cover',
+            display: 'block',
             borderRadius: 0,
             background: '#d5d0c8',
           }}

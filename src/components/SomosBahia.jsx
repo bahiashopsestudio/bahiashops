@@ -1,6 +1,41 @@
+'use client'
+
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 
+const INTERVALO_MS = 5000
+
+const SLIDES = [
+  {
+    imagen: '/images/somos-bahia.png',
+    titulo: 'Ella es Sofía. Hace cerámica.',
+    bajada: 'Bueno… en realidad no existe.',
+    cierre: 'Pero nos encantaría que pronto haya muchas Sofías reales en Bahía Shops.',
+  },
+  {
+    imagen: '/images/somos-bahia-cafe.png',
+    titulo: 'Ellos son Martín y Florencia. Tuestan café.',
+    bajada: 'Spoiler: tampoco existen.',
+    cierre: 'Pero nos encantaría que pronto haya muchos de ellos reales en Bahía Shops.',
+  },
+  {
+    imagen: '/images/somos-bahia-zapato.png',
+    titulo: 'Ella es Delfina. Vende zapatos.',
+    bajada: 'Sí, también la inventamos.',
+    cierre: 'Pero nos encantaría que pronto haya muchas Delfinas reales en Bahía Shops.',
+  },
+]
+
 export default function SomosBahia() {
+  const [activo, setActivo] = useState(0)
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setActivo((i) => (i + 1) % SLIDES.length)
+    }, INTERVALO_MS)
+    return () => clearInterval(id)
+  }, [])
+
   return (
     <section className="py-6 md:py-8">
       <div style={{ background: '#f1f29f', borderRadius: 0, overflow: 'hidden' }}>
@@ -51,63 +86,94 @@ export default function SomosBahia() {
           </p>
         </div>
 
-        {/* ── Foto grande ── */}
-        <div style={{ margin: '0 36px', position: 'relative' }}>
-          <img
-            src="/images/somos-bahia.png"
-            alt="Vendedores de Bahía Shops"
-            style={{ width: '100%', height: '300px', objectFit: 'cover', objectPosition: 'center 28%', borderRadius: '6px', display: 'block' }}
-          />
-          {/* Degradado: sin esto el texto blanco se pierde sobre la parte
-              clara de la foto. */}
-          <div
-            style={{
-              position: 'absolute',
-              inset: 0,
-              borderRadius: '6px',
-              background: 'linear-gradient(to top, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.3) 40%, rgba(0,0,0,0) 70%)',
-              pointerEvents: 'none',
-            }}
-          />
+        {/* ── Slide automático de fotos ── */}
+        <div style={{ margin: '0 36px' }}>
+          <div style={{ position: 'relative', height: '300px', borderRadius: '6px', overflow: 'hidden' }}>
 
-          <div style={{ position: 'absolute', left: '16px', right: '16px', bottom: '16px', maxWidth: '440px' }}>
-            <p
+            {/* Las fotos van apiladas y se cruzan por opacidad: así no hay
+                parpadeo ni recarga al cambiar de slide. */}
+            {SLIDES.map((s, i) => (
+              <img
+                key={s.imagen}
+                src={s.imagen}
+                alt={s.titulo}
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  opacity: i === activo ? 1 : 0,
+                  transition: 'opacity 900ms ease',
+                }}
+              />
+            ))}
+
+            {/* Degradado: sin esto el texto blanco se pierde sobre la parte
+                clara de la foto. */}
+            <div
               style={{
-                fontFamily: "'Inter', sans-serif",
-                fontWeight: 500,
-                fontSize: '13px',
-                color: 'rgba(255,255,255,0.95)',
+                position: 'absolute',
+                inset: 0,
+                background: 'linear-gradient(to top, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.3) 40%, rgba(0,0,0,0) 70%)',
+                pointerEvents: 'none',
               }}
-            >
-              Ella es Sofía. Hace cerámica.
-            </p>
-            <p
-              style={{
-                fontFamily: "'Inter', sans-serif",
-                fontWeight: 300,
-                fontSize: '13px',
-                color: 'rgba(255,255,255,0.9)',
-              }}
-            >
-              Bueno… en realidad no existe.
-            </p>
+            />
+
+            {/* Los epígrafes se cruzan con el mismo tiempo que las fotos. */}
+            {SLIDES.map((s, i) => (
+              <div
+                key={s.imagen}
+                className="max-w-[440px] md:max-w-[520px]"
+                style={{
+                  position: 'absolute',
+                  left: '16px',
+                  right: '16px',
+                  bottom: '16px',
+                  opacity: i === activo ? 1 : 0,
+                  transition: 'opacity 900ms ease',
+                  pointerEvents: 'none',
+                }}
+              >
+                <p
+                  style={{
+                    fontFamily: "'Inter', sans-serif",
+                    fontWeight: 500,
+                    fontSize: '13px',
+                    color: 'rgba(255,255,255,0.95)',
+                  }}
+                >
+                  {s.titulo}
+                </p>
+                <p
+                  style={{
+                    fontFamily: "'Inter', sans-serif",
+                    fontWeight: 300,
+                    fontSize: '13px',
+                    color: 'rgba(255,255,255,0.9)',
+                  }}
+                >
+                  {s.bajada}
+                </p>
+                <p
+                  style={{
+                    fontFamily: "'Inter', sans-serif",
+                    fontWeight: 300,
+                    fontSize: '13px',
+                    color: 'rgba(255,255,255,0.9)',
+                    lineHeight: 1.5,
+                    marginTop: '10px',
+                  }}
+                >
+                  {s.cierre}
+                </p>
+              </div>
+            ))}
           </div>
         </div>
 
         {/* ── Línea inferior ── */}
         <div style={{ padding: '20px 36px 36px' }}>
-          <p
-            style={{
-              fontFamily: "'Inter', sans-serif",
-              fontWeight: 300,
-              fontSize: '13px',
-              color: '#777',
-              lineHeight: 1.6,
-              marginBottom: '4px',
-            }}
-          >
-            Pero nos encantaría que pronto haya muchas Sofías reales en Bahía Shops.
-          </p>
           <span style={{ fontFamily: "'Inter', sans-serif", fontWeight: 300, fontSize: '13px', color: '#777' }}>
             ¿Tenés un emprendimiento?{' '}
           </span>
