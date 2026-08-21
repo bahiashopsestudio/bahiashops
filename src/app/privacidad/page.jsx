@@ -1,16 +1,20 @@
 // src/app/privacidad/page.jsx
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { EMAIL_CONTACTO, EMAIL_LEGAL } from '@/lib/contacto'
 import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
-import Footer from '@/components/Footer'
 import VolverAtras from '@/components/VolverAtras'
 
 export default function PrivacidadPage() {
   const [menuAbierto, setMenuAbierto] = useState(false)
+
+  useEffect(() => {
+    if (menuAbierto) { document.body.style.overflow = 'hidden' } else { document.body.style.overflow = '' }
+    return () => { document.body.style.overflow = '' }
+  }, [menuAbierto])
 
   return (
     <>
@@ -18,8 +22,12 @@ export default function PrivacidadPage() {
         href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&display=swap"
         rel="stylesheet"
       />
+      <link
+        href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,100..900&display=swap"
+        rel="stylesheet"
+      />
       <div className="min-h-screen bg-white" style={{ fontFamily: "'Inter', sans-serif" }}>
-        <MenuTakeover isOpen={menuAbierto} onClose={() => setMenuAbierto(false)} />
+        {menuAbierto && <MenuTakeover onClose={() => setMenuAbierto(false)} />}
         <Navbar variant="solid" onToggleMenu={() => setMenuAbierto(!menuAbierto)} />
 
         <main className="pt-20 pb-24 px-4 md:px-8">
@@ -27,7 +35,10 @@ export default function PrivacidadPage() {
 
             <VolverAtras />
 
-            <h1 className="text-3xl md:text-4xl font-black tracking-tight text-[#0a0a0a] mt-6 mb-2">
+            <h1
+              className="text-3xl md:text-4xl mt-6 mb-2"
+              style={{ fontFamily: 'Fraunces, serif', fontWeight: 500, color: '#0a0a0a', letterSpacing: '-0.02em' }}
+            >
               Política de Privacidad
             </h1>
             <p className="text-sm text-[#0a0a0a]/40 mb-10">
@@ -189,7 +200,6 @@ export default function PrivacidadPage() {
           </div>
         </main>
 
-        <Footer />
       </div>
     </>
   )
