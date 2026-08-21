@@ -3,6 +3,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { EMAIL_CONTACTO, EMAIL_LEGAL } from '@/lib/contacto'
 import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
 import Footer from '@/components/Footer'
@@ -46,7 +47,7 @@ export default function PrivacidadPage() {
             {/* 1 */}
             <Seccion titulo="1. Responsable del Tratamiento">
               <p>
-                El responsable del tratamiento de tus datos personales es Bahía Shops, con domicilio en Bahía Blanca, provincia de Buenos Aires, Argentina. Podés contactarnos en <a href="mailto:bahiashops.estudio@gmail.com" className="underline underline-offset-2 hover:text-[#4164fe]">bahiashops.estudio@gmail.com</a>.
+                El responsable del tratamiento de tus datos personales es Bahía Shops, con domicilio en Bahía Blanca, provincia de Buenos Aires, Argentina. Podés contactarnos en <a href={`mailto:${EMAIL_LEGAL}`} className="underline underline-offset-2 hover:text-[#4164fe]">{EMAIL_LEGAL}</a>.
               </p>
             </Seccion>
 
@@ -137,7 +138,7 @@ export default function PrivacidadPage() {
                 <li><strong className="text-[#0a0a0a]">Actualización:</strong> mantener tus datos al día.</li>
               </ul>
               <p>
-                Para ejercer cualquiera de estos derechos, escribinos a <a href="mailto:bahiashops.estudio@gmail.com" className="underline underline-offset-2 hover:text-[#4164fe]">bahiashops.estudio@gmail.com</a>. Responderemos en un plazo de 10 días hábiles, conforme lo establece la ley.
+                Para ejercer cualquiera de estos derechos, escribinos a <a href={`mailto:${EMAIL_LEGAL}`} className="underline underline-offset-2 hover:text-[#4164fe]">{EMAIL_LEGAL}</a>. Responderemos en un plazo de 10 días hábiles, conforme lo establece la ley.
               </p>
             </Seccion>
 
@@ -169,7 +170,7 @@ export default function PrivacidadPage() {
               </p>
               <div className="mt-3 p-4 rounded-2xl bg-[#0a0a0a]/[0.03] text-[15px] leading-relaxed text-[#0a0a0a]/80">
                 <p><strong className="text-[#0a0a0a]">Bahía Shops</strong></p>
-                <p>Email: <a href="mailto:bahiashops.estudio@gmail.com" className="underline underline-offset-2 hover:text-[#4164fe]">bahiashops.estudio@gmail.com</a></p>
+                <p>Email: <a href={`mailto:${EMAIL_CONTACTO}`} className="underline underline-offset-2 hover:text-[#4164fe]">{EMAIL_CONTACTO}</a></p>
                 <p>Sitio web: <a href="https://bahiashops.com.ar" className="underline underline-offset-2 hover:text-[#4164fe]">bahiashops.com.ar</a></p>
                 <p>Bahía Blanca, Buenos Aires, Argentina</p>
               </div>

@@ -2,6 +2,7 @@
 // por email a tu casilla usando Resend.
 
 import { NextResponse } from 'next/server';
+import { EMAIL_NOTIFICACIONES, REMITENTE_NO_REPLY } from '@/lib/contacto';
 
 export async function POST(request) {
   const { email, mensaje } = await request.json();
@@ -21,8 +22,8 @@ export async function POST(request) {
         'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
       },
       body: JSON.stringify({
-        from: 'Bahía Shops <no-reply@bahiashops.com.ar>',
-        to: 'bahiashops.estudio@gmail.com',
+        from: REMITENTE_NO_REPLY,
+        to: EMAIL_NOTIFICACIONES,
         subject: `Nuevo mensaje de contacto de ${email}`,
         reply_to: email,
         html: `

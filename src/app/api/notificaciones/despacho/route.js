@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
+import { EMAIL_CONTACTO, REMITENTE_CONTACTO } from '@/lib/contacto';
 
 export async function POST(request) {
   try {
@@ -94,8 +95,9 @@ export async function POST(request) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'Bahía Shops <hola@bahiashops.com.ar>',
+        from: REMITENTE_CONTACTO,
         to: user.email,
+        reply_to: EMAIL_CONTACTO,
         subject: `Tu pedido #${pedido.id} fue despachado`,
         html: htmlEmail,
       }),

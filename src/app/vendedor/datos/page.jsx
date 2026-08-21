@@ -422,7 +422,7 @@ export default function MisDatosVendedorPage() {
               {usarOtroEmail && (
                 <label className="flex flex-col gap-1.5">
                   <span className={labelClasses}>Email de contacto *</span>
-                  <input type="email" required placeholder="contacto@bahiashops.com.ar" value={emailContacto}
+                  <input type="email" required placeholder="tucorreo@ejemplo.com" value={emailContacto}
                     onChange={(e) => setEmailContacto(e.target.value)} className={inputClasses} />
                 </label>
               )}

@@ -166,6 +166,23 @@ export default function RegistroPage() {
                   Registrarse con Google
                 </button>
 
+                {/* Qué datos pedimos a Google (verificación de OAuth) */}
+                <p
+                  style={{
+                    fontFamily: 'Poppins, sans-serif',
+                    fontWeight: 300,
+                    fontSize: '13px',
+                    color: 'rgba(10,10,10,0.5)',
+                    lineHeight: 1.6,
+                    marginTop: '12px',
+                  }}
+                >
+                  Para ingresar podés usar tu cuenta de Google. Solo usamos tu nombre, tu correo y tu foto de perfil para crear tu cuenta en Bahía Shops e identificarte cuando comprás o vendés. No accedemos a ningún otro dato de tu cuenta ni lo compartimos con terceros.{' '}
+                  <Link href="/privacidad" className="text-[#0a0a0a] font-medium underline underline-offset-2">
+                    Política de Privacidad
+                  </Link>.
+                </p>
+
                 {/* Separador */}
                 <div className="flex items-center gap-4 my-6">
                   <div className="flex-1 h-px bg-[#0a0a0a]/5" />

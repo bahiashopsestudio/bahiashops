@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { EMAIL_CONTACTO, EMAIL_NOTIFICACIONES, REMITENTE_CONTACTO } from '@/lib/contacto';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -14,8 +15,9 @@ export async function POST(request) {
     }
 
     await resend.emails.send({
-      from: 'Bahía Shops <hola@bahiashops.com.ar>',
-      to: 'bahiashops.estudio@gmail.com',
+      from: REMITENTE_CONTACTO,
+      to: EMAIL_NOTIFICACIONES,
+      reply_to: EMAIL_CONTACTO,
       subject: `🍳 Nuevo lead gastronómico: ${nombre}`,
       html: `
         <div style="font-family: sans-serif; max-width: 500px;">

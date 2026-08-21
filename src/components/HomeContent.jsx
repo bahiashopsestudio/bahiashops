@@ -137,7 +137,7 @@ export default function HomeContent({ categorias, recientes, elegidos, vendedore
               }}
             />
             <div
-              className="relative z-10 h-full flex flex-col justify-center items-start max-w-[480px] md:max-w-[580px] py-14 px-5 md:px-12"
+              className="relative z-10 h-full flex flex-col justify-center items-start max-w-[480px] md:max-w-[620px] pt-28 pb-14 px-5 md:px-12"
             >
               <h1
                 className="text-[28px] md:text-[42px]"
@@ -156,43 +156,40 @@ export default function HomeContent({ categorias, recientes, elegidos, vendedore
               </h1>
 
               <p
+                className="text-[13px] md:text-[15px] md:whitespace-nowrap"
                 style={{
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 300,
-                  fontSize: '15px',
                   color: 'rgba(255,255,255,0.9)',
                   lineHeight: 1.6,
-                  maxWidth: '390px',
                   marginBottom: '12px',
                 }}
               >
-                Bahía Blanca está llena de proyectos y emprededores por conocer.
+                ¡Bahía Blanca está llena de proyectos y emprededores por conocer!
               </p>
 
               <p
+                className="text-[13px] md:text-[15px]"
                 style={{
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 300,
-                  fontSize: '15px',
                   color: 'rgba(255,255,255,0.9)',
                   lineHeight: 1.6,
                   maxWidth: '390px',
                   marginBottom: '28px',
                 }}
               >
-                Bahía Shops es el mercado online de Bahía Blanca: un espacio para descubrir, comprar y conectar con negocios de nuestra ciudad.
+                <strong style={{ fontWeight: 500 }}>Bahía Shops es el mercado online de Bahía Blanca:</strong> un espacio para descubrir, comprar y conectar con negocios de nuestra ciudad.
               </p>
 
               <Link
                 href="/vendedor/nuevo"
-                className="inline-block"
+                className="inline-block text-[13px] md:text-[14px] px-6 py-3 md:px-7 md:py-3.5"
                 style={{
                   fontFamily: 'Inter, sans-serif',
                   fontWeight: 500,
-                  fontSize: '14px',
                   background: '#fff',
                   color: '#0a0a0a',
-                  padding: '14px 28px',
                   borderRadius: '4px',
                   marginBottom: '20px',
                 }}
@@ -201,11 +198,10 @@ export default function HomeContent({ categorias, recientes, elegidos, vendedore
               </Link>
 
               <p
-                className="md:whitespace-nowrap"
+                className="text-[12px] md:text-[13px] md:whitespace-nowrap"
                 style={{
                   fontFamily: 'Inter, sans-serif',
                   fontWeight: 300,
-                  fontSize: '13px',
                   color: 'rgba(255,255,255,0.7)',
                 }}
               >
@@ -223,7 +219,35 @@ export default function HomeContent({ categorias, recientes, elegidos, vendedore
                   Registrate para comprar
                 </Link>
               </p>
+
             </div>
+
+            {/* Aviso de qué datos pedimos a Google (verificación de OAuth).
+                Va al pie del hero, en una sola línea, fuera de la columna de texto. */}
+            <p
+              className="absolute bottom-6 left-0 right-0 z-10 px-5 md:px-12 lg:whitespace-nowrap"
+              style={{
+                fontFamily: 'Inter, sans-serif',
+                fontWeight: 300,
+                fontSize: '12px',
+                color: 'rgba(255,255,255,0.6)',
+                lineHeight: 1.6,
+              }}
+            >
+              Podés ingresar con tu cuenta de Google. Solo usamos tu nombre, correo y foto de perfil para crear tu cuenta.{' '}
+              <Link
+                href="/privacidad"
+                style={{
+                  fontFamily: 'Inter, sans-serif',
+                  fontWeight: 400,
+                  color: 'rgba(255,255,255,0.85)',
+                  textDecoration: 'underline',
+                  textUnderlineOffset: '3px',
+                }}
+              >
+                Más sobre cómo cuidamos tus datos
+              </Link>.
+            </p>
           </section>
 
 

@@ -3,6 +3,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { EMAIL_ARREPENTIMIENTO, EMAIL_CONTACTO, EMAIL_LEGAL } from '@/lib/contacto'
 import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
 import Footer from '@/components/Footer'
@@ -66,7 +67,7 @@ export default function TerminosPage() {
                 Para comprar o vender en Bahía Shops es necesario registrarse y crear una cuenta. Podés hacerlo mediante tu cuenta de Google o con email y contraseña. Al registrarte te comprometés a proporcionar información veraz, actual y completa, y a mantenerla actualizada.
               </p>
               <p>
-                Tu cuenta es personal e intransferible. Sos responsable de mantener la confidencialidad de tus credenciales y de todas las actividades que se realicen bajo tu cuenta. Ante cualquier uso no autorizado, debés notificarnos de inmediato a <a href="mailto:bahiashops.estudio@gmail.com" className="underline underline-offset-2 hover:text-[#4164fe]">bahiashops.estudio@gmail.com</a>.
+                Tu cuenta es personal e intransferible. Sos responsable de mantener la confidencialidad de tus credenciales y de todas las actividades que se realicen bajo tu cuenta. Ante cualquier uso no autorizado, debés notificarnos de inmediato a <a href={`mailto:${EMAIL_LEGAL}`} className="underline underline-offset-2 hover:text-[#4164fe]">{EMAIL_LEGAL}</a>.
               </p>
             </Seccion>
 
@@ -140,7 +141,7 @@ export default function TerminosPage() {
                 De acuerdo con el artículo 34 de la Ley N° 24.240 de Defensa del Consumidor y el artículo 1.110 del Código Civil y Comercial de la Nación, el comprador tiene derecho a revocar la aceptación de la compra dentro de los 10 (diez) días corridos contados desde la recepción del producto o la celebración del contrato, lo que ocurra último.
               </p>
               <p>
-                Para ejercer este derecho, el comprador puede utilizar el botón de arrepentimiento disponible en el Sitio (accesible desde el pie de página) o enviar un email a <a href="mailto:bahiashops.estudio@gmail.com" className="underline underline-offset-2 hover:text-[#4164fe]">bahiashops.estudio@gmail.com</a>. Dentro de las 24 horas, Bahía Shops informará al comprador un número de código de identificación del trámite, conforme lo dispuesto por la Resolución 424/2020 de la Secretaría de Comercio Interior.
+                Para ejercer este derecho, el comprador puede utilizar el botón de arrepentimiento disponible en el Sitio (accesible desde el pie de página) o enviar un email a <a href={`mailto:${EMAIL_ARREPENTIMIENTO}`} className="underline underline-offset-2 hover:text-[#4164fe]">{EMAIL_ARREPENTIMIENTO}</a>. Dentro de las 24 horas, Bahía Shops informará al comprador un número de código de identificación del trámite, conforme lo dispuesto por la Resolución 424/2020 de la Secretaría de Comercio Interior.
               </p>
               <p>
                 El comprador deberá poner el producto a disposición del vendedor en las mismas condiciones en que lo recibió. Los gastos de devolución corren por cuenta del vendedor.
@@ -204,7 +205,7 @@ export default function TerminosPage() {
               </p>
               <div className="mt-3 p-4 rounded-2xl bg-[#0a0a0a]/[0.03] text-[15px] leading-relaxed text-[#0a0a0a]/80">
                 <p><strong className="text-[#0a0a0a]">Bahía Shops</strong></p>
-                <p>Email: <a href="mailto:bahiashops.estudio@gmail.com" className="underline underline-offset-2 hover:text-[#4164fe]">bahiashops.estudio@gmail.com</a></p>
+                <p>Email: <a href={`mailto:${EMAIL_CONTACTO}`} className="underline underline-offset-2 hover:text-[#4164fe]">{EMAIL_CONTACTO}</a></p>
                 <p>Sitio web: <a href="https://bahiashops.com.ar" className="underline underline-offset-2 hover:text-[#4164fe]">bahiashops.com.ar</a></p>
                 <p>Bahía Blanca, Buenos Aires, Argentina</p>
               </div>

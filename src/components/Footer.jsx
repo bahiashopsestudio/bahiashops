@@ -2,6 +2,7 @@
 'use client'
 
 import Link from 'next/link'
+import { EMAIL_ARREPENTIMIENTO, EMAIL_CONTACTO } from '@/lib/contacto'
 
 export default function Footer() {
   return (
@@ -33,10 +34,10 @@ export default function Footer() {
             </p>
             <p style={{ fontFamily: "'Inter', sans-serif", fontWeight: 400, fontSize: '13px', color: '#9cc3ea', marginTop: '12px' }}>
               <a
-                href="mailto:hola@bahiashops.com"
+                href={`mailto:${EMAIL_CONTACTO}`}
                 className="underline underline-offset-2 hover:text-[#9cc3ea] transition-colors"
               >
-                hola@bahiashops.com.ar
+                {EMAIL_CONTACTO}
               </a>
             </p>
           </div>
@@ -93,7 +94,7 @@ export default function Footer() {
 
           {/* Botón de arrepentimiento — Resolución 424/2020 */}
           <a
-            href="mailto:bahiashops.estudio@gmail.com?subject=Solicitud%20de%20arrepentimiento%20-%20Ley%2024.240"
+            href={`mailto:${EMAIL_ARREPENTIMIENTO}?subject=Solicitud%20de%20arrepentimiento%20-%20Ley%2024.240`}
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full transition-colors"
             style={{
               fontFamily: "'Inter', sans-serif",
