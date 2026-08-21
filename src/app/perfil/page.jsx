@@ -15,6 +15,7 @@ export default function PerfilPage() {
   const [user, setUser] = useState(null)
   const [perfil, setPerfil] = useState(null)
   const [vendedorSlug, setVendedorSlug] = useState(null)
+  const [esVendedor, setEsVendedor] = useState(false)
   const [cargando, setCargando] = useState(true)
   const [menuOpen, setMenuOpen] = useState(false)
   const [categorias, setCategorias] = useState([])
@@ -53,7 +54,8 @@ export default function PerfilPage() {
         .from('vendedores')
         .select('slug')
         .eq('usuario_id', user.id)
-        .single()
+        .maybeSingle()
+      if (vendedor) setEsVendedor(true)
       if (vendedor?.slug) setVendedorSlug(vendedor.slug)
 
       setCargando(false)
@@ -160,6 +162,21 @@ export default function PerfilPage() {
 
             {/* Vendedor */}
             <div className="rounded-2xl border border-[#0a0a0a]/5 overflow-hidden mb-6">
+              {esVendedor && (
+                <Link
+                  href="/vendedor/datos"
+                  className="flex items-center gap-3 px-5 py-4 border-b border-[#0a0a0a]/5 hover:bg-[#F5F2EC] transition"
+                >
+                  <svg className="w-5 h-5 text-[#0a0a0a]/25 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+                  </svg>
+                  <span className="flex-1 text-sm text-[#0a0a0a] font-light">Mis datos</span>
+                  <svg className="w-4 h-4 text-[#0a0a0a]/15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                  </svg>
+                </Link>
+              )}
+
               <Link
                 href="/vendedor/perfil"
                 className="flex items-center gap-3 px-5 py-4 hover:bg-[#F5F2EC] transition"

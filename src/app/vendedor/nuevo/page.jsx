@@ -55,7 +55,7 @@ export default function NuevoVendedorPage() {
 
   return (
     <>
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&display=swap" />
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,100..900&family=Poppins:wght@300;400;500&family=Inter:wght@200;300;400;500;600;700;800;900&display=swap" />
 
       <div className="min-h-screen bg-white" style={{ fontFamily: "'Inter', sans-serif" }}>
         {menuOpen && <MenuTakeover categorias={menuCats} onClose={() => setMenuOpen(false)} />}
@@ -67,10 +67,13 @@ export default function NuevoVendedorPage() {
 
             {!verificando && (
               <>
-                <h1 className="text-2xl md:text-3xl font-black text-[#0a0a0a] tracking-tight mb-1">
+                <h1
+                  className="text-2xl md:text-3xl mb-2"
+                  style={{ fontFamily: "'Fraunces', serif", fontWeight: 500, color: '#0a0a0a', letterSpacing: '-0.02em' }}
+                >
                   Sumar mi emprendimiento
                 </h1>
-                <p className="text-sm text-[#0a0a0a]/30 font-light mb-8">
+                <p style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 300, fontSize: '14px', color: 'rgba(10,10,10,0.45)', marginBottom: '32px' }}>
                   Completá estos datos para crear tu tienda en Bahía Shops.
                 </p>
 

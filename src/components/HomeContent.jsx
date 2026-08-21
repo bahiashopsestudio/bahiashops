@@ -166,7 +166,7 @@ export default function HomeContent({ categorias, recientes, elegidos, vendedore
                   marginBottom: '12px',
                 }}
               >
-                Bahía Blanca está lleno de proyectos y personas por conocer.
+                Bahía Blanca está llena de proyectos y emprededores por conocer.
               </p>
 
               <p
@@ -180,7 +180,7 @@ export default function HomeContent({ categorias, recientes, elegidos, vendedore
                   marginBottom: '28px',
                 }}
               >
-                ¡Bienvenidos a Bahía Shops! Un espacio para descubrir, comprar y conectar con negocios de nuestra ciudad.
+                Bahía Shops es el mercado online de Bahía Blanca: un espacio para descubrir, comprar y conectar con negocios de nuestra ciudad.
               </p>
 
               <Link

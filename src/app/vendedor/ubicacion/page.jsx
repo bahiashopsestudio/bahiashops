@@ -4,14 +4,19 @@ import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { createClient } from '@/lib/supabase/client'
 import Navbar from '@/components/Navbar'
+import MenuTakeover from '@/components/MenuTakeover'
 import VolverAtras from '@/components/VolverAtras'
+import {
+  inputClasses, selectClasses, fuenteTitulo, fuenteAyuda, ayudaClasses, labelClasses,
+  btnNegro, btnNegroInactivo,
+} from '@/lib/estilosVendedor'
 
 const MapaUbicacion = dynamic(
   () => import('@/app/vendedor/nuevo/MapaUbicacion'),
   {
     ssr: false,
     loading: () => (
-      <div className="h-[300px] bg-[#F5F2EC] rounded-lg flex items-center justify-center text-gray-400 text-sm">
+      <div className="h-[300px] bg-[#F5F2EC] rounded-lg flex items-center justify-center text-[#0a0a0a]/30 text-sm font-light">
         Cargando mapa...
       </div>
     ),
@@ -20,8 +25,13 @@ const MapaUbicacion = dynamic(
 
 const CENTRO_BB = { lat: -38.7183, lng: -62.2663 }
 
+const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage']
+
 export default function UbicacionVendedorPage() {
   const supabase = createClient()
+
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [categorias, setCategorias] = useState([])
 
   const [cargando, setCargando] = useState(true)
   const [vendedorId, setVendedorId] = useState(null)
@@ -47,9 +57,17 @@ export default function UbicacionVendedorPage() {
   const [guardando, setGuardando] = useState(false)
   const [guardado, setGuardado] = useState(false)
 
+  useEffect(() => {
+    if (menuOpen) { document.body.style.overflow = 'hidden' } else { document.body.style.overflow = '' }
+    return () => { document.body.style.overflow = '' }
+  }, [menuOpen])
+
   // ── Cargar datos actuales ──
   useEffect(() => {
     async function cargar() {
+      const { data: cats } = await supabase.from('categorias').select('id, nombre, slug').eq('activa', true).order('orden')
+      if (cats) setCategorias(cats)
+
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { setCargando(false); return }
 
@@ -196,39 +214,41 @@ export default function UbicacionVendedorPage() {
   }
 
   // ── Render ──
+  // Un único árbol: si el <link> y el Navbar cambiaran de posición según el
+  // estado, el HTML del servidor y el del cliente no coincidirían (hydration).
 
-  if (cargando) {
-    return (
-      <>
-        <Navbar variant="solid" />
-        <main className="pt-28 px-6 text-center text-gray-500">Cargando...</main>
-      </>
-    )
-  }
-
-  if (!vendedorId) {
-    return (
-      <>
-        <Navbar variant="solid" />
-        <main className="pt-28 px-6 text-center text-gray-500">No encontramos tu cuenta de vendedor.</main>
-      </>
-    )
-  }
+  const menuCats = MENU_CATEGORIAS.map((s) => categorias.find((c) => c.slug === s)).filter(Boolean)
 
   return (
     <>
-      <Navbar variant="solid" />
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,100..900&family=Poppins:wght@300;400;500&family=Inter:wght@200;300;400;500;600;700;800;900&display=swap" />
+
+      <div className="min-h-screen bg-white" style={{ fontFamily: "'Inter', sans-serif" }}>
+        {menuOpen && <MenuTakeover categorias={menuCats} onClose={() => setMenuOpen(false)} />}
+        <Navbar onToggleMenu={() => setMenuOpen(!menuOpen)} variant="solid" />
 
       <main className="pt-28 pb-12 px-6 max-w-[700px] w-full mx-auto">
+        {cargando ? (
+          <p className="text-center text-[#0a0a0a]/30 text-sm font-light">Cargando...</p>
+        ) : !vendedorId ? (
+          <p className="text-center text-[#0a0a0a]/30 text-sm font-light">No encontramos tu cuenta de vendedor.</p>
+        ) : (
+        <>
         <VolverAtras href="/vendedor/perfil" texto="Volver a Mi negocio" />
-        <h1 className="text-2xl font-semibold text-[#0a0a0a] mt-2">Mi ubicación</h1>
-        <p className="text-sm text-gray-500 mt-1 mb-8">
+        <h1 className="text-2xl md:text-3xl mt-2 mb-2" style={fuenteTitulo}>Mi ubicación</h1>
+        <p style={{ ...fuenteAyuda, fontSize: '14px', color: 'rgba(10,10,10,0.45)', marginBottom: '32px' }}>
           Actualizá la dirección y ubicación de tu negocio en el mapa.
         </p>
 
+        {guardado && (
+          <div className="mb-6 p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-800">
+            ✓ Listo, guardamos tus cambios.
+          </div>
+        )}
+
         {/* ¿Recibe público? */}
-        <div className="flex flex-col gap-2 mb-6">
-          <span className="text-[#0a0a0a] font-medium">¿Recibís gente en tu local, taller o showroom?</span>
+        <div className="flex flex-col gap-2.5 mb-6">
+          <span className={labelClasses}>¿Recibís gente en tu local, taller o showroom?</span>
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="radio"
@@ -237,7 +257,7 @@ export default function UbicacionVendedorPage() {
               onChange={() => { setRecibePublico(true); resetearUbicacion() }}
               className="accent-[#0a0a0a]"
             />
-            <span>Sí, recibo gente</span>
+            <span className="text-sm">Sí, recibo gente</span>
           </label>
           <label className="flex items-center gap-2 cursor-pointer">
             <input
@@ -247,18 +267,18 @@ export default function UbicacionVendedorPage() {
               onChange={() => { setRecibePublico(false); resetearUbicacion() }}
               className="accent-[#0a0a0a]"
             />
-            <span>No, vendo desde casa o solo despacho</span>
+            <span className="text-sm">No, vendo desde casa o solo despacho</span>
           </label>
         </div>
 
         {/* Localidad */}
         {recibePublico !== null && (
           <div className="mb-6">
-            <label className="block text-[#0a0a0a] font-medium mb-1">Localidad</label>
+            <label className={`block mb-1.5 ${labelClasses}`}>Localidad</label>
             <select
               value={localidadId}
               onChange={(e) => { setLocalidadId(e.target.value); resetearUbicacion() }}
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg bg-white outline-none focus:border-[#0a0a0a] focus:ring-1 focus:ring-[#0a0a0a]/20 transition-colors"
+              className={selectClasses}
             >
               <option value="">Elegí una localidad</option>
               {localidades.map((l) => (
@@ -271,8 +291,8 @@ export default function UbicacionVendedorPage() {
         {/* Dirección + mapa */}
         {recibePublico !== null && localidadId && localidadTieneBarrios && (
           <div className="mb-6">
-            <label className="block text-[#0a0a0a] font-medium mb-1">Dirección</label>
-            <p className="text-sm text-gray-500 mb-2">
+            <label className={`block mb-1.5 ${labelClasses}`}>Dirección</label>
+            <p className={`${ayudaClasses} mb-2`} style={fuenteAyuda}>
               {recibePublico
                 ? 'La dirección de tu local. Escribila y tocá "Ubicar".'
                 : 'La usamos solo para detectar tu barrio. No se muestra públicamente.'}
@@ -283,17 +303,13 @@ export default function UbicacionVendedorPage() {
                 placeholder="Ej: Donado 1234"
                 value={direccion}
                 onChange={(e) => setDireccion(e.target.value)}
-                className="flex-1 px-3 py-2.5 border border-gray-300 rounded-lg outline-none focus:border-[#0a0a0a] focus:ring-1 focus:ring-[#0a0a0a]/20 transition-colors"
+                className={`${inputClasses} flex-1`}
               />
               <button
                 type="button"
                 onClick={buscarDireccion}
                 disabled={buscando || !direccion}
-                className={`px-4 py-2.5 text-white border-none rounded-lg whitespace-nowrap transition-colors ${
-                  buscando || !direccion
-                    ? 'bg-gray-300 cursor-not-allowed'
-                    : 'bg-[#0a0a0a] cursor-pointer hover:bg-[#1a1a1a]'
-                }`}
+                className={`px-4 py-2.5 whitespace-nowrap ${buscando || !direccion ? btnNegroInactivo : btnNegro}`}
               >
                 {buscando ? 'Buscando...' : 'Ubicar 📍'}
               </button>
@@ -313,16 +329,16 @@ export default function UbicacionVendedorPage() {
                 />
 
                 {barrioDetectado ? (
-                  <p className="text-sm mt-2 mb-0">
+                  <p className={`${ayudaClasses} mt-2 mb-0`} style={fuenteAyuda}>
                     📍 Tu local está en <strong>{barrioDetectado.nombre}</strong>. Si la ubicación no es exacta, arrastrá el pin.
                   </p>
                 ) : latitud ? (
                   <div className="mt-2">
-                    <label className="block text-sm text-[#0a0a0a] mb-1">No pudimos detectar el barrio. Elegilo vos:</label>
+                    <label className={`block mb-1.5 ${labelClasses}`}>No pudimos detectar el barrio. Elegilo vos:</label>
                     <select
                       value={barrioId}
                       onChange={(e) => { setBarrioId(e.target.value); setBarrioAuto(false); setGuardado(false) }}
-                      className="w-full px-3 py-2.5 border border-gray-300 rounded-lg bg-white outline-none focus:border-[#0a0a0a] focus:ring-1 focus:ring-[#0a0a0a]/20 transition-colors"
+                      className={selectClasses}
                     >
                       <option value="">Elegí un barrio</option>
                       {barriosDeLaLocalidad.map((b) => (
@@ -333,7 +349,7 @@ export default function UbicacionVendedorPage() {
                 ) : null}
 
                 {latitud && longitud && (
-                  <span className="text-xs text-gray-400 font-mono mt-1 block">
+                  <span className="text-[11px] text-[#0a0a0a]/20 font-mono font-light mt-1 block">
                     📍 {latitud.toFixed(6)}, {longitud.toFixed(6)}
                   </span>
                 )}
@@ -347,17 +363,14 @@ export default function UbicacionVendedorPage() {
           type="button"
           onClick={guardar}
           disabled={guardando}
-          className={`px-6 py-3 text-base text-white border-none rounded-lg transition-colors ${
-            guardado
-              ? 'bg-emerald-700 cursor-default'
-              : guardando
-                ? 'bg-gray-400 cursor-not-allowed'
-                : 'bg-[#0a0a0a] cursor-pointer hover:bg-[#1a1a1a]'
-          }`}
+          className={`px-6 py-2.5 ${guardando ? btnNegroInactivo : btnNegro}`}
         >
-          {guardando ? 'Guardando...' : (guardado ? '✓ Guardado' : 'Guardar cambios')}
+          {guardando ? 'Guardando...' : 'Guardar cambios'}
         </button>
+        </>
+        )}
       </main>
+      </div>
     </>
   )
 }

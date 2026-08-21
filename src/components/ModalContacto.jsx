@@ -3,7 +3,14 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
-export default function ModalContacto({ abierto, onClose, mensajeInicial = '' }) {
+export default function ModalContacto({
+  abierto,
+  onClose,
+  mensajeInicial = '',
+  titulo = 'Contactanos',
+  subtitulo = '¿Sugerencias, problemas, ideas? Escribinos',
+  contexto = '',
+}) {
   const supabase = createClient()
 
   const [email, setEmail] = useState('')
@@ -38,13 +45,17 @@ export default function ModalContacto({ abierto, onClose, mensajeInicial = '' })
 
     setEnviando(true)
 
+    const cuerpo = contexto ? `[${contexto}]
+
+${mensaje.trim()}` : mensaje.trim()
+
     try {
       // Guardar en Supabase
       const { error: dbError } = await supabase
         .from('mensajes_contacto')
         .insert({
           email: email.trim(),
-          mensaje: mensaje.trim(),
+          mensaje: cuerpo,
           usuario_id: userId,
         })
 
@@ -57,7 +68,7 @@ export default function ModalContacto({ abierto, onClose, mensajeInicial = '' })
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             email: email.trim(),
-            mensaje: mensaje.trim(),
+            mensaje: cuerpo,
           }),
         })
       } catch {
@@ -106,8 +117,8 @@ export default function ModalContacto({ abierto, onClose, mensajeInicial = '' })
           <>
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="text-lg font-bold text-gray-900">Contactanos</h2>
-                <p className="text-sm text-gray-400">¿Sugerencias, problemas, ideas? Escribinos</p>
+                <h2 className="text-lg font-bold text-gray-900">{titulo}</h2>
+                <p className="text-sm text-gray-400">{subtitulo}</p>
               </div>
               <button
                 onClick={onClose}

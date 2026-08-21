@@ -5,6 +5,11 @@ import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { createClient } from '@/lib/supabase/client'
 import BloqueHorarios, { HORARIOS_INICIALES } from './BloqueHorarios'
+import ModalContacto from '@/components/ModalContacto'
+import {
+  inputClasses, selectClasses, fuenteTitulo, fuenteAyuda, ayudaClasses,
+  btnNegro, btnNegroInactivo, btnLinea, btnAmarillo, pillActiva, pillInactiva, fuentePill,
+} from '@/lib/estilosVendedor'
 
 const MapaUbicacion = dynamic(() => import('./MapaUbicacion'), {
   ssr: false,
@@ -25,9 +30,7 @@ const TITULOS_PASOS = {
   3: 'Disponibilidad y despacho',
 }
 
-const inputClasses =
-  'w-full px-3 py-2.5 border border-gray-300 rounded-lg outline-none focus:border-[#0a0a0a] focus:ring-1 focus:ring-[#0a0a0a]/20 transition-colors'
-const selectClasses = `${inputClasses} bg-white`
+// Los estilos viven en @/lib/estilosVendedor para que el alta y "Mis datos" no se separen
 
 export default function FormularioVendedor({ userId }) {
   const router = useRouter()
@@ -43,6 +46,7 @@ export default function FormularioVendedor({ userId }) {
   const [redSecundariaUrl, setRedSecundariaUrl] = useState('')
   const [whatsapp, setWhatsapp] = useState('')
   const [usarOtroEmail, setUsarOtroEmail] = useState(false)
+  const [modalCategoria, setModalCategoria] = useState(false)
   const [emailContacto, setEmailContacto] = useState('')
 
   const [recibePublico, setRecibePublico] = useState(null)
@@ -283,32 +287,38 @@ export default function FormularioVendedor({ userId }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+    <>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-6">
       {/* Encabezado del paso */}
       <div className="mb-2">
-        <h2 className="text-lg font-black text-[#0a0a0a] tracking-tight m-0">
+        <h2 className="text-lg md:text-xl m-0" style={fuenteTitulo}>
           {TITULOS_PASOS[paso]}
         </h2>
-        <span className="text-[11px] text-[#0a0a0a]/25 font-light">Paso {paso} de 3</span>
+        <span className="text-[11px] text-[#0a0a0a]/40" style={fuenteAyuda}>Paso {paso} de 3</span>
       </div>
 
       {/* ───── PASO 1 ───── */}
       {paso === 1 && (
         <>
-          <label className="flex flex-col gap-1">
+          <label className="flex flex-col gap-1.5">
             <span className="text-sm text-[#0a0a0a]/60 font-light">Nombre del emprendimiento *</span>
             <input type="text" required maxLength={80} value={nombreNegocio}
               onChange={(e) => setNombreNegocio(e.target.value)} className={inputClasses} />
           </label>
 
-          <label className="flex flex-col gap-1">
+          <label className="flex flex-col gap-1.5">
             <span className="text-sm text-[#0a0a0a]/60 font-light">Categoría / rubro *</span>
-            <span className="text-[11px] text-[#0a0a0a]/25 font-light">El rubro principal de tu emprendimiento.</span>
+            <span className={ayudaClasses} style={fuenteAyuda}>El rubro principal de tu emprendimiento.</span>
             <select required value={categoriaId} onChange={(e) => { setCategoriaId(e.target.value); setAlimentosCamino(null); setLeadEnviado(false) }} className={selectClasses}>
               <option value="">Elegí tu rubro</option>
               {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
             </select>
           </label>
+
+          <button type="button" onClick={() => setModalCategoria(true)}
+            className={`self-start -mt-2 ${btnAmarillo}`}>
+            ¿No encontrás tu categoría?
+          </button>
 
           {/* ── Flujo Alimentos y bebidas ── */}
           {esAlimentos && !alimentosCamino && !leadEnviado && (
@@ -319,14 +329,14 @@ export default function FormularioVendedor({ userId }) {
               <button type="button" onClick={() => setAlimentosCamino('envasados')}
                 className="w-full p-4 border border-[#0a0a0a]/10 rounded-xl text-left cursor-pointer bg-white hover:border-[#0a0a0a]/30 transition-all">
                 <span className="block text-sm font-medium text-[#0a0a0a]">Productos envasados y no perecederos</span>
-                <span className="block text-[11px] text-[#0a0a0a]/40 font-light mt-1">
+                <span className={`block mt-1 ${ayudaClasses}`} style={fuenteAyuda}>
                   Conservas, bebidas embotelladas, snacks, especias, yerba, café, chocolates...
                 </span>
               </button>
               <button type="button" onClick={() => setAlimentosCamino('cocinero')}
                 className="w-full p-4 border border-[#0a0a0a]/10 rounded-xl text-left cursor-pointer bg-white hover:border-[#0a0a0a]/30 transition-all">
                 <span className="block text-sm font-medium text-[#0a0a0a]">Soy cocinero/a, pastelero/a o gastronómico/a</span>
-                <span className="block text-[11px] text-[#0a0a0a]/40 font-light mt-1">
+                <span className={`block mt-1 ${ayudaClasses}`} style={fuenteAyuda}>
                   Comidas preparadas, repostería, catering, tortas, viandas...
                 </span>
               </button>
@@ -340,26 +350,26 @@ export default function FormularioVendedor({ userId }) {
           )}
 
           {esAlimentos && alimentosCamino === 'cocinero' && !leadEnviado && (
-            <div className="rounded-2xl border border-[#0a0a0a]/5 p-5 flex flex-col gap-4">
+            <div className="rounded-2xl border border-[#0a0a0a]/5 p-5 flex flex-col gap-6">
               <div>
                 <p className="text-sm font-medium text-[#0a0a0a] m-0">¡Nos encanta que quieras sumarte!</p>
-                <p className="text-sm text-[#0a0a0a]/40 font-light mt-1 mb-0">
+                <p className={`mt-1 mb-0 ${ayudaClasses}`} style={fuenteAyuda}>
                   Estamos preparando planes especiales para profesionales que prestan servicios. Dejanos tus datos y te contactamos cuando estén listos.
                 </p>
               </div>
-              <label className="flex flex-col gap-1">
+              <label className="flex flex-col gap-1.5">
                 <span className="text-sm text-[#0a0a0a]/60 font-light">Tu nombre *</span>
                 <input type="text" required value={leadNombre}
                   onChange={(e) => setLeadNombre(e.target.value)}
                   placeholder="Nombre y apellido" className={inputClasses} />
               </label>
-              <label className="flex flex-col gap-1">
+              <label className="flex flex-col gap-1.5">
                 <span className="text-sm text-[#0a0a0a]/60 font-light">¿Qué hacés? *</span>
                 <input type="text" required value={leadQueHace}
                   onChange={(e) => setLeadQueHace(e.target.value)}
                   placeholder="Ej: Pastelería artesanal, viandas saludables..." className={inputClasses} />
               </label>
-              <label className="flex flex-col gap-1">
+              <label className="flex flex-col gap-1.5">
                 <span className="text-sm text-[#0a0a0a]/60 font-light">WhatsApp</span>
                 <div className="flex gap-2 items-stretch">
                   <span className="px-3 py-2.5 border border-gray-300 rounded-lg bg-[#F5F2EC] text-[#0a0a0a]/40 flex items-center text-sm font-light">
@@ -370,16 +380,14 @@ export default function FormularioVendedor({ userId }) {
                     placeholder="291 555 1234" className={`${inputClasses} flex-1`} />
                 </div>
               </label>
-              <label className="flex flex-col gap-1">
+              <label className="flex flex-col gap-1.5">
                 <span className="text-sm text-[#0a0a0a]/60 font-light">Email</span>
                 <input type="email" value={leadEmail}
                   onChange={(e) => setLeadEmail(e.target.value)}
                   placeholder="tucorreo@ejemplo.com" className={inputClasses} />
               </label>
               <button type="button" onClick={enviarLeadGastronomia} disabled={enviandoLead}
-                className={`w-full px-6 py-2.5 border-none rounded-full text-sm text-white font-medium transition-colors ${
-                  enviandoLead ? 'bg-[#0a0a0a]/30 cursor-not-allowed' : 'bg-[#0a0a0a] cursor-pointer hover:bg-[#1a1a1a]'
-                }`}>
+                className={`w-full px-6 py-2.5 ${enviandoLead ? btnNegroInactivo : btnNegro}`}>
                 {enviandoLead ? 'Enviando...' : 'Enviar mis datos'}
               </button>
             </div>
@@ -387,7 +395,7 @@ export default function FormularioVendedor({ userId }) {
 
           {esAlimentos && leadEnviado && (
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-center">
-              <p className="text-lg font-black text-emerald-800 m-0">¡Gracias!</p>
+              <p className="text-lg m-0" style={{ ...fuenteTitulo, color: '#065f46' }}>¡Gracias!</p>
               <p className="text-sm text-emerald-700 mt-2 mb-0">
                 Recibimos tus datos. Te vamos a contactar cuando los planes para gastronómicos estén listos.
               </p>
@@ -399,14 +407,14 @@ export default function FormularioVendedor({ userId }) {
           <>
 
           {/* ── Sellos ── */}
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-1.5 py-3">
             <span className="text-sm text-[#0a0a0a]/60 font-light">
-              Sellos <span className="text-[#0a0a0a]/25">(opcional)</span>
+              Sellos <span className={ayudaClasses} style={fuenteAyuda}>(opcional)</span>
             </span>
-            <span className="text-[11px] text-[#0a0a0a]/25 font-light">
+            <span className={ayudaClasses} style={fuenteAyuda}>
               ¿Tu emprendimiento tiene alguno de estos sellos? Elegí los que apliquen.
             </span>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 mt-1.5">
               {sellos.map((s) => {
                 const activo = sellosSeleccionados.includes(s.id)
                 return (
@@ -414,11 +422,8 @@ export default function FormularioVendedor({ userId }) {
                     key={s.id}
                     type="button"
                     onClick={() => toggleSello(s.id)}
-                    className={`px-3 py-1.5 rounded-full text-sm transition-all cursor-pointer border ${
-                      activo
-                        ? 'bg-[#0a0a0a] text-white border-[#0a0a0a]'
-                        : 'bg-white text-[#0a0a0a]/60 border-[#0a0a0a]/10 hover:border-[#0a0a0a]/30'
-                    }`}
+                    className={activo ? pillActiva : pillInactiva}
+                    style={fuentePill}
                   >
                     {s.nombre}
                   </button>
@@ -427,30 +432,30 @@ export default function FormularioVendedor({ userId }) {
             </div>
           </div>
 
-          <label className="flex flex-col gap-1">
+          <label className="flex flex-col gap-1.5">
             <span className="text-sm text-[#0a0a0a]/60 font-light">
-              Descripción corta * <span className="text-[#0a0a0a]/25">(una línea, es lo primero que van a leer los compradores sobre tu emprendimiento)</span>
+              Descripción corta * <span className={ayudaClasses} style={fuenteAyuda}>(una línea, es lo primero que van a leer los compradores sobre tu emprendimiento)</span>
             </span>
             <input type="text" required maxLength={140} value={descripcionCorta}
               onChange={(e) => setDescripcionCorta(e.target.value)} className={inputClasses} />
           </label>
 
-          <label className="flex flex-col gap-1">
+          <label className="flex flex-col gap-1.5">
             <span className="text-sm text-[#0a0a0a]/60 font-light">
-              Descripción larga <span className="text-[#0a0a0a]/25">(opcional)</span>
+              Descripción larga <span className={ayudaClasses} style={fuenteAyuda}>(opcional)</span>
             </span>
             <textarea rows={5} maxLength={1000} value={descripcionLarga}
               onChange={(e) => setDescripcionLarga(e.target.value)}
               className={`${inputClasses} font-[inherit]`} />
           </label>
 
-          <label className="flex flex-col gap-1">
+          <label className="flex flex-col gap-1.5">
             <span className="text-sm text-[#0a0a0a]/60 font-light">Instagram *</span>
             <input type="text" required placeholder="bahiashops (sin @)" value={instagram}
               onChange={(e) => setInstagram(e.target.value.replace('@', ''))} className={inputClasses} />
           </label>
 
-          <label className="flex flex-col gap-1">
+          <label className="flex flex-col gap-1.5">
             <span className="text-sm text-[#0a0a0a]/60 font-light">Sitio web propio</span>
             <select value={plataformaSitio} onChange={(e) => setPlataformaSitio(e.target.value)} className={selectClasses}>
               <option value="">Elegí una opción</option>
@@ -467,14 +472,14 @@ export default function FormularioVendedor({ userId }) {
           </label>
 
           {tienePlataforma && (
-            <label className="flex flex-col gap-1">
+            <label className="flex flex-col gap-1.5">
               <span className="text-sm text-[#0a0a0a]/60 font-light">URL del sitio *</span>
               <input type="url" required placeholder="https://bahiashops.com.ar" value={sitioWeb}
                 onChange={(e) => setSitioWeb(e.target.value)} className={inputClasses} />
             </label>
           )}
 
-          <label className="flex flex-col gap-1">
+          <label className="flex flex-col gap-1.5">
             <span className="text-sm text-[#0a0a0a]/60 font-light">Otra red social</span>
             <select value={redSecundariaTipo} onChange={(e) => setRedSecundariaTipo(e.target.value)} className={selectClasses}>
               <option value="">Elegí una opción</option>
@@ -486,16 +491,16 @@ export default function FormularioVendedor({ userId }) {
           </label>
 
           {tieneRedSecundaria && (
-            <label className="flex flex-col gap-1">
+            <label className="flex flex-col gap-1.5">
               <span className="text-sm text-[#0a0a0a]/60 font-light">URL o usuario *</span>
               <input type="text" required placeholder={placeholderRed} value={redSecundariaUrl}
                 onChange={(e) => setRedSecundariaUrl(e.target.value)} className={inputClasses} />
             </label>
           )}
 
-          <label className="flex flex-col gap-1">
+          <label className="flex flex-col gap-1.5">
             <span className="text-sm text-[#0a0a0a]/60 font-light">
-              WhatsApp <span className="text-[#0a0a0a]/25">(recomendado)</span>
+              WhatsApp <span className={ayudaClasses} style={fuenteAyuda}>(recomendado)</span>
             </span>
             <div className="flex gap-2 items-stretch">
               <span className="px-3 py-2.5 border border-gray-300 rounded-lg bg-[#F5F2EC] text-[#0a0a0a]/40 flex items-center text-sm font-light">
@@ -510,11 +515,11 @@ export default function FormularioVendedor({ userId }) {
           <label className="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" checked={usarOtroEmail} onChange={(e) => setUsarOtroEmail(e.target.checked)}
               className="accent-[#0a0a0a]" />
-            <span className="text-sm text-[#0a0a0a]/60 font-light">Usar otro email para contacto público</span>
+            <span className="text-sm text-[#0a0a0a]/60 font-light">Usar otro email (diferente al del registro) para contacto público</span>
           </label>
 
           {usarOtroEmail && (
-            <label className="flex flex-col gap-1">
+            <label className="flex flex-col gap-1.5">
               <span className="text-sm text-[#0a0a0a]/60 font-light">Email de contacto *</span>
               <input type="email" required placeholder="contacto@bahiashops.com.ar" value={emailContacto}
                 onChange={(e) => setEmailContacto(e.target.value)} className={inputClasses} />
@@ -528,8 +533,8 @@ export default function FormularioVendedor({ userId }) {
 
       {/* ───── PASO 2 ───── */}
       {paso === 2 && (
-        <div className="rounded-2xl border border-[#0a0a0a]/5 p-5 flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
+        <div className="rounded-2xl border border-[#0a0a0a]/5 p-5 flex flex-col gap-6">
+          <div className="flex flex-col gap-2.5">
             <span className="text-sm text-[#0a0a0a]/60 font-light">¿Recibís gente en tu local, taller o showroom? *</span>
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="radio" name="recibe_publico" checked={recibePublico === true}
@@ -544,7 +549,7 @@ export default function FormularioVendedor({ userId }) {
           </div>
 
           {recibePublico !== null && (
-            <label className="flex flex-col gap-1">
+            <label className="flex flex-col gap-1.5">
               <span className="text-sm text-[#0a0a0a]/60 font-light">Localidad *</span>
               <select value={localidadId} onChange={(e) => { setLocalidadId(e.target.value); resetearUbicacion() }}
                 required className={selectClasses}>
@@ -556,9 +561,9 @@ export default function FormularioVendedor({ userId }) {
 
           {recibePublico !== null && localidadId && localidadTieneBarrios && (
             <>
-              <div className="flex flex-col gap-1">
+              <div className="flex flex-col gap-1.5">
                 <span className="text-sm text-[#0a0a0a]/60 font-light">Dirección *</span>
-                <span className="text-[11px] text-[#0a0a0a]/25 font-light">
+                <span className={ayudaClasses} style={fuenteAyuda}>
                   {recibePublico
                     ? 'Escribí la dirección de tu local y tocá "Ubicar".'
                     : 'La usamos solo para detectar tu barrio. No se guarda ni se muestra.'}
@@ -567,9 +572,7 @@ export default function FormularioVendedor({ userId }) {
                   <input type="text" required placeholder="Ej: Donado 1234" value={direccion}
                     onChange={(e) => setDireccion(e.target.value)} className={`${inputClasses} flex-1`} />
                   <button type="button" onClick={buscarDireccion} disabled={buscando || !direccion}
-                    className={`px-4 py-2.5 text-white border-none rounded-lg whitespace-nowrap transition-colors text-sm ${
-                      buscando || !direccion ? 'bg-[#0a0a0a]/20 cursor-not-allowed' : 'bg-[#0a0a0a] cursor-pointer hover:bg-[#1a1a1a]'
-                    }`}>
+                    className={`px-4 py-2.5 whitespace-nowrap ${buscando || !direccion ? btnNegroInactivo : btnNegro}`}>
                     {buscando ? 'Buscando...' : 'Ubicar 📍'}
                   </button>
                 </div>
@@ -590,7 +593,7 @@ export default function FormularioVendedor({ userId }) {
                       📍 Tu local está en <strong>{barrioDetectado.nombre}</strong>. Si la ubicación no es exacta, arrastrá el pin.
                     </p>
                   ) : latitud ? (
-                    <label className="flex flex-col gap-1">
+                    <label className="flex flex-col gap-1.5">
                       <span className="text-sm text-[#0a0a0a]/60 font-light">No pudimos detectar el barrio. Elegilo vos:</span>
                       <select value={barrioId} onChange={(e) => { setBarrioId(e.target.value); setBarrioAuto(false) }}
                         required className={selectClasses}>
@@ -614,15 +617,15 @@ export default function FormularioVendedor({ userId }) {
 
       {/* ───── PASO 3 ───── */}
       {paso === 3 && (
-        <div className="rounded-2xl border border-[#0a0a0a]/5 p-5 flex flex-col gap-4">
+        <div className="rounded-2xl border border-[#0a0a0a]/5 p-5 flex flex-col gap-6">
           <div>
             <span className="block mb-2 text-sm text-[#0a0a0a]/60 font-light">Horarios de atención</span>
             <BloqueHorarios valor={horarios} onChange={setHorarios} notas={notasHorarios} onNotasChange={setNotasHorarios} />
           </div>
 
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2.5">
             <span className="text-sm text-[#0a0a0a]/60 font-light">Tiempo de despacho *</span>
-            <span className="text-[11px] text-[#0a0a0a]/25 font-light">Cuánto te lleva en general despachar un pedido.</span>
+            <span className={`${ayudaClasses} mb-1`} style={fuenteAyuda}>Cuánto te lleva en general despachar un pedido.</span>
             {[
               { valor: 'mismo_dia',  label: 'Mismo día (si se compra dentro del horario)' },
               { valor: '24_48hs',    label: '24 a 48 horas hábiles' },
@@ -638,9 +641,9 @@ export default function FormularioVendedor({ userId }) {
             ))}
           </div>
 
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2.5">
             <span className="text-sm text-[#0a0a0a]/60 font-light">Métodos de entrega típicos</span>
-            <span className="text-[11px] text-[#0a0a0a]/25 font-light">Los que usás habitualmente. Después podés ajustar producto por producto.</span>
+            <span className={`${ayudaClasses} mb-1`} style={fuenteAyuda}>Los que usás habitualmente. Después podés ajustar producto por producto.</span>
             {[
               { valor: 'retiro',        label: 'Retiro en mi local / domicilio' },
               { valor: 'coordinar',     label: 'A coordinar con el comprador' },
@@ -668,19 +671,25 @@ export default function FormularioVendedor({ userId }) {
       {/* Navegación */}
       <div className="flex gap-3 justify-between mt-2">
         {paso > 1 ? (
-          <button type="button" onClick={irAlAnterior}
-            className="px-5 py-2.5 border border-[#0a0a0a]/10 rounded-full bg-white text-sm text-[#0a0a0a]/60 font-light cursor-pointer hover:border-[#0a0a0a]/30 transition-all">
+          <button type="button" onClick={irAlAnterior} className={`px-5 py-2.5 ${btnLinea}`}>
             ← Anterior
           </button>
         ) : <div />}
 
         <button type="submit" disabled={guardando}
-          className={`px-6 py-2.5 border-none rounded-full text-sm text-white font-medium transition-colors ${
-            guardando ? 'bg-[#0a0a0a]/30 cursor-not-allowed' : 'bg-[#0a0a0a] cursor-pointer hover:bg-[#1a1a1a]'
-          }`}>
+          className={`px-6 py-2.5 ${guardando ? btnNegroInactivo : btnNegro}`}>
           {paso < 3 ? 'Siguiente →' : (guardando ? 'Guardando...' : 'Sumar mi emprendimiento')}
         </button>
       </div>
-    </form>
+      </form>
+
+      <ModalContacto
+        abierto={modalCategoria}
+        onClose={() => setModalCategoria(false)}
+        titulo="¿No encontrás tu categoría?"
+        subtitulo="Contanos cuál te falta y la evaluamos."
+        contexto="Categoría faltante — alta de vendedor"
+      />
+    </>
   )
 }

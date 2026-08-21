@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { fuenteAyuda, ayudaClasses } from '@/lib/estilosVendedor'
 
 const DIAS = [
   { clave: 'lunes',     label: 'Lunes' },
@@ -22,8 +23,15 @@ export const HORARIOS_INICIALES = DIAS.reduce((acc, { clave }) => {
 
 const timeClasses =
   'px-1.5 py-1 border border-gray-300 rounded-lg w-[100px] outline-none focus:border-[#0a0a0a] focus:ring-1 focus:ring-[#0a0a0a]/20 transition-colors text-sm'
+// Mismo lenguaje que los botones de la página: casi cuadrados, negro <-> línea negra
+const btnMiniBase =
+  'inline-flex items-center justify-center px-2.5 py-1 text-xs border rounded-[4px] font-medium transition-colors'
 const btnMiniClasses =
-  'px-2.5 py-1 text-xs bg-white border border-[#0a0a0a]/10 rounded-full cursor-pointer text-[#0a0a0a]/60 font-light hover:border-[#0a0a0a]/30 hover:text-[#0a0a0a] transition-all'
+  `${btnMiniBase} bg-white border-[#0a0a0a] text-[#0a0a0a] cursor-pointer hover:bg-[#0a0a0a] hover:text-white`
+const btnMiniNegro =
+  `${btnMiniBase} bg-[#0a0a0a] border-[#0a0a0a] text-white cursor-pointer hover:bg-white hover:text-[#0a0a0a]`
+const btnMiniInactivo =
+  `${btnMiniBase} bg-[#0a0a0a]/20 border-[#0a0a0a]/20 text-white cursor-not-allowed`
 
 export default function BloqueHorarios({ valor, onChange, notas, onNotasChange }) {
   const [aplicarDesde, setAplicarDesde] = useState(null)
@@ -118,7 +126,7 @@ export default function BloqueHorarios({ valor, onChange, notas, onNotasChange }
                           className={timeClasses} />
                         {i === 1 && (
                           <button type="button" onClick={() => quitarTurno(clave, i)}
-                            className={`${btnMiniClasses} text-red-500`}
+                            className={`${btnMiniBase} bg-white border-red-300 text-red-500 cursor-pointer hover:bg-red-500 hover:text-white hover:border-red-500`}
                             aria-label="Quitar segundo turno">
                             ×
                           </button>
@@ -132,8 +140,7 @@ export default function BloqueHorarios({ valor, onChange, notas, onNotasChange }
                       </button>
                     )}
 
-                    <button type="button" onClick={() => abrirPanelAplicar(clave)}
-                      className={`${btnMiniClasses} font-medium`}>
+                    <button type="button" onClick={() => abrirPanelAplicar(clave)} className={btnMiniClasses}>
                       Aplicar a otros días
                     </button>
                   </div>
@@ -159,11 +166,7 @@ export default function BloqueHorarios({ valor, onChange, notas, onNotasChange }
                   </div>
                   <div className="flex gap-2">
                     <button type="button" onClick={confirmarAplicar} disabled={diasDestino.length === 0}
-                      className={`px-3 py-1 text-xs text-white rounded-full transition-colors ${
-                        diasDestino.length === 0
-                          ? 'bg-[#0a0a0a]/20 cursor-not-allowed'
-                          : 'bg-[#0a0a0a] cursor-pointer hover:bg-[#1a1a1a]'
-                      }`}>
+                      className={diasDestino.length === 0 ? btnMiniInactivo : btnMiniNegro}>
                       Aplicar
                     </button>
                     <button type="button" onClick={cerrarPanelAplicar} className={btnMiniClasses}>
@@ -178,11 +181,11 @@ export default function BloqueHorarios({ valor, onChange, notas, onNotasChange }
       </div>
 
       {/* Notas */}
-      <label className="flex flex-col gap-1">
+      <label className="flex flex-col gap-1.5 mt-2">
         <span className="text-sm text-[#0a0a0a]/60 font-light">
-          Notas sobre horarios <span className="text-[#0a0a0a]/25">(opcional)</span>
+          Notas sobre horarios <span className={ayudaClasses} style={fuenteAyuda}>(opcional)</span>
         </span>
-        <span className="text-[11px] text-[#0a0a0a]/25 font-light">
+        <span className={ayudaClasses} style={fuenteAyuda}>
           Para excepciones tipo "feriados cerrado" o "lunes con cita previa".
         </span>
         <textarea rows={2} maxLength={300} value={notas} onChange={(e) => onNotasChange(e.target.value)}
