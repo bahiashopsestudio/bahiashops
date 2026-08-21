@@ -44,6 +44,17 @@ const MAX_BYTES = 3 * 1024 * 1024;
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage'];
 
 
+// Lo que ve el vendedor al volver del OAuth de MercadoPago. Sin códigos ni
+// tecnicismos: qué pasó y qué puede hacer.
+const MENSAJES_MP = {
+  sin_codigo: 'MercadoPago no nos devolvió la autorización, así que la conexión quedó sin hacer. Puede pasar si cancelaste la pantalla de MercadoPago. Probá conectar de nuevo.',
+  sin_vendedor: 'No encontramos tu cuenta de vendedor, así que no pudimos guardar la conexión. Si recién te sumaste, completá primero los datos de tu emprendimiento.',
+  canje_rechazado: 'MercadoPago no aceptó la conexión. Suele pasar cuando la pantalla quedó abierta demasiado tiempo. Probá conectar de nuevo desde el principio.',
+  no_guardado: 'Nos conectamos con MercadoPago pero no pudimos guardar la conexión de tu lado. Esperá un momento y probá de nuevo.',
+};
+
+const MENSAJE_MP_GENERICO = 'No pudimos completar la conexión con MercadoPago. Probá de nuevo.';
+
 function Chevron() {
   return (
     <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-[#0a0a0a]/20 shrink-0">
@@ -73,13 +84,35 @@ export default function PerfilVendedorPage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [categorias, setCategorias] = useState([]);
 
+  const [resultadoMp, setResultadoMp] = useState(null);
+  const [confirmarDesconexion, setConfirmarDesconexion] = useState(false);
+  const [desconectando, setDesconectando] = useState(false);
+  const [errorDesconexion, setErrorDesconexion] = useState(null);
+  const [avisoDesconectado, setAvisoDesconectado] = useState(false);
+
   useEffect(() => {
     if (menuOpen) { document.body.style.overflow = 'hidden' } else { document.body.style.overflow = '' }
     return () => { document.body.style.overflow = '' }
   }, [menuOpen]);
 
   useEffect(() => {
+    // El callback de MercadoPago vuelve con ?mp=exito o ?mp=error&motivo=...
+    // Lo leemos una vez y limpiamos la URL para que no quede pegado.
+    function leerResultadoMp() {
+      const params = new URLSearchParams(window.location.search);
+      const mp = params.get('mp');
+      if (!mp) return;
+
+      setResultadoMp(mp === 'exito' ? { ok: true } : { ok: false, motivo: params.get('motivo') });
+
+      params.delete('mp');
+      params.delete('motivo');
+      const query = params.toString();
+      window.history.replaceState({}, '', window.location.pathname + (query ? '?' + query : ''));
+    }
+
     async function cargar() {
+      leerResultadoMp();
       const { data: cats } = await supabase.from('categorias').select('id, nombre, slug').eq('activa', true).order('orden');
       if (cats) setCategorias(cats);
 
@@ -160,6 +193,34 @@ export default function PerfilVendedorPage() {
     } finally {
       setSubiendo(false);
     }
+  }
+
+  async function desconectarMercadoPago() {
+    setDesconectando(true);
+    setErrorDesconexion(null);
+    try {
+      const respuesta = await fetch('/api/mercadopago/oauth/disconnect', { method: 'POST' });
+      const datos = await respuesta.json().catch(() => ({}));
+
+      if (!respuesta.ok) {
+        setErrorDesconexion(datos.error || 'No pudimos desconectar tu cuenta. Probá de nuevo.');
+        return;
+      }
+
+      setMpConectado(false);
+      setConfirmarDesconexion(false);
+      setAvisoDesconectado(true);
+    } catch {
+      setErrorDesconexion('No pudimos conectarnos con el servidor. Revisá tu conexión y probá de nuevo.');
+    } finally {
+      setDesconectando(false);
+    }
+  }
+
+  function cerrarConfirmacion() {
+    if (desconectando) return;
+    setConfirmarDesconexion(false);
+    setErrorDesconexion(null);
   }
 
   // --- Render ---
@@ -265,20 +326,48 @@ export default function PerfilVendedorPage() {
               </Link>
             </div>
 
+            {/* ═══ RESULTADO DE LA CONEXIÓN CON MERCADOPAGO ═══ */}
+            {resultadoMp?.ok && (
+              <div className="mt-4 p-4 rounded-2xl border border-emerald-200 bg-emerald-50">
+                <p className="text-sm font-medium text-emerald-800 m-0">¡Listo! Conectaste tu cuenta de MercadoPago.</p>
+                <p className="text-[13px] text-emerald-700 font-light mt-1 mb-0 leading-relaxed">
+                  Ya podés recibir el dinero de tus ventas en tu cuenta.
+                </p>
+              </div>
+            )}
+
+            {resultadoMp && !resultadoMp.ok && (
+              <div className="mt-4 p-4 rounded-2xl border border-red-200 bg-red-50">
+                <p className="text-sm font-medium text-red-800 m-0">No pudimos conectar tu cuenta de MercadoPago.</p>
+                <p className="text-[13px] text-red-700 font-light mt-1 mb-0 leading-relaxed">
+                  {MENSAJES_MP[resultadoMp.motivo] || MENSAJE_MP_GENERICO}
+                </p>
+              </div>
+            )}
+
             {/* ═══ COBROS ═══ */}
             <div className="mt-4 rounded-2xl border border-[#0a0a0a]/5 overflow-hidden">
               {mpConectado ? (
-                <div className="flex items-center gap-3 px-5 py-4">
-                  <span className="text-lg">💳</span>
-                  <div className="flex-1">
-                    <span className="text-sm font-medium text-[#0a0a0a]">MercadoPago conectado</span>
-                    <p className="text-[11px] text-[#0a0a0a]/30 font-light mt-0.5 mb-0">
-                      Recibís el dinero de tus ventas en tu cuenta.
-                    </p>
+                <div className="px-5 py-4">
+                  <div className="flex items-center gap-3">
+                    <span className="text-lg">💳</span>
+                    <div className="flex-1">
+                      <span className="text-sm font-medium text-[#0a0a0a]">MercadoPago conectado</span>
+                      <p className="text-[11px] text-[#0a0a0a]/30 font-light mt-0.5 mb-0">
+                        Recibís el dinero de tus ventas en tu cuenta.
+                      </p>
+                    </div>
+                    <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full font-medium">
+                      Activo
+                    </span>
                   </div>
-                  <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full font-medium">
-                    Activo
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => { setErrorDesconexion(null); setConfirmarDesconexion(true); }}
+                    className="mt-3 text-[11px] text-[#0a0a0a]/30 font-light underline underline-offset-2 hover:text-[#0a0a0a]/60 transition-colors cursor-pointer bg-transparent border-none p-0"
+                  >
+                    Desconectar cuenta
+                  </button>
                 </div>
               ) : (
                 <div className="px-5 py-4">
@@ -286,6 +375,16 @@ export default function PerfilVendedorPage() {
                     <span className="text-lg">💳</span>
                     <span className="text-sm font-medium text-[#0a0a0a]">Cobros</span>
                   </div>
+                  {avisoDesconectado && (
+                    <div className="mb-3">
+                      <p className="text-[11px] text-[#0a0a0a]/40 font-light m-0">
+                        Desconectamos tu cuenta de MercadoPago.
+                      </p>
+                      <p className="text-[11px] text-[#0a0a0a]/40 font-light mt-1 mb-0 leading-relaxed">
+                        Si además querés quitarle el permiso a Bahía Shops, podés hacerlo desde la sección de aplicaciones conectadas de tu cuenta de MercadoPago.
+                      </p>
+                    </div>
+                  )}
                   <p className="text-sm text-[#0a0a0a]/30 font-light mb-4 leading-relaxed">
                     Conectá tu cuenta de MercadoPago para recibir el dinero de tus ventas.
                   </p>
@@ -302,6 +401,62 @@ export default function PerfilVendedorPage() {
           </div>
         </div>
       </div>
+
+      {/* ═══ MODAL: CONFIRMAR DESCONEXIÓN DE MERCADOPAGO ═══ */}
+      {confirmarDesconexion && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[1000]"
+          onClick={cerrarConfirmacion}
+        >
+          <div
+            className="bg-white rounded-2xl w-full max-w-[440px] overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-6 py-4 border-b border-[#0a0a0a]/5">
+              <p className="m-0" style={{ fontFamily: 'Fraunces, serif', fontWeight: 500, color: '#0a0a0a' }}>
+                ¿Desconectar MercadoPago?
+              </p>
+            </div>
+
+            <div className="px-6 py-4">
+              <p className="text-sm text-[#0a0a0a]/60 font-light leading-relaxed m-0">
+                Si desconectás tu cuenta vas a dejar de poder cobrar tus ventas a través de Bahía Shops.
+                Tus productos siguen publicados, pero nadie va a poder pagarlos por la plataforma.
+              </p>
+              <p className="text-sm text-[#0a0a0a]/60 font-light leading-relaxed mt-3 mb-0">
+                Para volver a cobrar vas a tener que vincular tu cuenta de MercadoPago de nuevo.
+              </p>
+
+              {errorDesconexion && (
+                <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
+                  {errorDesconexion}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-[#0a0a0a]/5">
+              <button
+                type="button"
+                onClick={cerrarConfirmacion}
+                disabled={desconectando}
+                className="px-5 py-2.5 border border-[#0a0a0a]/10 rounded-full bg-white cursor-pointer text-sm text-[#0a0a0a]/60 font-light hover:border-[#0a0a0a]/30 transition-all disabled:cursor-not-allowed"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={desconectarMercadoPago}
+                disabled={desconectando}
+                className={`px-5 py-2.5 border-none rounded-full text-white text-sm font-medium transition-colors ${
+                  desconectando ? 'bg-[#0a0a0a]/30 cursor-not-allowed' : 'bg-[#dc2626] cursor-pointer hover:bg-[#b91c1c]'
+                }`}
+              >
+                {desconectando ? 'Desconectando...' : 'Sí, desconectar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ═══ MODAL DE RECORTE ═══ */}
       {recorte && (

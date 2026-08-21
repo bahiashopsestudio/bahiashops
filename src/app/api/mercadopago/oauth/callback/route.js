@@ -1,17 +1,34 @@
+// Vuelta del OAuth de MercadoPago.
+//
+// Acá aterriza el NAVEGADOR del vendedor, no un fetch: todas las salidas son
+// redirecciones. Nunca devolvemos JSON, ni en éxito ni en error, porque la
+// persona vería texto crudo en pantalla.
+
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { MP_CLIENT_ID, MP_CLIENT_SECRET, MP_REDIRECT_URI } from '@/lib/mercadopago/config';
+
+const PERFIL = '/vendedor/perfil';
+
+function alPerfil(request, params) {
+  const url = new URL(PERFIL, request.url);
+  for (const [clave, valor] of Object.entries(params)) {
+    url.searchParams.set(clave, valor);
+  }
+  return NextResponse.redirect(url);
+}
+
+function conError(request, motivo) {
+  return alPerfil(request, { mp: 'error', motivo });
+}
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
 
   if (!code) {
-    return NextResponse.json(
-      { error: 'No recibimos el código de autorización de MercadoPago.' },
-      { status: 400 }
-    );
+    return conError(request, 'sin_codigo');
   }
 
   // 1. ¿Quién es el vendedor que está conectando? (usa su sesión)
@@ -19,23 +36,22 @@ export async function GET(request) {
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json(
-      { error: 'No hay una sesión iniciada. Iniciá sesión antes de conectar MercadoPago.' },
-      { status: 401 }
-    );
+    // Perdió la cookie mientras estaba en MercadoPago. Mandarlo al perfil
+    // solo lo rebotaría al login, así que va derecho ahí, con vuelta al perfil.
+    const url = new URL('/login', request.url);
+    url.searchParams.set('next', PERFIL);
+    url.searchParams.set('motivo', 'sesion_mp');
+    return NextResponse.redirect(url);
   }
 
   const { data: vendedor, error: errorVendedor } = await supabase
     .from('vendedores')
     .select('id')
     .eq('usuario_id', user.id)
-    .single();
+    .maybeSingle();
 
   if (errorVendedor || !vendedor) {
-    return NextResponse.json(
-      { error: 'No encontramos tu cuenta de vendedor.' },
-      { status: 404 }
-    );
+    return conError(request, 'sin_vendedor');
   }
 
   // 2. Canjear el código por las llaves del vendedor.
@@ -54,10 +70,13 @@ export async function GET(request) {
   const datos = await respuesta.json();
 
   if (!respuesta.ok) {
-    return NextResponse.json(
-      { error: 'MercadoPago rechazó el canje.', detalle: datos },
-      { status: 400 }
+    // El detalle queda en el log del servidor: nunca viaja al navegador.
+    console.error(
+      'MercadoPago rechazó el canje para el vendedor', vendedor.id,
+      '| status:', respuesta.status,
+      '| error:', datos?.error, '| message:', datos?.message
     );
+    return conError(request, 'canje_rechazado');
   }
 
   // 3. Guardar las llaves con la "llave maestra" (service role).
@@ -81,21 +100,26 @@ export async function GET(request) {
     }, { onConflict: 'vendedor_id' });
 
   if (errorGuardado) {
-    return NextResponse.json(
-      { error: 'La conexión se hizo pero no se pudo guardar.', detalle: errorGuardado.message },
-      { status: 500 }
+    console.error(
+      'No se pudo guardar la cuenta de MP del vendedor', vendedor.id,
+      '|', errorGuardado.message
     );
+    return conError(request, 'no_guardado');
   }
 
   // 4. Marcar al vendedor como conectado (para la interfaz).
-  await admin
+  const { error: errorFlag } = await admin
     .from('vendedores')
     .update({ mercadopago_conectado: true })
     .eq('id', vendedor.id);
 
-  // 5. Confirmación (sin exponer las llaves).
-  return NextResponse.json({
-    mensaje: '¡Conexión con MercadoPago guardada con éxito!',
-    vendedor_id: vendedor.id,
-  });
+  if (errorFlag) {
+    console.error(
+      'Cuenta de MP guardada pero no se pudo marcar el vendedor', vendedor.id,
+      '|', errorFlag.message
+    );
+    return conError(request, 'no_guardado');
+  }
+
+  return alPerfil(request, { mp: 'exito' });
 }

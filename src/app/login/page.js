@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Navbar from '@/components/Navbar'
+import { rutaInterna } from '@/lib/rutas'
 import MenuTakeover from '@/components/MenuTakeover'
 
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage']
@@ -17,6 +18,9 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState(null)
   const [cargando, setCargando] = useState(false)
+  // A dónde volver después de entrar, y por qué lo mandamos acá.
+  const [destino, setDestino] = useState('/')
+  const [aviso, setAviso] = useState(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [categorias, setCategorias] = useState([])
 
@@ -26,7 +30,19 @@ export default function LoginPage() {
   }, [menuOpen])
 
   useEffect(() => {
+    // El callback de MercadoPago manda acá cuando se perdió la sesión:
+    //   /login?next=/vendedor/perfil&motivo=sesion_mp
+    function leerParametros() {
+      const params = new URLSearchParams(window.location.search)
+      // Solo rutas internas: nunca redirigir a un dominio de afuera.
+      setDestino(rutaInterna(params.get('next')))
+      if (params.get('motivo') === 'sesion_mp') {
+        setAviso('Se cerró tu sesión mientras estabas en MercadoPago, así que la conexión quedó sin terminar. Entrá de nuevo y volvé a tocar "Conectar con MercadoPago".')
+      }
+    }
+
     async function cargarCats() {
+      leerParametros()
       const { data } = await supabase.from('categorias').select('id, nombre, slug').eq('activa', true).order('orden')
       if (data) setCategorias(data)
     }
@@ -36,7 +52,7 @@ export default function LoginPage() {
   async function loginConGoogle() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: { redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(destino)}` },
     })
     if (error) setError(error.message)
   }
@@ -58,7 +74,7 @@ export default function LoginPage() {
       return
     }
 
-    router.push('/')
+    router.push(destino)
     router.refresh()
   }
 
@@ -94,6 +110,14 @@ export default function LoginPage() {
                 Iniciá sesión
               </h1>
             </div>
+
+            {aviso && (
+              <div className="mb-6 p-4 rounded-2xl border border-amber-200 bg-amber-50">
+                <p className="text-[13px] text-amber-900 font-light m-0 leading-relaxed">
+                  {aviso}
+                </p>
+              </div>
+            )}
 
             {/* Google */}
             <button
