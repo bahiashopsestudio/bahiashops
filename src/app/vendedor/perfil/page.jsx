@@ -381,7 +381,7 @@ export default function PerfilVendedorPage() {
                         Desconectamos tu cuenta de MercadoPago.
                       </p>
                       <p className="text-[11px] text-[#0a0a0a]/40 font-light mt-1 mb-0 leading-relaxed">
-                        Si además querés quitarle el permiso a Bahía Shops, podés hacerlo desde la sección de aplicaciones conectadas de tu cuenta de MercadoPago.
+                        Hasta que la vuelvas a conectar no vas a poder cobrar ventas por la plataforma. Tus productos siguen publicados.
                       </p>
                     </div>
                   )}
