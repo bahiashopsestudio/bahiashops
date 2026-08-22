@@ -8,6 +8,7 @@ import Cropper from 'react-easy-crop';
 import Navbar from '@/components/Navbar';
 import MenuTakeover from '@/components/MenuTakeover';
 import VolverAtras from '@/components/VolverAtras';
+import EstadoValidacion from '@/components/EstadoValidacion';
 
 
 // --- Utilidades de recorte ---
@@ -73,6 +74,8 @@ export default function PerfilVendedorPage() {
   const [logoUrl, setLogoUrl] = useState(null);
   const [portadaUrl, setPortadaUrl] = useState(null);
   const [mpConectado, setMpConectado] = useState(false);
+  const [estadoValidacion, setEstadoValidacion] = useState(null);
+  const [notasValidacion, setNotasValidacion] = useState(null);
   const [cargando, setCargando] = useState(true);
 
   const [recorte, setRecorte] = useState(null);
@@ -120,7 +123,7 @@ export default function PerfilVendedorPage() {
       if (!user) { setCargando(false); return; }
       const { data, error } = await supabase
         .from('vendedores')
-        .select('id, nombre_negocio, logo_url, portada_url, mercadopago_conectado')
+        .select('id, nombre_negocio, logo_url, portada_url, mercadopago_conectado, estado_validacion, notas_validacion')
         .eq('usuario_id', user.id)
         .single();
       if (error) {
@@ -131,6 +134,8 @@ export default function PerfilVendedorPage() {
         setLogoUrl(data.logo_url);
         setPortadaUrl(data.portada_url);
         setMpConectado(data.mercadopago_conectado || false);
+        setEstadoValidacion(data.estado_validacion || 'pendiente');
+        setNotasValidacion(data.notas_validacion);
       }
       setCargando(false);
     }
@@ -269,6 +274,11 @@ export default function PerfilVendedorPage() {
             <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 300, fontSize: '13px', color: 'rgba(10,10,10,0.45)', marginBottom: '24px' }}>
               {nombreNegocio}
             </p>
+
+            {/* ═══ ESTADO DE LA TIENDA ═══ */}
+            <div className="mb-6">
+              <EstadoValidacion estado={estadoValidacion} notas={notasValidacion} />
+            </div>
 
             {/* ═══ PORTADA + LOGO ═══ */}
             <div className="relative">

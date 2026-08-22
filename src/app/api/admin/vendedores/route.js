@@ -12,6 +12,7 @@ export async function GET() {
     .from('vendedores')
     .select(`
       id, nombre_negocio, slug, descripcion_corta, mercadopago_conectado, creado_en, bloqueado,
+      estado_validacion, notas_validacion, validado_en, validado_por,
       barrios ( nombre ),
       categorias ( nombre ),
       usuarios!vendedores_usuario_id_fkey ( email ),

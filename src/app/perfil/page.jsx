@@ -16,6 +16,7 @@ export default function PerfilPage() {
   const [perfil, setPerfil] = useState(null)
   const [vendedorSlug, setVendedorSlug] = useState(null)
   const [esVendedor, setEsVendedor] = useState(false)
+  const [tiendaAprobada, setTiendaAprobada] = useState(false)
   const [cargando, setCargando] = useState(true)
   const [menuOpen, setMenuOpen] = useState(false)
   const [categorias, setCategorias] = useState([])
@@ -52,11 +53,13 @@ export default function PerfilPage() {
       // Cargar slug del vendedor si tiene cuenta
       const { data: vendedor } = await supabase
         .from('vendedores')
-        .select('slug')
+        .select('slug, estado_validacion')
         .eq('usuario_id', user.id)
         .maybeSingle()
       if (vendedor) setEsVendedor(true)
       if (vendedor?.slug) setVendedorSlug(vendedor.slug)
+      // La tienda pública solo existe cuando está aprobada; si no, sería un 404.
+      if (vendedor?.estado_validacion === 'aprobado') setTiendaAprobada(true)
 
       setCargando(false)
     }
@@ -190,7 +193,7 @@ export default function PerfilPage() {
                 </svg>
               </Link>
 
-              {vendedorSlug && (
+              {vendedorSlug && tiendaAprobada && (
                 <Link
                   href={`/tienda/${vendedorSlug}`}
                   className="flex items-center gap-3 px-5 py-4 border-t border-[#0a0a0a]/5 hover:bg-red-50 transition"

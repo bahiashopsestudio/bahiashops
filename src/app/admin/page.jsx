@@ -134,7 +134,8 @@ export default function AdminDashboard() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [categorias, setCategorias] = useState([])
   const [pendientesModeracion, setPendientesModeracion] = useState(0)
-  const [vendedoresNuevos, setVendedoresNuevos] = useState(0)
+  const [vendedoresPendientes, setVendedoresPendientes] = useState(0)
+  const [errorConteo, setErrorConteo] = useState('')
   const [tesorosActivos, setTesorosActivos] = useState(0)
   const [ideasPendientes, setIdeasPendientes] = useState(0)
 
@@ -175,12 +176,21 @@ export default function AdminDashboard() {
         .eq('estado', 'en_revision')
       setPendientesModeracion(countModeracion || 0)
 
-      const hace7dias = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-      const { count: countNuevos } = await supabase
-        .from('vendedores')
-        .select('*', { count: 'exact', head: true })
-        .gte('creado_en', hace7dias)
-      setVendedoresNuevos(countNuevos || 0)
+      // Los pendientes NO se pueden contar desde el navegador: RLS solo deja
+      // ver las tiendas aprobadas y la propia, así que el conteo daría 0
+      // siempre. Va por la API de admin, que valida admin y usa service role.
+      try {
+        const resVendedores = await fetch('/api/admin/vendedores')
+        const datosVendedores = await resVendedores.json()
+        if (!resVendedores.ok) throw new Error(datosVendedores.error || 'respuesta ' + resVendedores.status)
+        setVendedoresPendientes(
+          (datosVendedores.vendedores || []).filter((v) => v.estado_validacion === 'pendiente').length
+        )
+      } catch (err) {
+        // Que no quede en cero silencioso: si falla, se ve.
+        console.error('No se pudo contar los vendedores pendientes:', err)
+        setErrorConteo('No pudimos contar los vendedores pendientes.')
+      }
 
       const { count: countTesoros } = await supabase
         .from('tesoros')
@@ -240,6 +250,12 @@ export default function AdminDashboard() {
             <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 300, fontSize: '14px', color: 'rgba(10,10,10,0.45)', marginTop: '10px' }}>
               Todo lo que necesitás para que la plataforma funcione.
             </p>
+
+            {errorConteo && (
+              <p style={{ fontFamily: "'Inter', sans-serif", fontSize: '12px', fontWeight: 400, color: '#cc152b', backgroundColor: '#fce4e4', borderRadius: '6px', padding: '10px 14px', marginTop: '16px' }}>
+                {errorConteo} Los números de las tarjetas pueden estar incompletos.
+              </p>
+            )}
           </div>
 
           <div
@@ -253,7 +269,7 @@ export default function AdminDashboard() {
               iconoColor="#6b3fa0"
               titulo="Vendedores"
               desc="Vendedores registrados, estado de cada tienda, conexión con MercadoPago."
-              badge={vendedoresNuevos > 0 ? vendedoresNuevos : null}
+              badge={vendedoresPendientes > 0 ? vendedoresPendientes : null}
               badgeTipo="rojo"
               flecha="Ver vendedores →"
             />

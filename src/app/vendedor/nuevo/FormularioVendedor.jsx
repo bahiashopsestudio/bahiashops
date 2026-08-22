@@ -283,7 +283,8 @@ export default function FormularioVendedor({ userId }) {
       }
     }
 
-    router.push('/')
+    // Al panel del vendedor: ahí está el cartel con el estado de la tienda.
+    router.push('/vendedor/perfil')
   }
 
   return (
