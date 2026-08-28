@@ -3,6 +3,7 @@
 export const metadata = {
   title: 'Local Shops — Bahía Shops',
   description: 'Local Shops es el proyecto que busca llevar el modelo de Bahía Shops a otras ciudades. Todavía se está construyendo.',
+  alternates: { canonical: '/local-shops' },
 }
 
 export default function LocalShopsLayout({ children }) {

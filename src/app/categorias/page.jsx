@@ -22,9 +22,13 @@ export default function CategoriasPage() {
   useEffect(() => {
     async function cargar() {
       const supabase = createClient()
+      // Sólo las abiertas. Una categoría cerrada es una que todavía no eligió
+      // ningún vendedor: mostrarla acá lleva a una página vacía. Es el mismo
+      // criterio que usan el navbar y los menús.
       const { data } = await supabase
         .from('categorias')
         .select('id, nombre, slug')
+        .eq('activa', true)
         .order('orden')
       if (data) setCategorias(data)
       setCargando(false)

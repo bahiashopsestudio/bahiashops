@@ -288,15 +288,13 @@ export default function AdminDashboard() {
               flecha="Ir al panel →"
             />
             <Tarjeta
-              disabled
+              href="/admin/colecciones"
               icono={<IconoRegalo />}
               iconoFondo="#d4e8f0"
               iconoColor="#1a6585"
               titulo="Cápsulas"
               desc="Creá colecciones temáticas e invitá vendedores a sumarse con sus productos."
-              badge="Próximamente"
-              badgeTipo="proximamente"
-              flecha="Próximamente"
+              flecha="Gestionar cápsulas →"
             />
             <Tarjeta
               href="/admin/tesoros"
@@ -310,15 +308,13 @@ export default function AdminDashboard() {
               flecha="Gestionar tesoros →"
             />
             <Tarjeta
-              disabled
+              href="/admin/categorias"
               icono={<IconoCuadrados />}
               iconoFondo="#d0f0e0"
               iconoColor="#1a7a4a"
               titulo="Categorías"
-              desc="Activar, desactivar y reordenar las categorías de la plataforma."
-              badge="Próximamente"
-              badgeTipo="proximamente"
-              flecha="Próximamente"
+              desc="Qué categorías están abiertas, cuántos vendedores tiene cada una, y abrir o cerrar a mano."
+              flecha="Ver categorías →"
             />
             <Tarjeta
               href="/admin/ideas"

@@ -8,11 +8,19 @@ import 'leaflet/dist/leaflet.css'
 
 const CENTRO_BB = [-38.7183, -62.2663]
 
-// Arreglo del ícono del pin (si no, viene roto en Next.js)
+// Arreglo del ícono del pin (si no, viene roto en Next.js: Leaflet arma las
+// rutas de sus imágenes a mano y no encuentra las del bundle).
+//
+// Las imágenes se sirven desde public/leaflet/, copiadas tal cual del paquete
+// leaflet 1.9.4. Antes venían de unpkg.com: si ese CDN tardaba o se caía, el
+// pin desaparecía de los tres formularios que usan este mapa (alta de
+// vendedor, /vendedor/ubicacion y el formulario de direcciones). Si algún día
+// se actualiza Leaflet, hay que volver a copiarlas desde
+// node_modules/leaflet/dist/images/.
 const iconoPin = L.icon({
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  iconUrl: '/leaflet/marker-icon.png',
+  iconRetinaUrl: '/leaflet/marker-icon-2x.png',
+  shadowUrl: '/leaflet/marker-shadow.png',
   iconSize: [25, 41],
   iconAnchor: [12, 41],
 })

@@ -5,6 +5,18 @@ import {
   soloProductosPublicados,
 } from '@/lib/vendedoresPublicos'
 
+// La home vive en el grupo de rutas (home) — los paréntesis no salen en la URL,
+// esto sigue siendo '/'. Está acá para que loading.jsx la acompañe sin abrir un
+// límite de Suspense sobre el resto del sitio: ese límite arranca la respuesta
+// en streaming y deja el status en 200, y entonces notFound() de las rutas de
+// abajo no puede devolver un 404 de verdad.
+//
+// La canónica: acá se declara cuál de las dos direcciones (con www y sin www)
+// es la buena. El path es relativo al metadataBase del layout raíz.
+export const metadata = {
+  alternates: { canonical: '/' },
+}
+
 export default async function Home() {
   const supabase = await createClient()
 

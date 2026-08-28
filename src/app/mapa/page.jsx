@@ -5,6 +5,7 @@ import MapaContent from './MapaContent'
 export const metadata = {
   title: 'Mapa de vendedores — Bahía Shops',
   description: 'Encontrá vendedores y emprendedores cerca tuyo en Bahía Blanca.',
+  alternates: { canonical: '/mapa' },
 }
 
 export default async function MapaPage() {

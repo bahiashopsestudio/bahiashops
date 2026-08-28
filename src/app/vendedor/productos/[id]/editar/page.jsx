@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { activarCategorias, AVISO_CATEGORIA } from '@/lib/categorias';
 import imageCompression from 'browser-image-compression';
 import {
   DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors,
@@ -510,16 +511,20 @@ export default function EditarProductoPage() {
         if (errSellos) console.error('Error al guardar sellos del producto:', errSellos.message);
       }
 
-      // Activar categorías si estaban inactivas
+      // Abrir las categorías del producto si estaban cerradas. Va por el
+      // servidor: el navegador no puede escribir en 'categorias'.
       const catPrincipal = todasCategorias.find((c) => c.id === Number(categoriaPrincipalId));
-      if (catPrincipal) {
-        await supabase.from('categorias').update({ activa: true }).eq('id', catPrincipal.id);
-      }
-      if (categoriaSecundariaId) {
-        await supabase.from('categorias').update({ activa: true }).eq('id', Number(categoriaSecundariaId));
-      }
+      const falloCategoria = await activarCategorias([
+        catPrincipal?.id,
+        categoriaSecundariaId,
+      ]);
 
-      alert('¡Producto actualizado! Queda en revisión hasta que lo apruebes.');
+      // El producto ya quedó guardado: esto se avisa, no se deshace.
+      if (falloCategoria) {
+        alert(`¡Producto actualizado! Queda en revisión hasta que lo apruebes.\n\n${AVISO_CATEGORIA}`);
+      } else {
+        alert('¡Producto actualizado! Queda en revisión hasta que lo apruebes.');
+      }
       router.push('/vendedor/productos');
 
     } catch (err) {

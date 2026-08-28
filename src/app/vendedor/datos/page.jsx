@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { activarCategoria, AVISO_CATEGORIA } from '@/lib/categorias'
 import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
 import VolverAtras from '@/components/VolverAtras'
@@ -60,6 +61,7 @@ export default function MisDatosVendedorPage() {
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState(null)
   const [guardado, setGuardado] = useState(false)
+  const [avisoCategoria, setAvisoCategoria] = useState(null)
   const [modalCategoria, setModalCategoria] = useState(false)
 
   // ── Catálogos ──
@@ -197,11 +199,14 @@ export default function MisDatosVendedorPage() {
       return
     }
 
-    // Activar la categoría si estaba inactiva (mismo criterio que el alta)
+    // Abrir la categoría si estaba cerrada (mismo criterio que el alta). Va
+    // por el servidor: el navegador no puede escribir en 'categorias'.
+    setAvisoCategoria(null)
     if (categoriaId) {
       const catElegida = categorias.find((c) => c.id === Number(categoriaId))
       if (catElegida && !catElegida.activa) {
-        await supabase.from('categorias').update({ activa: true }).eq('id', Number(categoriaId))
+        const resultado = await activarCategoria(categoriaId)
+        if (!resultado.ok) setAvisoCategoria(AVISO_CATEGORIA)
       }
     }
 
@@ -281,6 +286,12 @@ export default function MisDatosVendedorPage() {
             {guardado && (
               <div className="mb-6 p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-800">
                 ✓ Listo, guardamos tus cambios.
+              </div>
+            )}
+
+            {avisoCategoria && (
+              <div className="mb-6 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-900">
+                {avisoCategoria}
               </div>
             )}
 

@@ -3,6 +3,7 @@
 export const metadata = {
   title: 'Próximamente — Bahía Shops',
   description: 'Estamos preparando un nuevo espacio para descubrir y comprar en los comercios y emprendimientos de Bahía Blanca.',
+  alternates: { canonical: '/proximamente' },
 }
 
 export default function ProximamenteLayout({ children }) {

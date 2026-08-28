@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { createClient } from '@/lib/supabase/client'
+import { activarCategoria, AVISO_CATEGORIA } from '@/lib/categorias'
 import BloqueHorarios, { HORARIOS_INICIALES } from './BloqueHorarios'
 import ModalContacto from '@/components/ModalContacto'
 import {
@@ -137,13 +138,19 @@ export default function FormularioVendedor({ userId }) {
   const [paso, setPaso] = useState(1)
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState(null)
+  // La tienda se guardó pero su categoría no se pudo abrir. No es motivo para
+  // deshacer nada: se avisa y se sigue.
+  const [avisoCategoria, setAvisoCategoria] = useState(null)
 
   useEffect(() => {
     async function cargarDatos() {
       const { data: locs } = await supabase.from('localidades').select('id, nombre').order('nombre')
       const { data: brs } = await supabase.from('barrios').select('id, nombre, localidad_id').order('nombre')
 
-      // Todas las categorías (las inactivas se activan al ser elegidas)
+      // TODAS las categorías, abiertas y cerradas — no filtrar por 'activa'
+      // acá. Este selector es el único lugar donde una categoría cerrada se
+      // puede elegir, y elegirla es lo que la abre. Si se filtrara, ninguna
+      // categoría nueva podría abrirse nunca.
       const { data: cats } = await supabase
         .from('categorias')
         .select('id, nombre, activa')
@@ -255,14 +262,14 @@ export default function FormularioVendedor({ userId }) {
       setGuardando(false); return
     }
 
-    // Activar categoría si estaba inactiva
+    // Abrir la categoría si estaba cerrada. Va por el servidor: el navegador
+    // no tiene permiso de escritura sobre 'categorias'.
+    let falloCategoria = null
     if (vendedorNuevo && categoriaId) {
       const catElegida = categorias.find((c) => c.id === Number(categoriaId))
       if (catElegida && !catElegida.activa) {
-        await supabase
-          .from('categorias')
-          .update({ activa: true })
-          .eq('id', Number(categoriaId))
+        const resultado = await activarCategoria(categoriaId)
+        if (!resultado.ok) falloCategoria = resultado.error
       }
     }
 
@@ -281,6 +288,14 @@ export default function FormularioVendedor({ userId }) {
         console.error('Error al guardar sellos:', errorSellos.message)
         // No bloqueamos el registro por esto — el vendedor ya se creó
       }
+    }
+
+    // Si la categoría no se pudo abrir, la persona lo ve antes de irse. La
+    // tienda quedó creada igual, pero el problema no se pierde en la consola.
+    if (falloCategoria) {
+      setAvisoCategoria(AVISO_CATEGORIA)
+      setGuardando(false)
+      return
     }
 
     // Al panel del vendedor: ahí está el cartel con el estado de la tienda.
@@ -663,6 +678,19 @@ export default function FormularioVendedor({ userId }) {
       )}
 
       {/* Error */}
+      {avisoCategoria && (
+        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 text-sm">
+          <p className="m-0">Tu tienda quedó creada. {avisoCategoria}</p>
+          <button
+            type="button"
+            onClick={() => router.push('/vendedor/perfil')}
+            className="mt-3 underline cursor-pointer"
+          >
+            Continuar a mi panel
+          </button>
+        </div>
+      )}
+
       {error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm">
           {error}

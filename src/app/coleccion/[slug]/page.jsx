@@ -3,6 +3,15 @@ import { createClient } from '@/lib/supabase/server';
 import { vendedorPublicado } from '@/lib/vendedoresPublicos';
 import ColeccionContent from '@/components/ColeccionContent';
 
+// Si la colección no existe la página llama a notFound() y este metadata se
+// descarta con ella, así que la canónica no llega a servirse en un 404.
+export async function generateMetadata({ params }) {
+  const { slug } = await params;
+  return {
+    alternates: { canonical: `/coleccion/${encodeURIComponent(slug)}` },
+  };
+}
+
 export default async function ColeccionPage({ params }) {
   const { slug } = await params;
   const supabase = await createClient();

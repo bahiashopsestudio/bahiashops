@@ -35,6 +35,10 @@ export async function generateMetadata({ params }) {
   return {
     title: `${data.nombre_negocio} — Bahía Shops`,
     description: data.descripcion_corta,
+    // La dirección oficial de esta tienda, sin www. Sólo la declaran las
+    // tiendas que existen: arriba, sin fila, se sale con noindex y sin
+    // canónica, porque no hay página oficial que señalar.
+    alternates: { canonical: `/tienda/${encodeURIComponent(slug)}` },
   }
 }
 

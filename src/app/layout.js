@@ -15,6 +15,14 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
+  // Dirección oficial del sitio, sin www. Todo path relativo que declare una
+  // página (canónicas, imágenes de Open Graph) se resuelve contra esto.
+  //
+  // Acá NO va la canónica: los campos de metadata se heredan hacia abajo, así
+  // que una canónica en el layout raíz haría que toda página que no declare la
+  // suya diga que la original es la home. Cada ruta declara la propia; la de
+  // la home está en src/app/page.js.
+  metadataBase: new URL("https://bahiashops.com.ar"),
   title: "Bahía Shops",
   description: "El marketplace de Bahía Blanca. Descubrí, comprá y conectá con comercios y emprendedores de la ciudad.",
 };
