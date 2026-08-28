@@ -1,12 +1,13 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { getServiceRoleClient, verificarAdmin } from '@/lib/supabase/admin'
+import { soloVendedoresPublicados } from '@/lib/vendedoresPublicos'
 import TiendaContent from './TiendaContent'
 
 const CAMPOS = `
   id, nombre_negocio, slug, descripcion_corta, descripcion_larga,
   logo_url, portada_url, instagram, recibe_publico, direccion,
-  horarios_texto_libre, estado_validacion,
+  horarios_texto_libre, estado_validacion, bloqueado,
   barrio:barrios(nombre),
   categoria:categorias(nombre, slug)
 `
@@ -15,15 +16,15 @@ const CAMPOS = `
 export async function generateMetadata({ params }) {
   const { slug } = await params
   const supabase = await createClient()
-  const { data } = await supabase
-    .from('vendedores')
-    .select('nombre_negocio, descripcion_corta')
-    .eq('slug', slug)
-    .eq('estado_validacion', 'aprobado')
-    .single()
+  const { data } = await soloVendedoresPublicados(
+    supabase
+      .from('vendedores')
+      .select('nombre_negocio, descripcion_corta')
+      .eq('slug', slug)
+  ).maybeSingle()
 
-  // Una tienda sin publicar no expone su nombre ni se indexa, ni siquiera
-  // cuando el admin la está previsualizando.
+  // Una tienda sin publicar o bloqueada no expone su nombre ni se indexa, ni
+  // siquiera cuando el admin la está previsualizando.
   if (!data) {
     return {
       title: 'Tienda no encontrada — Bahía Shops',
@@ -43,15 +44,16 @@ export default async function TiendaPage({ params, searchParams }) {
   const { preview } = await searchParams
   const supabase = await createClient()
 
-  // Vista normal: solo tiendas aprobadas.
-  const { data: aprobada } = await supabase
-    .from('vendedores')
-    .select(CAMPOS)
-    .eq('slug', slug)
-    .eq('estado_validacion', 'aprobado')
-    .maybeSingle()
+  // Vista normal: sólo tiendas publicadas y no bloqueadas. Para el visitante
+  // las dos situaciones son la misma: el 404 de siempre, sin decir cuál es.
+  const { data: publicada } = await soloVendedoresPublicados(
+    supabase
+      .from('vendedores')
+      .select(CAMPOS)
+      .eq('slug', slug)
+  ).maybeSingle()
 
-  let vendedor = aprobada
+  let vendedor = publicada
   let esPrevisualizacion = false
 
   // Previsualización para el admin: le deja ver la tienda antes de aprobarla.
@@ -101,7 +103,9 @@ export default async function TiendaPage({ params, searchParams }) {
             textAlign: 'center', padding: '10px 16px',
           }}
         >
-          Vista previa · esta tienda todavía no está publicada
+          {vendedor.bloqueado
+            ? 'Vista previa · esta tienda está bloqueada y no se ve en público'
+            : 'Vista previa · esta tienda todavía no está publicada'}
         </div>
       )}
       <TiendaContent

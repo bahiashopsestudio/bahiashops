@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 
 export const metadata = {
   title: "Bahía Shops",
-  description: "El marketplace de Bahía Blanca",
+  description: "El marketplace de Bahía Blanca. Descubrí, comprá y conectá con comercios y emprendedores de la ciudad.",
 };
 
 export default function RootLayout({ children }) {

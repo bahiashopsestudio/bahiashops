@@ -274,6 +274,17 @@ export default function AdminVendedorDetallePage() {
 
             {/* ── Acciones ── */}
             <div style={{ backgroundColor: '#ffffff', border: '1px solid rgba(10,10,10,0.06)', borderRadius: '8px', padding: '18px 20px', margin: '24px 0 32px' }}>
+              {vendedor.bloqueado && vendedor.bloqueo_actual?.motivo && (
+                <div style={{ backgroundColor: '#fce4e4', borderRadius: '6px', padding: '10px 12px', marginBottom: '14px' }}>
+                  <p style={{ fontSize: '10px', fontWeight: 500, color: '#a01020', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    Motivo del bloqueo{vendedor.bloqueo_actual.creado_en ? ` · ${fecha(vendedor.bloqueo_actual.creado_en)}` : ''}
+                  </p>
+                  <p style={{ fontSize: '13px', fontWeight: 300, color: 'rgba(10,10,10,0.75)', margin: '4px 0 0', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                    {vendedor.bloqueo_actual.motivo}
+                  </p>
+                </div>
+              )}
+
               {vendedor.notas_validacion && !pidiendoCambios && (
                 <div style={{ backgroundColor: '#fef3c7', borderRadius: '6px', padding: '10px 12px', marginBottom: '14px' }}>
                   <p style={{ fontSize: '10px', fontWeight: 500, color: '#92650a', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
@@ -287,6 +298,19 @@ export default function AdminVendedorDetallePage() {
 
               {pidiendoCambios ? (
                 <div>
+                  {/* Pedir cambios despublica: se avisa antes de confirmar. */}
+                  {vendedor.estado_validacion === 'aprobado' && (
+                    <p
+                      style={{
+                        fontFamily: "'Inter', sans-serif", fontSize: '12px', fontWeight: 400,
+                        color: '#92650a', backgroundColor: '#fef3c7',
+                        borderRadius: '6px', padding: '10px 12px', margin: '0 0 10px', lineHeight: 1.5,
+                      }}
+                    >
+                      Ojo: esta tienda está publicada. Al pedir cambios deja de verse en el sitio
+                      —junto con sus productos— hasta que la vuelvas a aprobar.
+                    </p>
+                  )}
                   <textarea
                     value={notas}
                     onChange={(e) => setNotas(e.target.value)}

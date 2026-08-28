@@ -1,14 +1,44 @@
 import { NextResponse } from 'next/server';
 import { getServiceRoleClient, verificarAdmin } from '@/lib/supabase/admin';
-import { mailAprobado, mailNecesitaCambios } from '@/lib/mailsValidacion';
+import {
+  mailAprobado,
+  mailNecesitaCambios,
+  mailBloqueado,
+  mailDesbloqueado,
+} from '@/lib/mailsValidacion';
 
 // Lista cerrada: cualquier otro valor se rechaza con 400.
 const ESTADOS_VALIDOS = ['pendiente', 'aprobado', 'necesita_cambios'];
 
-// Avisa al vendedor por mail. Nunca lanza: si falla, la revisión ya quedó
-// guardada y no queremos deshacerla por un problema de envío.
-async function avisarAlVendedor({ vendedor, estado, admin, baseUrl }) {
-  if (estado !== 'aprobado' && estado !== 'necesita_cambios') return { enviado: false, motivo: 'sin_aviso' };
+// Arma el mail que corresponde, o null si esta escritura no lleva aviso.
+function armarMail({ vendedor, estado, bloqueo, baseUrl }) {
+  if (bloqueo === 'bloquear') {
+    return mailBloqueado({
+      nombreNegocio: vendedor.nombre_negocio,
+      motivo: vendedor.motivo_bloqueo,
+    });
+  }
+  if (bloqueo === 'desbloquear') {
+    return mailDesbloqueado({
+      nombreNegocio: vendedor.nombre_negocio,
+      slug: vendedor.slug,
+      baseUrl,
+    });
+  }
+  if (estado === 'aprobado') {
+    return mailAprobado({ nombreNegocio: vendedor.nombre_negocio, slug: vendedor.slug, baseUrl });
+  }
+  if (estado === 'necesita_cambios') {
+    return mailNecesitaCambios({ nombreNegocio: vendedor.nombre_negocio, notas: vendedor.notas_validacion, baseUrl });
+  }
+  return null;
+}
+
+// Avisa al vendedor por mail. Nunca lanza: si falla, el cambio ya quedó
+// guardado y no queremos deshacerlo por un problema de envío.
+async function avisarAlVendedor({ vendedor, estado, bloqueo, admin, baseUrl }) {
+  const mail = armarMail({ vendedor, estado, bloqueo, baseUrl });
+  if (!mail) return { enviado: false, motivo: 'sin_aviso' };
 
   try {
     // El mail de contacto público es opcional: si no hay, va al de la cuenta.
@@ -26,10 +56,6 @@ async function avisarAlVendedor({ vendedor, estado, admin, baseUrl }) {
       console.error('Sin dirección para avisar al vendedor', vendedor.id);
       return { enviado: false, motivo: 'sin_destinatario' };
     }
-
-    const mail = estado === 'aprobado'
-      ? mailAprobado({ nombreNegocio: vendedor.nombre_negocio, slug: vendedor.slug, baseUrl })
-      : mailNecesitaCambios({ nombreNegocio: vendedor.nombre_negocio, notas: vendedor.notas_validacion, baseUrl });
 
     const respuesta = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -76,8 +102,22 @@ export async function PUT(request, { params }) {
   // mandar columnas de más no tenga ningún efecto.
   const campos = {};
 
+  // 'bloquear' | 'desbloquear' | null — decide qué mail sale al final.
+  let bloqueo = null;
+  let motivoBloqueo = '';
+
   if (cambiaBloqueo) {
+    motivoBloqueo = typeof body.motivo_bloqueo === 'string' ? body.motivo_bloqueo.trim() : '';
+
+    if (body.bloqueado && !motivoBloqueo) {
+      return NextResponse.json(
+        { error: 'Para bloquear hay que escribir el motivo.' },
+        { status: 400 }
+      );
+    }
+
     campos.bloqueado = body.bloqueado;
+    bloqueo = body.bloqueado ? 'bloquear' : 'desbloquear';
   }
 
   if (cambiaEstado) {
@@ -123,16 +163,52 @@ export async function PUT(request, { params }) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // El motivo va a su propia tabla, que no es pública. Se registra después de
+  // que el flag quedó guardado: si esto fallara, el vendedor ya está bloqueado
+  // —que es lo importante— y el motivo se puede reponer a mano.
+  let bloqueoActual = null;
+
+  if (bloqueo === 'bloquear') {
+    const { data: fila, error: errorBloqueo } = await admin
+      .from('vendedor_bloqueos')
+      .insert({ vendedor_id: Number(id), motivo: motivoBloqueo, bloqueado_por: admin_user.id })
+      .select('motivo, creado_en, levantado_en')
+      .single();
+
+    if (errorBloqueo) {
+      console.error('No se pudo registrar el motivo del bloqueo', id, errorBloqueo.message);
+    }
+    bloqueoActual = fila || null;
+  }
+
+  if (bloqueo === 'desbloquear') {
+    const { error: errorLevantar } = await admin
+      .from('vendedor_bloqueos')
+      .update({ levantado_en: new Date().toISOString() })
+      .eq('vendedor_id', id)
+      .is('levantado_en', null);
+
+    if (errorLevantar) {
+      console.error('No se pudo cerrar el bloqueo', id, errorLevantar.message);
+    }
+  }
+
   // El mail va DESPUÉS de que la escritura salió bien, y no puede deshacerla.
   let aviso = { enviado: false, motivo: 'sin_aviso' };
-  if (cambiaEstado) {
+  if (cambiaEstado || cambiaBloqueo) {
     aviso = await avisarAlVendedor({
-      vendedor: data,
+      vendedor: { ...data, motivo_bloqueo: motivoBloqueo },
       estado: campos.estado_validacion,
+      bloqueo,
       admin,
       baseUrl: new URL(request.url).origin,
     });
   }
 
-  return NextResponse.json({ vendedor: data, aviso });
+  // bloqueo_actual acompaña a la fila para que el panel pinte el motivo sin
+  // recargar la lista entera.
+  return NextResponse.json({
+    vendedor: { ...data, bloqueo_actual: bloqueoActual },
+    aviso,
+  });
 }

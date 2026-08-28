@@ -20,7 +20,8 @@ export async function GET(request, { params }) {
       categorias ( nombre ),
       barrios ( nombre ),
       localidades ( nombre ),
-      usuarios!vendedores_usuario_id_fkey ( email )
+      usuarios!vendedores_usuario_id_fkey ( email ),
+      vendedor_bloqueos ( motivo, creado_en, levantado_en )
     `)
     .eq('id', id)
     .maybeSingle();
@@ -32,6 +33,12 @@ export async function GET(request, { params }) {
   if (!vendedor) {
     return NextResponse.json({ error: 'No encontramos ese vendedor.' }, { status: 404 });
   }
+
+  // El bloqueo vigente, si lo hay: el motivo no está en la fila del vendedor.
+  vendedor.bloqueo_actual =
+    (vendedor.vendedor_bloqueos || [])
+      .filter((b) => !b.levantado_en)
+      .sort((a, b) => new Date(b.creado_en) - new Date(a.creado_en))[0] || null;
 
   const { data: productos } = await admin
     .from('productos')

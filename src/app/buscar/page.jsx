@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { soloVendedoresPublicados, soloProductosPublicados } from '@/lib/vendedoresPublicos'
 import Link from 'next/link'
 import { Suspense } from 'react'
 import Navbar from '@/components/Navbar'
@@ -64,18 +65,19 @@ function BuscarContenido() {
     setCargando(true)
     setBuscado(true)
 
-    let query = supabase
-      .from('productos')
-      .select(`
-        id, nombre, precio, precio_anterior, genero,
-        vendedor:vendedores(id, nombre_negocio, slug),
-        media:producto_media(url, es_principal, orden),
-        producto_sellos ( sello_id )
-      `)
-      .eq('estado', 'activo')
-      .or(`nombre.ilike.%${termino}%,descripcion.ilike.%${termino}%`)
-      .order('creado_en', { ascending: false })
-      .limit(50)
+    let query = soloProductosPublicados(
+      supabase
+        .from('productos')
+        .select(`
+          id, nombre, precio, precio_anterior, genero,
+          vendedor:vendedores!inner(id, nombre_negocio, slug, estado_validacion, bloqueado),
+          media:producto_media(url, es_principal, orden),
+          producto_sellos ( sello_id )
+        `)
+        .eq('estado', 'activo')
+        .or(`nombre.ilike.%${termino}%,descripcion.ilike.%${termino}%`)
+        .order('creado_en', { ascending: false })
+    ).limit(50)
 
     if (generoParam) {
       query = query.contains('genero', [generoParam])
@@ -83,12 +85,12 @@ function BuscarContenido() {
 
     const { data: prods } = await query
 
-    const { data: vendedores } = await supabase
-      .from('vendedores')
-      .select('id, nombre_negocio, slug, logo_url, descripcion_corta')
-      .eq('estado_validacion', 'aprobado')
-      .ilike('nombre_negocio', `%${termino}%`)
-      .limit(5)
+    const { data: vendedores } = await soloVendedoresPublicados(
+      supabase
+        .from('vendedores')
+        .select('id, nombre_negocio, slug, logo_url, descripcion_corta')
+        .ilike('nombre_negocio', `%${termino}%`)
+    ).limit(5)
 
     const limpios = (prods || []).map((p) => ({
       ...p,

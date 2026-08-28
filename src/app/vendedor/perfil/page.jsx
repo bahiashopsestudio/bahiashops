@@ -76,6 +76,8 @@ export default function PerfilVendedorPage() {
   const [mpConectado, setMpConectado] = useState(false);
   const [estadoValidacion, setEstadoValidacion] = useState(null);
   const [notasValidacion, setNotasValidacion] = useState(null);
+  const [slugTienda, setSlugTienda] = useState(null);
+  const [bloqueado, setBloqueado] = useState(false);
   const [cargando, setCargando] = useState(true);
 
   const [recorte, setRecorte] = useState(null);
@@ -123,7 +125,7 @@ export default function PerfilVendedorPage() {
       if (!user) { setCargando(false); return; }
       const { data, error } = await supabase
         .from('vendedores')
-        .select('id, nombre_negocio, logo_url, portada_url, mercadopago_conectado, estado_validacion, notas_validacion')
+        .select('id, nombre_negocio, slug, logo_url, portada_url, mercadopago_conectado, estado_validacion, notas_validacion, bloqueado')
         .eq('usuario_id', user.id)
         .single();
       if (error) {
@@ -134,8 +136,10 @@ export default function PerfilVendedorPage() {
         setLogoUrl(data.logo_url);
         setPortadaUrl(data.portada_url);
         setMpConectado(data.mercadopago_conectado || false);
-        setEstadoValidacion(data.estado_validacion || 'pendiente');
+        setEstadoValidacion(data.estado_validacion || 'aprobado');
         setNotasValidacion(data.notas_validacion);
+        setSlugTienda(data.slug || null);
+        setBloqueado(data.bloqueado === true);
       }
       setCargando(false);
     }
@@ -277,7 +281,12 @@ export default function PerfilVendedorPage() {
 
             {/* ═══ ESTADO DE LA TIENDA ═══ */}
             <div className="mb-6">
-              <EstadoValidacion estado={estadoValidacion} notas={notasValidacion} />
+              <EstadoValidacion
+                estado={estadoValidacion}
+                notas={notasValidacion}
+                slug={slugTienda}
+                bloqueado={bloqueado}
+              />
             </div>
 
             {/* ═══ PORTADA + LOGO ═══ */}

@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { soloProductosPublicados } from '@/lib/vendedoresPublicos'
 import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
 import VolverAtras from '@/components/VolverAtras'
@@ -112,17 +113,20 @@ function CategoriaContenido() {
         ? subcategorias.find((s) => s.slug === subParam)?.id
         : null
 
-      let query = supabase
-        .from('productos')
-        .select(`
-          id, nombre, precio, precio_anterior, genero,
-          producto_media ( url, es_principal, orden ),
-          vendedores ( nombre_negocio ),
-          producto_sellos ( sello_id )
-        `)
-        .eq('estado', 'activo')
-        .or(`categoria_id.eq.${categoria.id},categoria_secundaria_id.eq.${categoria.id}`)
-        .order('creado_en', { ascending: false })
+      let query = soloProductosPublicados(
+        supabase
+          .from('productos')
+          .select(`
+            id, nombre, precio, precio_anterior, genero,
+            producto_media ( url, es_principal, orden ),
+            vendedores!inner ( nombre_negocio, estado_validacion, bloqueado ),
+            producto_sellos ( sello_id )
+          `)
+          .eq('estado', 'activo')
+          .or(`categoria_id.eq.${categoria.id},categoria_secundaria_id.eq.${categoria.id}`)
+          .order('creado_en', { ascending: false }),
+        'vendedores'
+      )
 
       if (subId) {
         query = query.or(`subcategoria_id.eq.${subId},subcategoria_secundaria_id.eq.${subId}`)

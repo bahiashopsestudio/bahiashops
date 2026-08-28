@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { soloProductosPublicados } from '@/lib/vendedoresPublicos'
 import { useCarrito } from '@/context/CarritoContext'
 import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
@@ -53,11 +54,16 @@ export default function PaginaProducto() {
         .order('orden')
       if (cats) setCategorias(cats)
 
-      const { data: prod, error } = await supabase
-        .from('productos')
-        .select('*')
-        .eq('id', productoId)
-        .single()
+      // El !inner sobre el vendedor hace que la ficha de un producto de una
+      // tienda bloqueada o despublicada no traiga fila: se ve el mismo
+      // "no encontrado" que un id inexistente.
+      const { data: prod, error } = await soloProductosPublicados(
+        supabase
+          .from('productos')
+          .select('*, vendedores!inner(estado_validacion, bloqueado)')
+          .eq('id', productoId),
+        'vendedores'
+      ).maybeSingle()
 
       if (error || !prod) {
         setNoEncontrado(true)

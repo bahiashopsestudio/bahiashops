@@ -134,7 +134,7 @@ export default function AdminDashboard() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [categorias, setCategorias] = useState([])
   const [pendientesModeracion, setPendientesModeracion] = useState(0)
-  const [vendedoresPendientes, setVendedoresPendientes] = useState(0)
+  const [vendedoresNuevos, setVendedoresNuevos] = useState(0)
   const [errorConteo, setErrorConteo] = useState('')
   const [tesorosActivos, setTesorosActivos] = useState(0)
   const [ideasPendientes, setIdeasPendientes] = useState(0)
@@ -176,20 +176,23 @@ export default function AdminDashboard() {
         .eq('estado', 'en_revision')
       setPendientesModeracion(countModeracion || 0)
 
-      // Los pendientes NO se pueden contar desde el navegador: RLS solo deja
-      // ver las tiendas aprobadas y la propia, así que el conteo daría 0
-      // siempre. Va por la API de admin, que valida admin y usa service role.
+      // El badge cuenta altas nuevas, no pendientes: desde que las tiendas se
+      // publican solas ya no hay cola de revisión, y lo que interesa mirar es
+      // cuánta gente se está sumando.
+      //
+      // El conteo NO se puede hacer desde el navegador: RLS solo deja ver las
+      // tiendas publicadas y la propia. Va por la API de admin, que valida
+      // admin, usa service role y devuelve el número ya contado.
       try {
         const resVendedores = await fetch('/api/admin/vendedores')
         const datosVendedores = await resVendedores.json()
         if (!resVendedores.ok) throw new Error(datosVendedores.error || 'respuesta ' + resVendedores.status)
-        setVendedoresPendientes(
-          (datosVendedores.vendedores || []).filter((v) => v.estado_validacion === 'pendiente').length
-        )
+        if (typeof datosVendedores.resumen?.nuevos !== 'number') throw new Error('respuesta sin resumen')
+        setVendedoresNuevos(datosVendedores.resumen.nuevos)
       } catch (err) {
         // Que no quede en cero silencioso: si falla, se ve.
-        console.error('No se pudo contar los vendedores pendientes:', err)
-        setErrorConteo('No pudimos contar los vendedores pendientes.')
+        console.error('No se pudo contar los vendedores nuevos:', err)
+        setErrorConteo('No pudimos contar los vendedores nuevos.')
       }
 
       const { count: countTesoros } = await supabase
@@ -269,8 +272,8 @@ export default function AdminDashboard() {
               iconoColor="#6b3fa0"
               titulo="Vendedores"
               desc="Vendedores registrados, estado de cada tienda, conexión con MercadoPago."
-              badge={vendedoresPendientes > 0 ? vendedoresPendientes : null}
-              badgeTipo="rojo"
+              badge={vendedoresNuevos > 0 ? `${vendedoresNuevos} ${vendedoresNuevos === 1 ? 'nuevo' : 'nuevos'}` : null}
+              badgeTipo="neutro"
               flecha="Ver vendedores →"
             />
             <Tarjeta

@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { soloVendedoresPublicados } from '@/lib/vendedoresPublicos'
 import MapaContent from './MapaContent'
 
 export const metadata = {
@@ -9,11 +10,13 @@ export const metadata = {
 export default async function MapaPage() {
   const supabase = await createClient()
 
-  const { data: vendedores } = await supabase
-    .from('vendedores')
-    .select('id, nombre_negocio, slug, latitud, longitud, recibe_publico, barrio_id, logo_url, descripcion_corta')
-    .not('latitud', 'is', null)
-    .not('longitud', 'is', null)
+  const { data: vendedores } = await soloVendedoresPublicados(
+    supabase
+      .from('vendedores')
+      .select('id, nombre_negocio, slug, latitud, longitud, recibe_publico, barrio_id, logo_url, descripcion_corta')
+      .not('latitud', 'is', null)
+      .not('longitud', 'is', null)
+  )
 
   const { data: categorias } = await supabase
     .from('categorias')

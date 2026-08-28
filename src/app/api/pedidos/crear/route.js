@@ -30,16 +30,79 @@ export async function POST(request) {
     );
   }
 
-  // 3. Calcular la comisión: 5% sobre PRODUCTOS, no sobre envío.
-  const comision = Math.round(subtotalProductos * 0.05);
-
-  // 4. Buscar las llaves de MercadoPago del vendedor.
   const admin = createAdminClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.SUPABASE_SERVICE_ROLE_KEY
   );
 
-  // 4b. Obtener un token válido del vendedor (se auto-renueva si está por vencer).
+  // 3. ¿Esto todavía se puede comprar?
+  //
+  // El carrito vive en el localStorage del comprador: puede tener adentro un
+  // producto pausado hace un mes o la tienda de un vendedor bloqueado ayer.
+  // Nada de lo que pasó antes en la UI cuenta como control — este cliente usa
+  // service_role y se saltea RLS, así que la regla se aplica acá a mano.
+  //
+  // El mensaje que sale de acá no dice por qué. "No está disponible" es todo
+  // lo que le corresponde saber a quien compra: el motivo es entre nosotros y
+  // el vendedor.
+  const NO_DISPONIBLE = {
+    error: 'Algunos productos de este pedido ya no están disponibles.',
+    codigo: 'NO_DISPONIBLE',
+  };
+
+  const { data: vendedor, error: errorVendedor } = await admin
+    .from('vendedores')
+    .select('id, bloqueado, estado_validacion')
+    .eq('id', vendedorId)
+    .maybeSingle();
+
+  if (errorVendedor) {
+    return NextResponse.json(
+      { error: 'No se pudo verificar el pedido.' },
+      { status: 500 }
+    );
+  }
+
+  // Tienda inexistente, bloqueada o despublicada: los tres son lo mismo acá.
+  if (!vendedor || vendedor.bloqueado || vendedor.estado_validacion !== 'aprobado') {
+    return NextResponse.json(
+      { ...NO_DISPONIBLE, productos_no_disponibles: items.map((i) => Number(i.productoId)) },
+      { status: 409 }
+    );
+  }
+
+  // Y los productos uno por uno: que sigan activos y que sigan siendo de este
+  // vendedor (el precio y el nombre los manda el cliente, el permiso no).
+  const idsPedidos = [...new Set(items.map((i) => Number(i.productoId)).filter(Boolean))];
+
+  const { data: vigentes, error: errorProductos } = await admin
+    .from('productos')
+    .select('id')
+    .in('id', idsPedidos)
+    .eq('vendedor_id', vendedorId)
+    .eq('estado', 'activo');
+
+  if (errorProductos) {
+    return NextResponse.json(
+      { error: 'No se pudo verificar el pedido.' },
+      { status: 500 }
+    );
+  }
+
+  const disponibles = new Set((vigentes || []).map((p) => p.id));
+  const caidos = idsPedidos.filter((id) => !disponibles.has(id));
+
+  if (caidos.length > 0) {
+    return NextResponse.json(
+      { ...NO_DISPONIBLE, productos_no_disponibles: caidos },
+      { status: 409 }
+    );
+  }
+
+  // 4. Calcular la comisión: 5% sobre PRODUCTOS, no sobre envío.
+  const comision = Math.round(subtotalProductos * 0.05);
+
+  // 5. Obtener un token válido del vendedor (se auto-renueva si está por vencer).
   let accessToken;
   try {
     accessToken = await getValidAccessToken(vendedorId, admin);
@@ -55,7 +118,7 @@ export async function POST(request) {
     );
   }
 
-  // 5. Anotar el pedido en la libreta (estado: pendiente, porque todavía no pagó).
+  // 6. Anotar el pedido en la libreta (estado: pendiente, porque todavía no pagó).
   const { data: pedido, error: errorPedido } = await admin
     .from('pedidos')
     .insert({
@@ -80,7 +143,7 @@ export async function POST(request) {
     );
   }
 
-  // 6. Guardar la "foto" de los productos (nombre y precio de este momento).
+  // 7. Guardar la "foto" de los productos (nombre y precio de este momento).
   const itemsParaGuardar = items.map((item) => ({
     pedido_id: pedido.id,
     producto_id: item.productoId,
@@ -103,7 +166,7 @@ export async function POST(request) {
     );
   }
 
-  // 7. Pedirle a MercadoPago el link de pago con el split.
+  // 8. Pedirle a MercadoPago el link de pago con el split.
   //    Usamos las llaves DEL VENDEDOR (no las nuestras) — así el pago
   //    entra a SU cuenta y MercadoPago reparte nuestra comisión solo.
   const baseUrl = new URL(request.url).origin;
@@ -154,13 +217,13 @@ export async function POST(request) {
     );
   }
 
-  // 8. Guardar el id de la preferencia en el pedido (para rastrearlo después).
+  // 9. Guardar el id de la preferencia en el pedido (para rastrearlo después).
   await admin
     .from('pedidos')
     .update({ mp_preference_id: mpData.id })
     .eq('id', pedido.id);
 
-  // 9. Devolver el link de pago al checkout para que mande al comprador.
+  // 10. Devolver el link de pago al checkout para que mande al comprador.
   return NextResponse.json({
     checkout_url: mpData.init_point,
     pedido_id: pedido.id,

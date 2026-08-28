@@ -32,6 +32,98 @@ function esNuevo(fecha) {
   return Date.now() - new Date(fecha).getTime() < SIETE_DIAS_MS
 }
 
+// ── Modal de bloqueo / desbloqueo ──────────────────────────────────────────
+// Reemplaza al window.confirm que había antes: bloquear no es una decisión
+// que se tome de un click, y el motivo se le manda por mail a la persona.
+function ModalBloqueo({ vendedor, motivo, onMotivo, onCancelar, onConfirmar, procesando, error }) {
+  const bloqueando = !vendedor.bloqueado
+  const faltaMotivo = bloqueando && !motivo.trim()
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[1000]"
+      onClick={procesando ? undefined : onCancelar}
+    >
+      <div
+        className="bg-white rounded-2xl w-full max-w-[440px] overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-6 py-4 border-b border-[#0a0a0a]/5">
+          <p className="m-0" style={{ fontFamily: 'Fraunces, serif', fontWeight: 500, color: '#0a0a0a' }}>
+            {bloqueando ? `¿Bloquear a ${vendedor.nombre_negocio}?` : `¿Desbloquear a ${vendedor.nombre_negocio}?`}
+          </p>
+        </div>
+
+        <div className="px-6 py-4">
+          {bloqueando ? (
+            <>
+              <p className="text-sm text-[#0a0a0a]/60 font-light leading-relaxed m-0">
+                Su tienda y todos sus productos dejan de verse en el sitio. Quien entre al link de la tienda
+                va a ver la página de siempre de &quot;no encontramos esta página&quot;. No se borra nada.
+              </p>
+              <p className="text-sm text-[#0a0a0a]/60 font-light leading-relaxed mt-3 mb-0">
+                Escribí el motivo. Se lo mandamos por mail tal cual lo escribas.
+              </p>
+              <textarea
+                value={motivo}
+                onChange={(e) => onMotivo(e.target.value)}
+                placeholder="¿Por qué bloqueás esta tienda? Este texto lo va a leer el vendedor."
+                rows={3}
+                autoFocus
+                disabled={procesando}
+                className="mt-3"
+                style={{
+                  fontFamily: "'Inter', sans-serif", fontSize: '13px', fontWeight: 300,
+                  width: '100%', padding: '10px 12px', borderRadius: '8px',
+                  border: '1px solid rgba(10,10,10,0.1)', outline: 'none', resize: 'vertical',
+                }}
+              />
+            </>
+          ) : (
+            <p className="text-sm text-[#0a0a0a]/60 font-light leading-relaxed m-0">
+              Su tienda y sus productos vuelven a verse en el sitio, tal como estaban.
+              Le avisamos por mail de que ya está publicada de nuevo.
+            </p>
+          )}
+
+          {error && (
+            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
+              {error}
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-3 px-6 py-4 border-t border-[#0a0a0a]/5">
+          <button
+            type="button"
+            onClick={onCancelar}
+            disabled={procesando}
+            className="px-5 py-2.5 border border-[#0a0a0a]/10 rounded-full bg-white cursor-pointer text-sm text-[#0a0a0a]/60 font-light hover:border-[#0a0a0a]/30 transition-all disabled:cursor-not-allowed"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={onConfirmar}
+            disabled={procesando || faltaMotivo}
+            className={`px-5 py-2.5 border-none rounded-full text-white text-sm font-medium transition-colors ${
+              procesando || faltaMotivo
+                ? 'bg-[#0a0a0a]/30 cursor-not-allowed'
+                : bloqueando
+                  ? 'bg-[#dc2626] cursor-pointer hover:bg-[#b91c1c]'
+                  : 'bg-[#1a7a4a] cursor-pointer hover:bg-[#166139]'
+            }`}
+          >
+            {procesando
+              ? (bloqueando ? 'Bloqueando...' : 'Desbloqueando...')
+              : (bloqueando ? 'Bloquear y avisar' : 'Desbloquear y avisar')}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function VendedorCard({ v, onToggleBloqueo, onCambiarEstado, procesando }) {
   const [hover, setHover] = useState(false)
   const [pidiendoCambios, setPidiendoCambios] = useState(false)
@@ -201,6 +293,17 @@ function VendedorCard({ v, onToggleBloqueo, onCambiarEstado, procesando }) {
       {/* ── Revisión ── */}
       <div className="md:w-full" style={{ borderTop: '1px solid rgba(10,10,10,0.06)', paddingTop: '14px', marginTop: '4px' }}>
 
+        {v.bloqueado && v.bloqueo_actual?.motivo && !pidiendoCambios && (
+          <div style={{ backgroundColor: '#fce4e4', borderRadius: '6px', padding: '10px 12px', marginBottom: '12px' }}>
+            <p style={{ fontFamily: "'Inter', sans-serif", fontSize: '10px', fontWeight: 500, color: '#a01020', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Motivo del bloqueo{v.bloqueo_actual.creado_en ? ` · ${formatearFecha(v.bloqueo_actual.creado_en)}` : ''}
+            </p>
+            <p style={{ fontFamily: "'Inter', sans-serif", fontSize: '12px', fontWeight: 300, color: 'rgba(10,10,10,0.7)', margin: '4px 0 0', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+              {v.bloqueo_actual.motivo}
+            </p>
+          </div>
+        )}
+
         {v.notas_validacion && !pidiendoCambios && (
           <div style={{ backgroundColor: '#fef3c7', borderRadius: '6px', padding: '10px 12px', marginBottom: '12px' }}>
             <p style={{ fontFamily: "'Inter', sans-serif", fontSize: '10px', fontWeight: 500, color: '#92650a', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
@@ -214,6 +317,20 @@ function VendedorCard({ v, onToggleBloqueo, onCambiarEstado, procesando }) {
 
         {pidiendoCambios ? (
           <div>
+            {/* Pedir cambios despublica: la tienda deja de verse hasta que se
+                la vuelva a aprobar. Se avisa antes de confirmar, no después. */}
+            {v.estado_validacion === 'aprobado' && (
+              <p
+                style={{
+                  fontFamily: "'Inter', sans-serif", fontSize: '12px', fontWeight: 400,
+                  color: '#92650a', backgroundColor: '#fef3c7',
+                  borderRadius: '6px', padding: '10px 12px', margin: '0 0 10px', lineHeight: 1.5,
+                }}
+              >
+                Ojo: esta tienda está publicada. Al pedir cambios deja de verse en el sitio
+                —junto con sus productos— hasta que la vuelvas a aprobar.
+              </p>
+            )}
             <textarea
               value={notas}
               onChange={(e) => setNotas(e.target.value)}
@@ -327,6 +444,11 @@ export default function AdminVendedoresPage() {
   const [procesandoId, setProcesandoId] = useState(null)
   const [error, setError] = useState('')
 
+  // Vendedor cuyo bloqueo/desbloqueo está esperando confirmación en el modal.
+  const [bloqueoPendiente, setBloqueoPendiente] = useState(null)
+  const [motivoBloqueo, setMotivoBloqueo] = useState('')
+  const [errorBloqueo, setErrorBloqueo] = useState('')
+
   const pendientes = vendedores.filter((v) => v.estado_validacion === 'pendiente').length
 
   useEffect(() => {
@@ -362,22 +484,57 @@ export default function AdminVendedoresPage() {
     }
   }
 
-  async function toggleBloqueo(v) {
-    const accion = v.bloqueado ? 'desbloquear' : 'bloquear'
-    if (!window.confirm(`¿Seguro que querés ${accion} a "${v.nombre_negocio}"?`)) return
+  function pedirConfirmacionBloqueo(v) {
+    setBloqueoPendiente(v)
+    setMotivoBloqueo('')
+    setErrorBloqueo('')
+  }
+
+  function cancelarBloqueo() {
+    setBloqueoPendiente(null)
+    setMotivoBloqueo('')
+    setErrorBloqueo('')
+  }
+
+  async function confirmarBloqueo() {
+    const v = bloqueoPendiente
+    if (!v) return
+
+    const bloqueando = !v.bloqueado
+    if (bloqueando && !motivoBloqueo.trim()) {
+      setErrorBloqueo('Escribí el motivo antes de bloquear.')
+      return
+    }
 
     setProcesandoId(v.id)
+    setErrorBloqueo('')
+
     const res = await fetch(`/api/admin/vendedores/${v.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ bloqueado: !v.bloqueado }),
+      body: JSON.stringify({
+        bloqueado: bloqueando,
+        motivo_bloqueo: bloqueando ? motivoBloqueo.trim() : null,
+      }),
     })
 
+    const data = await res.json().catch(() => ({}))
+
     if (res.ok) {
-      setVendedores((prev) => prev.map((x) => (x.id === v.id ? { ...x, bloqueado: !v.bloqueado } : x)))
+      setVendedores((prev) => prev.map((x) => (x.id === v.id ? { ...x, ...data.vendedor } : x)))
+      cancelarBloqueo()
+      // El bloqueo ya quedó guardado aunque el mail no salga: solo se avisa.
+      if (data.aviso && !data.aviso.enviado) {
+        setError(
+          bloqueando
+            ? 'Bloqueamos la tienda, pero no se pudo enviar el mail al vendedor. Avisale vos.'
+            : 'Desbloqueamos la tienda, pero no se pudo enviar el mail al vendedor. Avisale vos.'
+        )
+      } else {
+        setError('')
+      }
     } else {
-      const data = await res.json()
-      alert(data.error || 'No se pudo actualizar.')
+      setErrorBloqueo(data.error || 'No se pudo actualizar.')
     }
     setProcesandoId(null)
   }
@@ -498,12 +655,24 @@ export default function AdminVendedoresPage() {
               </p>
             ) : (
               filtrados.map((v) => (
-                <VendedorCard key={v.id} v={v} onToggleBloqueo={toggleBloqueo} onCambiarEstado={cambiarEstado} procesando={procesandoId === v.id} />
+                <VendedorCard key={v.id} v={v} onToggleBloqueo={pedirConfirmacionBloqueo} onCambiarEstado={cambiarEstado} procesando={procesandoId === v.id} />
               ))
             )}
           </div>
         </div>
       </div>
+
+      {bloqueoPendiente && (
+        <ModalBloqueo
+          vendedor={bloqueoPendiente}
+          motivo={motivoBloqueo}
+          onMotivo={setMotivoBloqueo}
+          onCancelar={cancelarBloqueo}
+          onConfirmar={confirmarBloqueo}
+          procesando={procesandoId === bloqueoPendiente.id}
+          error={errorBloqueo}
+        />
+      )}
     </>
   )
 }

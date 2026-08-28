@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { soloProductosPublicados } from '@/lib/vendedoresPublicos'
 
 // ── Fuzzy matching: distancia de Levenshtein ──
 // Cuenta cuántos cambios (insertar, borrar, reemplazar letra)
@@ -97,16 +98,17 @@ export default function Buscador({ placeholder = '¿Qué estás buscando?', most
       setSugerenciaFuzzy(null)
 
       // Buscar productos activos cuyo nombre contenga el texto
-      const { data } = await supabase
-        .from('productos')
-        .select(`
-          id, nombre, precio,
-          vendedor:vendedores(nombre_negocio),
-          media:producto_media(url, es_principal, orden)
-        `)
-        .eq('estado', 'activo')
-        .ilike('nombre', `%${termino.trim()}%`)
-        .limit(6)
+      const { data } = await soloProductosPublicados(
+        supabase
+          .from('productos')
+          .select(`
+            id, nombre, precio,
+            vendedor:vendedores!inner(nombre_negocio, estado_validacion, bloqueado),
+            media:producto_media(url, es_principal, orden)
+          `)
+          .eq('estado', 'activo')
+          .ilike('nombre', `%${termino.trim()}%`)
+      ).limit(6)
 
       const resultados = data || []
       setSugerencias(resultados)
@@ -128,10 +130,14 @@ export default function Buscador({ placeholder = '¿Qué estás buscando?', most
   // Se carga una sola vez y se reutiliza
   async function obtenerNombresProductos() {
     if (nombresCache) return nombresCache
-    const { data } = await supabase
-      .from('productos')
-      .select('nombre')
-      .eq('estado', 'activo')
+    // También filtrado: si no, el corrector sugeriría el nombre de un producto
+    // de una tienda bloqueada y la búsqueda terminaría sin resultados.
+    const { data } = await soloProductosPublicados(
+      supabase
+        .from('productos')
+        .select('nombre, vendedor:vendedores!inner(estado_validacion, bloqueado)')
+        .eq('estado', 'activo')
+    )
     const nombres = [...new Set((data || []).map(p => p.nombre))]
     setNombresCache(nombres)
     return nombres

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useCarrito } from '@/context/CarritoContext'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { idsDisponibles } from '@/lib/disponibilidad'
 import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
 import VolverAtras from '@/components/VolverAtras'
@@ -22,6 +23,24 @@ export default function PaginaCarrito() {
   const supabase = createClient()
   const [menuOpen, setMenuOpen] = useState(false)
   const [categorias, setCategorias] = useState([])
+  // Ids que ya no se pueden comprar. Se marcan acá para que nadie llegue al
+  // checkout sin enterarse; quien decide de verdad es /api/pedidos/crear.
+  const [idsCaidos, setIdsCaidos] = useState([])
+
+  const firmaCarrito = locales.flatMap((l) => l.items.map((it) => it.productoId)).join(',')
+
+  useEffect(() => {
+    if (!listo) return
+    let cancelado = false
+    async function revisar() {
+      const todosLosIds = locales.flatMap((l) => l.items.map((it) => it.productoId))
+      const disponibles = await idsDisponibles(supabase, todosLosIds)
+      if (cancelado || !disponibles) return
+      setIdsCaidos(todosLosIds.map(Number).filter((id) => !disponibles.has(id)))
+    }
+    revisar()
+    return () => { cancelado = true }
+  }, [listo, firmaCarrito])
 
   useEffect(() => {
     if (menuOpen) {
@@ -114,25 +133,37 @@ export default function PaginaCarrito() {
                       <span className="font-medium text-[#0a0a0a] text-sm">{local.vendedorNombre}</span>
                     </div>
 
-                    {local.items.map((item) => (
+                    {local.items.map((item) => {
+                      const caido = idsCaidos.includes(Number(item.productoId))
+                      return (
                       <div
                         key={item.productoId}
                         className="flex items-center gap-3 py-3 border-t border-[#0a0a0a]/5"
                       >
-                        <div className="w-14 h-14 rounded-xl bg-[#ECEAE3] shrink-0 overflow-hidden">
+                        <div className={`w-14 h-14 rounded-xl bg-[#ECEAE3] shrink-0 overflow-hidden ${caido ? 'opacity-40' : ''}`}>
                           {item.foto && (
                             <img src={item.foto} alt={item.nombre} className="w-full h-full object-cover" />
                           )}
                         </div>
 
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-[#0a0a0a] truncate">{item.nombre}</p>
+                          <p className={`text-sm font-medium truncate ${caido ? 'text-[#0a0a0a]/40 line-through' : 'text-[#0a0a0a]'}`}>{item.nombre}</p>
                           {item.variante && (
                             <p className="text-xs text-[#0a0a0a]/30 font-light mt-0.5">{item.variante}</p>
                           )}
-                          <p className="text-sm text-[#0a0a0a]/60 mt-0.5">${formatearPrecio(item.precio)}</p>
+                          {caido ? (
+                            <span
+                              className="inline-block mt-1"
+                              style={{ fontSize: '11px', fontWeight: 500, color: 'rgba(10,10,10,0.5)', backgroundColor: 'rgba(10,10,10,0.05)', borderRadius: '999px', padding: '3px 9px' }}
+                            >
+                              Ya no está disponible
+                            </span>
+                          ) : (
+                            <p className="text-sm text-[#0a0a0a]/60 mt-0.5">${formatearPrecio(item.precio)}</p>
+                          )}
                         </div>
 
+                        {!caido && (
                         <div className="flex items-center gap-3 border border-[#0a0a0a]/10 rounded-full px-3 py-1">
                           <button
                             type="button"
@@ -148,6 +179,7 @@ export default function PaginaCarrito() {
                             aria-label="Sumar"
                           >+</button>
                         </div>
+                        )}
 
                         <button
                           type="button"
@@ -160,12 +192,19 @@ export default function PaginaCarrito() {
                           </svg>
                         </button>
                       </div>
-                    ))}
+                      )
+                    })}
 
                     <div className="flex justify-between pt-3 border-t border-[#0a0a0a]/5 mt-1">
                       <span className="text-sm text-[#0a0a0a]/30 font-light">Subtotal</span>
                       <span className="text-sm font-semibold text-[#0a0a0a]">${formatearPrecio(subtotalLocal(local.vendedorId))}</span>
                     </div>
+
+                    {local.items.some((it) => idsCaidos.includes(Number(it.productoId))) && (
+                      <p className="text-xs text-[#0a0a0a]/45 font-light mt-3 mb-0 leading-relaxed">
+                        Sacá lo que ya no está disponible para poder terminar la compra de este local.
+                      </p>
+                    )}
                   </div>
                 ))}
 

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { vendedorPublicado } from '@/lib/vendedoresPublicos'
 import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
 
@@ -198,8 +199,8 @@ export default function TesorosPage() {
           .select(`
             id, destacado, color_fondo, quote, quote_autor, orden,
             producto:productos (
-              id, nombre, precio,
-              vendedor:vendedores ( nombre_negocio, barrio_id ),
+              id, nombre, precio, estado,
+              vendedor:vendedores ( nombre_negocio, barrio_id, estado_validacion, bloqueado ),
               media:producto_media ( url, es_principal, orden )
             )
           `)
@@ -207,7 +208,16 @@ export default function TesorosPage() {
           .order('orden')
 
         if (!error && data) {
-          setTesoros(data.filter((t) => t.producto))
+          // La vitrina es curada a mano, pero no manda sobre la visibilidad:
+          // si la tienda se bloquea o se despublica, el tesoro se cae solo.
+          setTesoros(
+            data.filter(
+              (t) =>
+                t.producto &&
+                t.producto.estado === 'activo' &&
+                vendedorPublicado(t.producto.vendedor)
+            )
+          )
         }
       } catch {
         // Tabla inexistente u otro error: la página muestra el estado vacío

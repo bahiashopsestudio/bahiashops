@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { soloProductosPublicados } from '@/lib/vendedoresPublicos'
 import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
 import VolverAtras from '@/components/VolverAtras'
@@ -53,17 +54,20 @@ export default function ValorPage() {
 
       // !inner filtra los productos que tienen este sello: sin el inner join
       // traería todos los productos y el filtro no se aplicaría.
-      const { data: prods } = await supabase
-        .from('productos')
-        .select(`
-          id, nombre, precio, precio_anterior,
-          producto_media ( url, es_principal, orden ),
-          vendedores ( nombre_negocio ),
-          producto_sellos!inner ( sello_id )
-        `)
-        .eq('estado', 'activo')
-        .eq('producto_sellos.sello_id', selloData.id)
-        .order('creado_en', { ascending: false })
+      const { data: prods } = await soloProductosPublicados(
+        supabase
+          .from('productos')
+          .select(`
+            id, nombre, precio, precio_anterior,
+            producto_media ( url, es_principal, orden ),
+            vendedores!inner ( nombre_negocio, estado_validacion, bloqueado ),
+            producto_sellos!inner ( sello_id )
+          `)
+          .eq('estado', 'activo')
+          .eq('producto_sellos.sello_id', selloData.id)
+          .order('creado_en', { ascending: false }),
+        'vendedores'
+      )
 
       setProductos(
         (prods || []).map((p) => ({ ...p, fotoPrincipal: fotoPrincipalDe(p.producto_media) }))

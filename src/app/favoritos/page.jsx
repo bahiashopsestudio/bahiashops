@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { soloProductosPublicados } from '@/lib/vendedoresPublicos'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Navbar from '@/components/Navbar'
@@ -72,15 +73,19 @@ export default function FavoritosPage() {
 
       const ids = favs.map(f => f.producto_id)
 
-      const { data: prods } = await supabase
-        .from('productos')
-        .select(`
-          id, nombre, precio, precio_anterior,
-          vendedor:vendedores(id, nombre_negocio, slug),
-          media:producto_media(url, es_principal, orden)
-        `)
-        .in('id', ids)
-        .eq('estado', 'activo')
+      // Un favorito de una tienda bloqueada o despublicada deja de listarse:
+      // el corazón queda guardado, pero la tarjeta no se muestra.
+      const { data: prods } = await soloProductosPublicados(
+        supabase
+          .from('productos')
+          .select(`
+            id, nombre, precio, precio_anterior,
+            vendedor:vendedores!inner(id, nombre_negocio, slug, estado_validacion, bloqueado),
+            media:producto_media(url, es_principal, orden)
+          `)
+          .in('id', ids)
+          .eq('estado', 'activo')
+      )
 
       const ordenado = ids
         .map(id => (prods || []).find(p => p.id === id))
