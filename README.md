@@ -77,6 +77,7 @@ ejecuta. **En orden numérico**, y cada una una sola vez.
 006_vendedores_vuelta_a_revision.sql     disparador: editar los datos reabre la revisión
 007_vendedores_publicacion_automatica.sql  alta publicada sola + el bloqueo pasa a ser efectivo
 008_categorias_al_dia.sql                abre las categorías que ya tenían vendedores
+009_pedidos_franja_y_tienda.sql          franja de despacho + nombre de tienda congelado
 ```
 
 Algunas piden un paso manual antes (crear un bucket de Storage desde el panel, por ejemplo). Está

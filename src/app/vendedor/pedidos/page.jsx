@@ -66,7 +66,6 @@ export default function VendedorPedidosPage() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
   const [abierto, setAbierto] = useState(null);
-  const [detalles, setDetalles] = useState({});
   const [avanzando, setAvanzando] = useState(null);
   const [nombreNegocio, setNombreNegocio] = useState('');
   const [franjaModal, setFranjaModal] = useState(null);
@@ -92,36 +91,34 @@ export default function VendedorPedidosPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setError('No hay sesión iniciada.'); setCargando(false); return; }
 
-      const { data: vendedor } = await supabase
-        .from('vendedores').select('id, nombre_negocio').eq('usuario_id', user.id).single();
+      // Los pedidos vienen del servidor: el navegador no puede leer 'pedidos',
+      // 'pedido_items' ni la dirección del comprador. La ruta ya verifica que
+      // quien pide sea el dueño de esas ventas.
+      try {
+        const res = await fetch('/api/vendedor/pedidos');
+        const datos = await res.json().catch(() => ({}));
 
-      if (!vendedor) { setError('No se encontró tu cuenta de vendedor.'); setCargando(false); return; }
-      setNombreNegocio(vendedor.nombre_negocio || '');
+        if (!res.ok) {
+          setError(datos.error || 'No se pudieron cargar los pedidos.');
+          console.error('Error cargando pedidos del vendedor', res.status, datos.error);
+          setCargando(false);
+          return;
+        }
 
-      const { data, error: errPedidos } = await supabase
-        .from('pedidos')
-        .select(`
-          id, estado, metodo_envio, subtotal_productos, costo_envio, total,
-          comision_plataforma, turno_preferido, creado_en, actualizado_en,
-          direccion:direcciones ( calle, numero, piso_depto, telefono, barrio_id )
-        `)
-        .eq('vendedor_id', vendedor.id)
-        .order('creado_en', { ascending: false });
-
-      if (errPedidos) { setError('No se pudieron cargar los pedidos.'); console.error(errPedidos); }
-      else setPedidos(data || []);
+        setNombreNegocio(datos.vendedor?.nombre_negocio || '');
+        setPedidos(datos.pedidos || []);
+      } catch (err) {
+        console.error('Error de red cargando los pedidos', err);
+        setError('No pudimos conectarnos. Revisá tu conexión y probá de nuevo.');
+      }
       setCargando(false);
     }
     cargar();
   }, []);
 
-  async function toggleDetalle(pedidoId) {
-    if (abierto === pedidoId) { setAbierto(null); return; }
-    setAbierto(pedidoId);
-    if (!detalles[pedidoId]) {
-      const { data } = await supabase.from('pedido_items').select('*').eq('pedido_id', pedidoId);
-      if (data) setDetalles(prev => ({ ...prev, [pedidoId]: data }));
-    }
+  // Los items ya vienen con cada pedido: desplegar es sólo abrir y cerrar.
+  function toggleDetalle(pedidoId) {
+    setAbierto(abierto === pedidoId ? null : pedidoId);
   }
 
   function iniciarAvance(pedido) {
@@ -137,27 +134,45 @@ export default function VendedorPedidosPage() {
     setAvanzando(pedido.id);
     setFranjaModal(null);
 
-    const { error } = await supabase
-      .from('pedidos').update({ estado: accion.siguiente, actualizado_en: new Date().toISOString() }).eq('id', pedido.id);
+    // El avance lo decide el servidor: acá sólo se dice a qué paso se quiere
+    // ir. Si no corresponde, la ruta lo rechaza y explica por qué.
+    try {
+      const res = await fetch('/api/vendedor/pedidos/avanzar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pedido_id: pedido.id,
+          destino: accion.siguiente,
+          ...(accion.pideFranja ? { franja } : {}),
+        }),
+      });
+      const datos = await res.json().catch(() => ({}));
 
-    if (error) {
-      alert('No se pudo actualizar el estado: ' + error.message);
-    } else {
-      setPedidos(prev => prev.map(p => p.id === pedido.id ? { ...p, estado: accion.siguiente } : p));
+      if (!res.ok) {
+        console.error('Avance rechazado', res.status, datos.motivo, datos.error);
+        alert(datos.error || 'No se pudo actualizar el estado del pedido.');
+        setAvanzando(null);
+        return;
+      }
 
-      if (accion.siguiente === 'despachado') {
-        try {
-          const res = await fetch('/api/notificaciones/despacho', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pedidoId: pedido.id }),
-          });
-          if (!res.ok) alert('El pedido se marcó como despachado, pero no se pudo enviar el email al comprador.');
-        } catch { alert('El pedido se marcó como despachado, pero no se pudo enviar el email al comprador.'); }
+      setPedidos(prev => prev.map(p => (
+        p.id === pedido.id
+          ? { ...p, estado: datos.pedido.estado, franja_horaria: datos.pedido.franja_horaria, actualizado_en: datos.pedido.actualizado_en }
+          : p
+      )));
+
+      // El mail al comprador lo manda la misma ruta. Si no salió, se avisa:
+      // el pedido ya quedó despachado igual.
+      if (datos.pedido.estado === 'despachado' && datos.aviso && !datos.aviso.enviado) {
+        alert('El pedido se marcó como despachado, pero no se pudo enviar el email al comprador.');
       }
 
       if (accion.whatsapp && pedido.direccion?.telefono) {
         abrirWhatsApp(pedido.direccion.telefono, accion.mensajeWA(pedido, franja, nombreNegocio));
       }
+    } catch (err) {
+      console.error('Error de red al avanzar el pedido', err);
+      alert('No pudimos conectarnos. Revisá tu conexión y probá de nuevo.');
     }
     setAvanzando(null);
   }
@@ -226,7 +241,7 @@ export default function VendedorPedidosPage() {
                 </h2>
                 {activos.map(p => (
                   <PedidoCard key={p.id} pedido={p} abierto={abierto === p.id}
-                    items={detalles[p.id] || []} avanzando={avanzando === p.id}
+                    items={p.items || []} avanzando={avanzando === p.id}
                     onToggle={() => toggleDetalle(p.id)} onAvanzar={() => iniciarAvance(p)} />
                 ))}
               </>
@@ -239,7 +254,7 @@ export default function VendedorPedidosPage() {
                 </h2>
                 {completados.map(p => (
                   <PedidoCard key={p.id} pedido={p} abierto={abierto === p.id}
-                    items={detalles[p.id] || []} avanzando={avanzando === p.id}
+                    items={p.items || []} avanzando={avanzando === p.id}
                     onToggle={() => toggleDetalle(p.id)} onAvanzar={() => iniciarAvance(p)} />
                 ))}
               </>
@@ -326,7 +341,7 @@ function PedidoCard({ pedido, abierto, items, avanzando, onToggle, onAvanzar }) 
           <div className="mb-4">
             <p className="m-0 mb-2 text-[11px] text-[#0a0a0a]/25 font-light uppercase tracking-wider">Productos</p>
             {items.length === 0 ? (
-              <p className="text-sm text-[#0a0a0a]/20 font-light">Cargando...</p>
+              <p className="text-sm text-[#0a0a0a]/20 font-light">Este pedido no tiene productos registrados.</p>
             ) : items.map(it => (
               <div key={it.id} className="flex justify-between py-1 text-sm">
                 <span className="text-[#0a0a0a]/60 font-light">{it.nombre}{it.variante ? ` · ${it.variante}` : ''} × {it.cantidad}</span>
@@ -340,6 +355,9 @@ function PedidoCard({ pedido, abierto, items, avanzando, onToggle, onAvanzar }) 
             <p className="m-0 text-sm text-[#0a0a0a]/60 font-light">{p.metodo_envio}</p>
             {p.turno_preferido && (
               <p className="m-0 text-[11px] text-[#0a0a0a]/25 font-light">Preferencia: {p.turno_preferido.toLowerCase()}</p>
+            )}
+            {p.franja_horaria && (
+              <p className="m-0 text-[11px] text-[#0a0a0a]/40 font-light">Franja avisada: {p.franja_horaria.toLowerCase()}</p>
             )}
             {p.direccion && (
               <p className="mt-1 mb-0 text-sm text-[#0a0a0a]/60 font-light">

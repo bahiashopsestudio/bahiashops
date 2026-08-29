@@ -26,6 +26,7 @@ export default function MisPedidosPage() {
   const router = useRouter()
   const [pedidos, setPedidos] = useState([])
   const [cargando, setCargando] = useState(true)
+  const [error, setError] = useState(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [categorias, setCategorias] = useState([])
 
@@ -42,18 +43,31 @@ export default function MisPedidosPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
 
-      const { data } = await supabase
+      // El historial se arma con lo que quedó congelado al comprar, no con lo
+      // que exista hoy: pedido_items guarda el nombre, el precio y la foto de
+      // cada producto, y el pedido guarda el nombre de la tienda. Si después
+      // se borra el producto o se bloquea el vendedor, la compra vieja se
+      // sigue viendo igual.
+      //
+      // De 'vendedores' sólo se pide el slug, y sólo para el enlace: si la
+      // tienda ya no está publicada, el nombre se muestra sin enlace.
+      const { data, error } = await supabase
         .from('pedidos')
         .select(`
           id, estado, total, costo_envio, metodo_envio, creado_en,
-          vendedor:vendedores(nombre_negocio, slug),
-          items:pedido_items(
-            cantidad, precio_unitario, variante,
-            producto:productos(nombre, producto_media(url, orden))
-          )
+          vendedor_nombre, franja_horaria,
+          vendedor:vendedores(slug),
+          items:pedido_items(id, nombre, foto_url, cantidad, precio, variante)
         `)
         .eq('comprador_id', user.id)
         .order('creado_en', { ascending: false })
+
+      if (error) {
+        console.error('No se pudieron cargar las compras', error)
+        setError('No pudimos cargar tus compras. Probá de nuevo en un rato.')
+        setCargando(false)
+        return
+      }
 
       setPedidos(data || [])
       setCargando(false)
@@ -69,11 +83,6 @@ export default function MisPedidosPage() {
     })
   }
 
-  function getFoto(item) {
-    const media = item.producto?.producto_media
-    if (!media?.length) return null
-    return [...media].sort((a, b) => a.orden - b.orden)[0]?.url || null
-  }
 
   const menuCats = MENU_CATEGORIAS.map(s => categorias.find(c => c.slug === s)).filter(Boolean)
 
@@ -109,7 +118,11 @@ export default function MisPedidosPage() {
               Mis pedidos
             </h1>
 
-            {pedidos.length === 0 ? (
+            {error ? (
+              <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
+                {error}
+              </div>
+            ) : pedidos.length === 0 ? (
               <div className="text-center py-20">
                 <svg className="w-12 h-12 text-[#0a0a0a]/10 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 1 0-7.5 0v4.5m11.356-1.993 1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 0 1-1.12-1.243l1.264-12A1.125 1.125 0 0 1 5.513 7.5h12.974c.576 0 1.059.435 1.119 1.007Z" />
@@ -127,22 +140,37 @@ export default function MisPedidosPage() {
               <div className="mt-6">
                 {pedidos.map((pedido) => {
                   const estado = ESTADOS[pedido.estado] || { label: pedido.estado, color: 'bg-gray-50 text-gray-600' }
+                  // Con la franja guardada, la etiqueta dice cuál es en vez de
+                  // "Franja asignada": es el dato que le sirve a quien espera
+                  // el pedido. Sin franja (pedidos anteriores a la migración
+                  // 009) queda la etiqueta genérica.
+                  const etiquetaEstado =
+                    pedido.estado === 'franja' && pedido.franja_horaria
+                      ? `Sale a la ${pedido.franja_horaria.toLowerCase()}`
+                      : estado.label
                   return (
                     <div key={pedido.id} className="rounded-2xl border border-[#0a0a0a]/5 p-5 mb-4">
                       {/* Header */}
                       <div className="flex items-center justify-between mb-3">
                         <div>
                           <div className="flex items-center gap-2">
-                            {pedido.vendedor && (
+                            {/* El nombre sale de la copia guardada en el
+                                pedido. El enlace, sólo si la tienda sigue
+                                publicada. */}
+                            {pedido.vendedor?.slug ? (
                               <Link
                                 href={`/tienda/${pedido.vendedor.slug}`}
                                 className="text-sm font-medium text-[#0a0a0a] hover:text-[#0a0a0a]/50 transition"
                               >
-                                {pedido.vendedor.nombre_negocio}
+                                {pedido.vendedor_nombre || 'Tienda'}
                               </Link>
+                            ) : (
+                              <span className="text-sm font-medium text-[#0a0a0a]">
+                                {pedido.vendedor_nombre || 'Tienda'}
+                              </span>
                             )}
                             <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${estado.color}`}>
-                              {estado.label}
+                              {etiquetaEstado}
                             </span>
                           </div>
                           <p className="text-xs text-[#0a0a0a]/20 font-light mt-1">
@@ -153,25 +181,22 @@ export default function MisPedidosPage() {
                       </div>
 
                       {/* Items */}
-                      {pedido.items?.map((item, i) => {
-                        const foto = getFoto(item)
-                        return (
-                          <div key={i} className="flex items-center gap-3 py-2 border-t border-[#0a0a0a]/5">
-                            <div className="w-12 h-12 rounded-lg bg-[#ECEAE3] shrink-0 overflow-hidden">
-                              {foto && <img src={foto} alt="" className="w-full h-full object-cover" />}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm text-[#0a0a0a] truncate font-light">
-                                {item.producto?.nombre || 'Producto'}
-                                {item.variante && <span className="text-[#0a0a0a]/30"> · {item.variante}</span>}
-                              </p>
-                              <p className="text-xs text-[#0a0a0a]/25 font-light">
-                                {item.cantidad} × ${fmt(item.precio_unitario)}
-                              </p>
-                            </div>
+                      {pedido.items?.map((item) => (
+                        <div key={item.id} className="flex items-center gap-3 py-2 border-t border-[#0a0a0a]/5">
+                          <div className="w-12 h-12 rounded-lg bg-[#ECEAE3] shrink-0 overflow-hidden">
+                            {item.foto_url && <img src={item.foto_url} alt="" className="w-full h-full object-cover" />}
                           </div>
-                        )
-                      })}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-[#0a0a0a] truncate font-light">
+                              {item.nombre || 'Producto'}
+                              {item.variante && <span className="text-[#0a0a0a]/30"> · {item.variante}</span>}
+                            </p>
+                            <p className="text-xs text-[#0a0a0a]/25 font-light">
+                              {item.cantidad} × ${fmt(item.precio)}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
 
                       {/* Envío */}
                       {pedido.costo_envio > 0 && (

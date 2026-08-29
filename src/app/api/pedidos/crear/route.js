@@ -52,7 +52,7 @@ export async function POST(request) {
 
   const { data: vendedor, error: errorVendedor } = await admin
     .from('vendedores')
-    .select('id, bloqueado, estado_validacion')
+    .select('id, nombre_negocio, bloqueado, estado_validacion')
     .eq('id', vendedorId)
     .maybeSingle();
 
@@ -124,6 +124,9 @@ export async function POST(request) {
     .insert({
       comprador_id: user.id,
       vendedor_id: vendedorId,
+      // Copia congelada: el historial del comprador tiene que poder nombrar la
+      // tienda aunque después se bloquee o cambie de nombre.
+      vendedor_nombre: vendedor.nombre_negocio,
       direccion_id: direccionId || null,
       metodo_envio: metodoEnvio,
       turno_preferido: turnoPreferido || null,
