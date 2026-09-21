@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { getValidAccessToken } from '@/lib/mercadopago/tokens';
+import { SITIO_URL } from '@/lib/sitio';
 
 export async function POST(request) {
   // 1. ¿Quién está comprando? (necesitamos su sesión)
@@ -99,6 +100,61 @@ export async function POST(request) {
     );
   }
 
+  // 3b. La dirección de entrega, si hay, tiene que ser de quien compra.
+  //
+  // ESTO NO ES DEFENSIVO, a diferencia de las lecturas del payer más abajo:
+  // si no se puede confirmar el dueño, la compra se rechaza y el pedido no se
+  // crea. El direccionId viene del navegador, y la pantalla del vendedor lee
+  // el pedido con service_role mostrando la dirección embebida, teléfono
+  // incluido. Sin esta verificación, cualquiera podía darse de alta como
+  // vendedor, comprarse su propio producto pasando un direccion_id ajeno (son
+  // correlativos) y leer la dirección y el teléfono de otra persona.
+  //
+  // Una dirección inexistente y una ajena reciben la misma respuesta, para que
+  // esto no sirva para averiguar qué ids existen.
+  let direccionIdVerificada = null;
+
+  if (direccionId !== null && direccionId !== undefined && direccionId !== '') {
+    const idNumerico = Number(direccionId);
+
+    if (!Number.isInteger(idNumerico) || idNumerico <= 0) {
+      console.warn('Compra rechazada: direccionId inválido', { usuario: user.id, direccionId });
+      return NextResponse.json(
+        { error: 'La dirección de entrega no es válida.' },
+        { status: 400 }
+      );
+    }
+
+    const { data: direccionPropia, error: errorDueno } = await admin
+      .from('direcciones')
+      .select('id')
+      .eq('id', idNumerico)
+      .eq('usuario_id', user.id)
+      .maybeSingle();
+
+    if (errorDueno) {
+      console.error('Compra rechazada: no se pudo verificar el dueño de la dirección', {
+        usuario: user.id, direccionId: idNumerico, error: errorDueno.message,
+      });
+      return NextResponse.json(
+        { error: 'No se pudo verificar la dirección de entrega. Probá de nuevo.' },
+        { status: 500 }
+      );
+    }
+
+    if (!direccionPropia) {
+      console.warn('Compra rechazada: la dirección no es de quien compra', {
+        usuario: user.id, direccionId: idNumerico,
+      });
+      return NextResponse.json(
+        { error: 'La dirección de entrega no es válida.' },
+        { status: 403 }
+      );
+    }
+
+    direccionIdVerificada = idNumerico;
+  }
+
   // 4. Calcular la comisión: 5% sobre PRODUCTOS, no sobre envío.
   const comision = Math.round(subtotalProductos * 0.05);
 
@@ -127,7 +183,9 @@ export async function POST(request) {
       // Copia congelada: el historial del comprador tiene que poder nombrar la
       // tienda aunque después se bloquee o cambie de nombre.
       vendedor_nombre: vendedor.nombre_negocio,
-      direccion_id: direccionId || null,
+      // Sólo la dirección verificada en el paso 3b: es exactamente el id que se
+      // comprobó, no el valor crudo que mandó el navegador.
+      direccion_id: direccionIdVerificada,
       metodo_envio: metodoEnvio,
       turno_preferido: turnoPreferido || null,
       subtotal_productos: subtotalProductos,
@@ -172,14 +230,20 @@ export async function POST(request) {
   // 8. Pedirle a MercadoPago el link de pago con el split.
   //    Usamos las llaves DEL VENDEDOR (no las nuestras) — así el pago
   //    entra a SU cuenta y MercadoPago reparte nuestra comisión solo.
-  const baseUrl = new URL(request.url).origin;
-
-  const mpItems = items.map((item) => ({
-    title: item.nombre + (item.variante ? ` (${item.variante})` : ''),
-    quantity: item.cantidad,
-    unit_price: item.precio,
-    currency_id: 'ARS',
-  }));
+  const mpItems = items.map((item) => {
+    const mpItem = {
+      id: String(item.productoId),
+      title: item.nombre + (item.variante ? ` (${item.variante})` : ''),
+      description: item.nombre,
+      quantity: item.cantidad,
+      unit_price: item.precio,
+      currency_id: 'ARS',
+      category_id: 'others',
+    };
+    // Sin foto no va la clave: nada de picture_url vacío.
+    if (item.foto) mpItem.picture_url = item.foto;
+    return mpItem;
+  });
 
   // Si hay costo de envío, lo sumamos como un item más al pago.
   if (costoEnvio > 0) {
@@ -188,7 +252,67 @@ export async function POST(request) {
       quantity: 1,
       unit_price: costoEnvio,
       currency_id: 'ARS',
+      category_id: 'others',
     });
+  }
+
+  // ── Datos del comprador para la preferencia ──
+  //
+  // Todo lo de acá abajo es opcional: sirve para que MercadoPago muestre mejor
+  // el pago, pero nada de esto puede impedir una compra. Si un dato falta, si
+  // viene vacío, o si la lectura falla, se omite la CLAVE ENTERA y se sigue.
+  // Nunca se manda un phone sin número ni un address a medio llenar.
+  const payer = { email: user.email };
+
+  const { data: comprador, error: errorComprador } = await admin
+    .from('usuarios')
+    .select('nombre, apellido, telefono')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  if (errorComprador) {
+    console.error('No se pudieron leer los datos del comprador', user.id, errorComprador.message);
+  }
+
+  // nombre y apellido son NOT NULL pero pueden venir vacíos: con registro por
+  // Google puede faltar el apellido. El vacío se trata igual que el nulo.
+  const nombreComprador = comprador?.nombre?.trim();
+  const apellidoComprador = comprador?.apellido?.trim();
+  if (nombreComprador) payer.name = nombreComprador;
+  if (apellidoComprador) payer.surname = apellidoComprador;
+
+  // La dirección sólo existe si el método de entrega la pidió. En retiro en
+  // local o "a coordinar", no hay dirección verificada y acá no se consulta
+  // nada. Esta lectura SÍ es defensiva: el dueño ya se comprobó en el paso 3b,
+  // y si ahora falla, se omite el address y la compra sigue.
+  let direccionComprador = null;
+  if (direccionIdVerificada) {
+    const { data, error: errorDireccion } = await admin
+      .from('direcciones')
+      .select('calle, numero, telefono')
+      .eq('id', direccionIdVerificada)
+      // Que la dirección sea de quien compra: el id viene del navegador.
+      .eq('usuario_id', user.id)
+      .maybeSingle();
+
+    if (errorDireccion) {
+      console.error('No se pudo leer la dirección del comprador', direccionIdVerificada, errorDireccion.message);
+    }
+    direccionComprador = data || null;
+  }
+
+  // Teléfono: primero el de la cuenta, después el de la dirección. Sin
+  // area_code, porque se guarda como un solo string y no vamos a adivinar
+  // dónde termina la característica.
+  const telefonoComprador =
+    comprador?.telefono?.trim() || direccionComprador?.telefono?.trim() || '';
+  if (telefonoComprador) payer.phone = { number: telefonoComprador };
+
+  // Sin código postal: no existe en la base y no se inventa.
+  const calle = direccionComprador?.calle?.trim();
+  const numero = direccionComprador?.numero?.trim();
+  if (calle && numero) {
+    payer.address = { street_name: calle, street_number: numero };
   }
 
   const mpResponse = await fetch('https://api.mercadopago.com/checkout/preferences', {
@@ -199,14 +323,16 @@ export async function POST(request) {
     },
     body: JSON.stringify({
       items: mpItems,
+      payer,
       marketplace_fee: comision,
+      statement_descriptor: 'BAHIASHOPS',
       back_urls: {
-        success: `${baseUrl}/compra/exito?pedido=${pedido.id}`,
-        failure: `${baseUrl}/compra/fallo?pedido=${pedido.id}`,
-        pending: `${baseUrl}/compra/pendiente?pedido=${pedido.id}`,
+        success: `${SITIO_URL}/compra/exito?pedido=${pedido.id}`,
+        failure: `${SITIO_URL}/compra/fallo?pedido=${pedido.id}`,
+        pending: `${SITIO_URL}/compra/pendiente?pedido=${pedido.id}`,
       },
       auto_return: 'approved',
-      notification_url: `${baseUrl}/api/mercadopago/webhook`,
+      notification_url: `${SITIO_URL}/api/mercadopago/webhook`,
       external_reference: String(pedido.id),
     }),
   });

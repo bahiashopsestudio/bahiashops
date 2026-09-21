@@ -1,6 +1,7 @@
 import { Inter, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { CarritoProvider } from "@/context/CarritoContext";
+import { SITIO_URL } from "@/lib/sitio";
 import BotonContacto from '@/components/BotonContacto';
 import Footer from '@/components/Footer';
 
@@ -22,7 +23,7 @@ export const metadata = {
   // que una canónica en el layout raíz haría que toda página que no declare la
   // suya diga que la original es la home. Cada ruta declara la propia; la de
   // la home está en src/app/page.js.
-  metadataBase: new URL("https://bahiashops.com.ar"),
+  metadataBase: new URL(SITIO_URL),
   title: "Bahía Shops",
   description: "El marketplace de Bahía Blanca. Descubrí, comprá y conectá con comercios y emprendedores de la ciudad.",
 };

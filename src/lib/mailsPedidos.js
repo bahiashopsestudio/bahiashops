@@ -7,8 +7,7 @@
 // quien pide el despacho es el vendedor dueño del pedido.
 
 import { EMAIL_CONTACTO, REMITENTE_CONTACTO } from '@/lib/contacto'
-
-const SITIO = 'https://bahiashops.com.ar'
+import { SITIO_URL } from '@/lib/sitio'
 
 function pesos(n) {
   return `$${Number(n || 0).toLocaleString('es-AR')}`
@@ -52,7 +51,7 @@ function html({ pedido, nombreVendedor, direccion, franja }) {
           <span>${pesos(pedido.total)}</span>
         </div>
       </div>
-      <a href="${SITIO}/mis-pedidos" style="display: inline-block; background: #222; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 500;">
+      <a href="${SITIO_URL}/mis-pedidos" style="display: inline-block; background: #222; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 500;">
         Ver mis compras
       </a>
       <p style="color: #aaa; font-size: 12px; margin-top: 24px;">

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
+import { ESTADOS_DE_PAGO } from '@/lib/pedidos';
  
 // ── Verificar que el webhook realmente viene de MercadoPago ──
 // MercadoPago firma cada notificación con HMAC-SHA256.
@@ -113,16 +114,53 @@ export async function POST(request) {
     else if (estadoMp === 'rejected' || estadoMp === 'cancelled') nuestroEstado = 'rechazado';
     else nuestroEstado = 'pendiente';
  
-    await admin
+    // Van dos escrituras separadas a propósito.
+    //
+    // El id del pago es un dato del cobro y se guarda siempre: vale igual esté
+    // el pedido donde esté en la preparación.
+    const { data: pedidoActual, error: errorPago } = await admin
       .from('pedidos')
       .update({
-        estado: nuestroEstado,
         mp_payment_id: String(paymentId),
         actualizado_en: new Date().toISOString(),
       })
-      .eq('id', pedidoId);
- 
-    console.log(`✅ Pedido ${pedidoId} actualizado a: ${nuestroEstado}`);
+      .eq('id', pedidoId)
+      .select('id, estado')
+      .maybeSingle();
+
+    if (errorPago) {
+      console.error(`Pedido ${pedidoId}: no se pudo guardar mp_payment_id — ${errorPago.message}`);
+    }
+
+    if (!pedidoActual && !errorPago) {
+      console.warn(`Pedido ${pedidoId}: no existe, no se escribió nada.`);
+      return NextResponse.json({ recibido: true });
+    }
+
+    // El estado, en cambio, sólo se pisa si el pedido sigue en un estado de
+    // cobro. Sin esta guarda, un aviso repetido de MercadoPago sobre un pedido
+    // que el vendedor ya movió a 'preparando', 'franja', 'por_salir' o
+    // 'despachado' lo devolvía a 'pagado' y reaparecía como pendiente de
+    // preparar.
+    const { data: pedidoNuevo, error: errorEstado } = await admin
+      .from('pedidos')
+      .update({ estado: nuestroEstado })
+      .eq('id', pedidoId)
+      .in('estado', ESTADOS_DE_PAGO)
+      .select('id, estado')
+      .maybeSingle();
+
+    if (errorEstado) {
+      console.error(`Pedido ${pedidoId}: no se pudo escribir el estado "${nuestroEstado}" — ${errorEstado.message}`);
+    } else if (pedidoNuevo) {
+      console.log(`Pedido ${pedidoId}: estado escrito -> ${pedidoNuevo.estado}`);
+    } else {
+      // Que la guarda frene la escritura NO es un error: es el caso normal de
+      // un reintento de MercadoPago sobre un pedido que ya avanzó.
+      console.log(
+        `Pedido ${pedidoId}: la guarda bloqueó "${nuestroEstado}" — el pedido está en "${pedidoActual?.estado}", fuera de los estados de cobro.`
+      );
+    }
  
     return NextResponse.json({ recibido: true });
   } catch (err) {
