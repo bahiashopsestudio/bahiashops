@@ -227,17 +227,21 @@ function CheckoutContenido() {
     // El envío se recalcula solo al recargar los costos del vendedor.
     if (data.envio) await cargarVendedor()
 
+    // El aviso nombra a la tienda: el precio lo cambió el vendedor, no la
+    // plataforma, y sin decirlo queda la sospecha de que fuimos nosotros.
+    const tienda = local.vendedorNombre || 'La tienda'
+
     const textos = cambios.map((c) => (
       c.precio_anterior === null
-        ? `El precio de ${c.nombre} ahora es $${fmt(c.precio_nuevo)}.`
-        : `El precio de ${c.nombre} cambió: antes $${fmt(c.precio_anterior)}, ahora $${fmt(c.precio_nuevo)}.`
+        ? `${tienda} cambió el precio de "${c.nombre}": ahora $${fmt(c.precio_nuevo)}.`
+        : `${tienda} cambió el precio de "${c.nombre}": antes $${fmt(c.precio_anterior)}, ahora $${fmt(c.precio_nuevo)}.`
     ))
 
     if (data.envio) {
       textos.push(
         data.envio.anterior === null
-          ? `El costo de envío ahora es $${fmt(data.envio.nuevo)}.`
-          : `El costo de envío cambió: antes $${fmt(data.envio.anterior)}, ahora $${fmt(data.envio.nuevo)}.`
+          ? `${tienda} cambió el costo de envío: ahora $${fmt(data.envio.nuevo)}.`
+          : `${tienda} cambió el costo de envío: antes $${fmt(data.envio.anterior)}, ahora $${fmt(data.envio.nuevo)}.`
       )
     }
 
