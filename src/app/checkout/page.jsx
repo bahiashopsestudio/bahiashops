@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { idsDisponibles, itemsNoDisponibles } from '@/lib/disponibilidad'
+import { metodosOfrecidos } from '@/lib/precioPedido'
 import { useCarrito } from '@/context/CarritoContext'
 import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
@@ -30,7 +31,7 @@ function CheckoutContenido() {
   const supabase = createClient()
   const vendedorId = Number(searchParams.get('vendedor'))
 
-  const { locales, subtotalLocal, quitar, listo: carritoListo } = useCarrito()
+  const { locales, subtotalLocal, quitar, actualizarPrecios, listo: carritoListo } = useCarrito()
   const local = locales.find((l) => l.vendedorId === vendedorId)
   // Firma de los items del local: cambia cuando se agrega o se saca algo.
   const firmaItems = (local?.items || []).map((it) => it.productoId).join(',')
@@ -51,6 +52,9 @@ function CheckoutContenido() {
   const [idsCaidos, setIdsCaidos] = useState([])
   const [revisandoStock, setRevisandoStock] = useState(true)
   const [errorPago, setErrorPago] = useState('')
+  // Aviso de que cambió un precio o el envío: no es un error, es que hay que
+  // volver a mirar los números.
+  const [avisoPrecios, setAvisoPrecios] = useState('')
 
   const [vendedorBarrioId, setVendedorBarrioId] = useState(null)
   const [metodosDisponibles, setMetodosDisponibles] = useState([])
@@ -98,12 +102,7 @@ function CheckoutContenido() {
         setDireccionElegida(principal ? principal.id : dirs[0].id)
       }
 
-      const { data: vendedor } = await supabase.from('vendedores').select('barrio_id, metodos_entrega_default, costos_envio_zona').eq('id', vendedorId).single()
-      if (vendedor) {
-        setVendedorBarrioId(vendedor.barrio_id)
-        setMetodosDisponibles(vendedor.metodos_entrega_default || [])
-        setCostosVendedor(vendedor.costos_envio_zona || {})
-      }
+      await cargarVendedor()
       setCargando(false)
     }
     cargar()
@@ -159,13 +158,36 @@ function CheckoutContenido() {
     setMostrarFormDir(false)
   }
 
+  // Los costos de envío del vendedor. Se recargan si el servidor avisa que el
+  // envío cambió mientras la persona estaba en esta pantalla.
+  async function cargarVendedor() {
+    const { data: vendedor } = await supabase.from('vendedores').select('barrio_id, metodos_entrega_default, costos_envio_zona').eq('id', vendedorId).single()
+    if (vendedor) {
+      setVendedorBarrioId(vendedor.barrio_id)
+      setMetodosDisponibles(vendedor.metodos_entrega_default || [])
+      setCostosVendedor(vendedor.costos_envio_zona || {})
+    }
+  }
+
   async function pagar() {
     setPagando(true)
     setErrorPago('')
+    setAvisoPrecios('')
     try {
       const res = await fetch('/api/pedidos/crear', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vendedorId: local.vendedorId, items: local.items, metodoEnvio: metodoElegido, direccionId: direccionElegida, turnoPreferido: turno, subtotalProductos: subtotal, costoEnvio, total }),
+        // El precio de cada ítem y el costo de envío van sólo para que el
+        // servidor los compare con los suyos. El subtotal y el total ya no se
+        // mandan: los calcula él.
+        body: JSON.stringify({
+          vendedorId: local.vendedorId,
+          items: local.items,
+          metodoEnvio: metodoElegido,
+          direccionId: direccionElegida,
+          turnoPreferido: turno,
+          zonaCorreo: metodoElegido === 'correo' ? zonaCorreoElegida : null,
+          costoEnvio,
+        }),
       })
       const data = await res.json()
 
@@ -177,9 +199,50 @@ function CheckoutContenido() {
         return
       }
 
+      // Cambió un precio o el costo de envío desde que se armó el carrito. No
+      // se cobró nada: se corrige lo que hay en pantalla y la persona vuelve a
+      // confirmar con los números nuevos.
+      if (data?.codigo === 'PRECIO_CAMBIO') {
+        await aplicarCambiosDePrecio(data)
+        setPagando(false)
+        return
+      }
+
       if (!res.ok) { setErrorPago(data.error || 'No se pudo procesar el pago. Probá de nuevo.'); setPagando(false); return }
       window.location.href = data.checkout_url
     } catch { setErrorPago('No pudimos conectarnos. Revisá tu conexión y probá de nuevo.'); setPagando(false) }
+  }
+
+  // Actualiza el carrito con los precios que confirmó el servidor y arma el
+  // aviso que se le muestra a la persona.
+  async function aplicarCambiosDePrecio(data) {
+    const cambios = data.cambios || []
+
+    if (cambios.length > 0) {
+      const precios = {}
+      cambios.forEach((c) => { precios[c.producto_id] = c.precio_nuevo })
+      actualizarPrecios(local.vendedorId, precios)
+    }
+
+    // El envío se recalcula solo al recargar los costos del vendedor.
+    if (data.envio) await cargarVendedor()
+
+    const textos = cambios.map((c) => (
+      c.precio_anterior === null
+        ? `El precio de ${c.nombre} ahora es $${fmt(c.precio_nuevo)}.`
+        : `El precio de ${c.nombre} cambió: antes $${fmt(c.precio_anterior)}, ahora $${fmt(c.precio_nuevo)}.`
+    ))
+
+    if (data.envio) {
+      textos.push(
+        data.envio.anterior === null
+          ? `El costo de envío ahora es $${fmt(data.envio.nuevo)}.`
+          : `El costo de envío cambió: antes $${fmt(data.envio.anterior)}, ahora $${fmt(data.envio.nuevo)}.`
+      )
+    }
+
+    textos.push('Actualizamos tu carrito. Revisá el total y volvé a confirmar.')
+    setAvisoPrecios(textos.join(' '))
   }
 
   // Saca del carrito lo que ya no está y sigue con el resto. Si no queda nada
@@ -302,10 +365,24 @@ function CheckoutContenido() {
     )
   }
 
+  // CUÁLES se ofrecen lo decide metodosOfrecidos(), en src/lib/precioPedido.js:
+  // el mismo módulo con el que el servidor los valida. Si la regla viviera
+  // también acá, las dos copias se separarían sin que nadie se entere, y un
+  // vendedor quedaría con métodos que la pantalla ofrece y el servidor
+  // rechaza. Acá sólo se decide CÓMO se ven y en qué orden.
+  const ofrecidos = metodosOfrecidos({
+    metodos_entrega_default: metodosDisponibles,
+    costos_envio_zona: costosVendedor,
+  })
+
+  // 'acordar' puede llegar porque el vendedor lo eligió, o como salida de
+  // emergencia cuando no le quedó ningún método usable. El texto cambia.
+  const acordarEsRespaldo = !metodosDisponibles.includes('acordar')
+
   // Construir métodos
   const metodos = []
-  if (metodosDisponibles.includes('retiro')) metodos.push({ id: 'retiro', label: 'Retiro en el local', sub: 'Retirás en la dirección del vendedor', costoLabel: 'Gratis', pideDireccion: false, pideTurno: false })
-  if (metodosDisponibles.includes('cadeteria')) {
+  if (ofrecidos.includes('retiro')) metodos.push({ id: 'retiro', label: 'Retiro en el local', sub: 'Retirás en la dirección del vendedor', costoLabel: 'Gratis', pideDireccion: false, pideTurno: false })
+  if (ofrecidos.includes('cadeteria')) {
     let costoLabel = 'Seleccioná una dirección'
     if (calculandoZona) costoLabel = 'Calculando...'
     else if (sinBarrio) costoLabel = 'Dirección sin barrio'
@@ -313,13 +390,12 @@ function CheckoutContenido() {
     else if (costoCadeteria === null && zonaCadeteria) costoLabel = 'No disponible'
     metodos.push({ id: 'cadeteria', label: 'Cadetería', sub: 'Envío dentro de Bahía Blanca', costoLabel, pideDireccion: true, pideTurno: true })
   }
-  if (metodosDisponibles.includes('correo')) {
+  if (ofrecidos.includes('correo')) {
     let costoLabel = 'Elegí tu zona'
     if (zonaCorreoElegida) { const c = costosVendedor[zonaCorreoElegida]; costoLabel = c !== null && c !== undefined ? `$${fmt(c)}` : 'No disponible' }
     metodos.push({ id: 'correo', label: 'Envío por correo', sub: 'Otras localidades', costoLabel, pideDireccion: true, pideTurno: false })
   }
-  if (metodosDisponibles.includes('acordar')) metodos.push({ id: 'acordar', label: 'Acordar con el vendedor', sub: 'Coordinás por WhatsApp', costoLabel: 'A coordinar', pideDireccion: false, pideTurno: false })
-  if (metodos.length === 0) metodos.push({ id: 'acordar', label: 'Acordar con el vendedor', sub: 'El vendedor aún no configuró envíos', costoLabel: 'A coordinar', pideDireccion: false, pideTurno: false })
+  if (ofrecidos.includes('acordar')) metodos.push({ id: 'acordar', label: 'Acordar con el vendedor', sub: acordarEsRespaldo ? 'El vendedor aún no configuró envíos' : 'Coordinás por WhatsApp', costoLabel: 'A coordinar', pideDireccion: false, pideTurno: false })
 
   const metodoActual = metodos.find(m => m.id === metodoElegido)
   const dirElegida = direcciones.find((d) => d.id === direccionElegida)
@@ -547,6 +623,12 @@ function CheckoutContenido() {
                     <span>${fmt(total)}</span>
                   </div>
                 </div>
+
+                {avisoPrecios && (
+                  <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-900">
+                    {avisoPrecios}
+                  </div>
+                )}
 
                 {errorPago && (
                   <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">

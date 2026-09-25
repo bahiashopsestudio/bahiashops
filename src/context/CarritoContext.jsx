@@ -77,6 +77,28 @@ export function CarritoProvider({ children }) {
     );
   }
 
+  // Pone los precios que confirmó el servidor. Se usa cuando el checkout
+  // rechaza la compra porque algún precio cambió desde que se agregó al
+  // carrito: el servidor manda los precios de verdad y acá se corrigen, para
+  // que la persona vea el total nuevo antes de volver a confirmar.
+  // 'precios' es { [productoId]: precioNuevo }.
+  function actualizarPrecios(vendedorId, precios) {
+    setLocales((actual) =>
+      actual.map((l) =>
+        l.vendedorId !== vendedorId
+          ? l
+          : {
+              ...l,
+              items: l.items.map((it) =>
+                precios[it.productoId] !== undefined
+                  ? { ...it, precio: Number(precios[it.productoId]) }
+                  : it
+              ),
+            }
+      )
+    );
+  }
+
   // Vacía un local entero (lo usamos después de que se compró ese local).
   function vaciarLocal(vendedorId) {
     setLocales((actual) => actual.filter((l) => l.vendedorId !== vendedorId));
@@ -102,6 +124,7 @@ export function CarritoProvider({ children }) {
         agregar,
         quitar,
         cambiarCantidad,
+        actualizarPrecios,
         vaciarLocal,
         vaciarTodo,
         cantidadTotal,

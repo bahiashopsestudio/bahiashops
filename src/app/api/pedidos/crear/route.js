@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { getValidAccessToken } from '@/lib/mercadopago/tokens';
 import { SITIO_URL } from '@/lib/sitio';
+import { calcularPedido } from '@/lib/precioPedido';
 
 export async function POST(request) {
   // 1. ¿Quién está comprando? (necesitamos su sesión)
@@ -17,14 +18,20 @@ export async function POST(request) {
   }
 
   // 2. Leer los datos que mandó el checkout.
+  //
+  // El navegador propone, el servidor decide: de acá se acepta SÓLO qué se
+  // compra, cómo se entrega y a dónde. Los valores de plata (subtotal, total)
+  // ni se leen. El precio de cada ítem y el costo de envío sí se leen, pero
+  // únicamente para comparar contra lo que dice la base: son "lo que la
+  // persona vio en pantalla", no lo que se cobra.
   const body = await request.json();
   const {
     vendedorId, items, metodoEnvio,
-    direccionId, turnoPreferido,
-    subtotalProductos, costoEnvio, total,
+    direccionId, turnoPreferido, zonaCorreo,
+    costoEnvio: costoEnvioVisto,
   } = body;
 
-  if (!vendedorId || !items?.length || !metodoEnvio) {
+  if (!vendedorId || !Array.isArray(items) || items.length === 0 || !metodoEnvio) {
     return NextResponse.json(
       { error: 'Faltan datos del pedido.' },
       { status: 400 }
@@ -53,7 +60,11 @@ export async function POST(request) {
 
   const { data: vendedor, error: errorVendedor } = await admin
     .from('vendedores')
-    .select('id, nombre_negocio, bloqueado, estado_validacion')
+    .select(
+      'id, nombre_negocio, bloqueado, estado_validacion, ' +
+      // Para recalcular el envío del lado del servidor.
+      'barrio_id, metodos_entrega_default, costos_envio_zona'
+    )
     .eq('id', vendedorId)
     .maybeSingle();
 
@@ -73,12 +84,13 @@ export async function POST(request) {
   }
 
   // Y los productos uno por uno: que sigan activos y que sigan siendo de este
-  // vendedor (el precio y el nombre los manda el cliente, el permiso no).
+  // vendedor. De la misma lectura salen el precio, el nombre y si tiene
+  // variantes: nada de eso se le cree al navegador.
   const idsPedidos = [...new Set(items.map((i) => Number(i.productoId)).filter(Boolean))];
 
   const { data: vigentes, error: errorProductos } = await admin
     .from('productos')
-    .select('id')
+    .select('id, nombre, precio, tiene_variantes')
     .in('id', idsPedidos)
     .eq('vendedor_id', vendedorId)
     .eq('estado', 'activo');
@@ -113,6 +125,8 @@ export async function POST(request) {
   // Una dirección inexistente y una ajena reciben la misma respuesta, para que
   // esto no sirva para averiguar qué ids existen.
   let direccionIdVerificada = null;
+  // El barrio sale de la misma lectura: hace falta para calcular la cadetería.
+  let barrioDireccion = null;
 
   if (direccionId !== null && direccionId !== undefined && direccionId !== '') {
     const idNumerico = Number(direccionId);
@@ -127,7 +141,7 @@ export async function POST(request) {
 
     const { data: direccionPropia, error: errorDueno } = await admin
       .from('direcciones')
-      .select('id')
+      .select('id, barrio_id')
       .eq('id', idNumerico)
       .eq('usuario_id', user.id)
       .maybeSingle();
@@ -153,10 +167,71 @@ export async function POST(request) {
     }
 
     direccionIdVerificada = idNumerico;
+    barrioDireccion = direccionPropia.barrio_id ?? null;
   }
 
-  // 4. Calcular la comisión: 5% sobre PRODUCTOS, no sobre envío.
-  const comision = Math.round(subtotalProductos * 0.05);
+  // 3c. Lo que hace falta para poner los precios: variantes y fotos.
+  const { data: variantes, error: errorVariantes } = await admin
+    .from('producto_variantes')
+    .select('producto_id, propiedad_1_valor')
+    .in('producto_id', idsPedidos);
+
+  if (errorVariantes) {
+    console.error('No se pudieron leer las variantes', errorVariantes.message);
+    return NextResponse.json({ error: 'No se pudo verificar el pedido.' }, { status: 500 });
+  }
+
+  const { data: medias, error: errorMedias } = await admin
+    .from('producto_media')
+    .select('producto_id, url, es_principal, orden')
+    .in('producto_id', idsPedidos);
+
+  if (errorMedias) {
+    console.error('No se pudieron leer las fotos de los productos', errorMedias.message);
+    return NextResponse.json({ error: 'No se pudo verificar el pedido.' }, { status: 500 });
+  }
+
+  // 3d. La zona de cadetería la resuelve la base, con la misma función que usa
+  // el checkout. Va con el cliente de la sesión, no con service_role: es el
+  // mismo permiso que tiene hoy el navegador.
+  let zonaCadeteria = null;
+
+  if (metodoEnvio === 'cadeteria' && barrioDireccion && vendedor.barrio_id) {
+    const { data: zona, error: errorZona } = await supabase.rpc('calcular_zona_envio', {
+      barrio_vendedor_id: vendedor.barrio_id,
+      barrio_comprador_id: barrioDireccion,
+    });
+
+    if (errorZona) {
+      console.error('No se pudo calcular la zona de envío', errorZona.message);
+      return NextResponse.json({ error: 'No se pudo calcular el costo de envío.' }, { status: 500 });
+    }
+    zonaCadeteria = zona ?? null;
+  }
+
+  // 4. La plata: toda calculada acá, con lo leído de la base.
+  const calculo = calcularPedido({
+    items,
+    productos: vigentes,
+    variantes,
+    medias,
+    vendedor,
+    metodoEnvio,
+    hayDireccion: direccionIdVerificada !== null,
+    zonaCadeteria,
+    zonaCorreo,
+    costoEnvioVisto,
+  });
+
+  if (!calculo.ok) {
+    const { ok, status, ...respuesta } = calculo;
+    console.warn('Compra rechazada al calcular el pedido', {
+      usuario: user.id, vendedorId, codigo: calculo.codigo,
+    });
+    return NextResponse.json(respuesta, { status });
+  }
+
+  const comision = calculo.comision;
 
   // 5. Obtener un token válido del vendedor (se auto-renueva si está por vencer).
   let accessToken;
@@ -188,9 +263,9 @@ export async function POST(request) {
       direccion_id: direccionIdVerificada,
       metodo_envio: metodoEnvio,
       turno_preferido: turnoPreferido || null,
-      subtotal_productos: subtotalProductos,
-      costo_envio: costoEnvio,
-      total: total,
+      subtotal_productos: calculo.subtotal,
+      costo_envio: calculo.costoEnvio,
+      total: calculo.total,
       comision_plataforma: comision,
       estado: 'pendiente',
     })
@@ -205,14 +280,15 @@ export async function POST(request) {
   }
 
   // 7. Guardar la "foto" de los productos (nombre y precio de este momento).
-  const itemsParaGuardar = items.map((item) => ({
+  // Todo sale del cálculo del servidor, no del carrito.
+  const itemsParaGuardar = calculo.lineas.map((linea) => ({
     pedido_id: pedido.id,
-    producto_id: item.productoId,
-    nombre: item.nombre,
-    variante: item.variante || null,
-    precio: item.precio,
-    cantidad: item.cantidad,
-    foto_url: item.foto || null,
+    producto_id: linea.productoId,
+    nombre: linea.nombre,
+    variante: linea.variante,
+    precio: linea.precio,
+    cantidad: linea.cantidad,
+    foto_url: linea.foto,
   }));
 
   const { error: errorItems } = await admin
@@ -230,27 +306,30 @@ export async function POST(request) {
   // 8. Pedirle a MercadoPago el link de pago con el split.
   //    Usamos las llaves DEL VENDEDOR (no las nuestras) — así el pago
   //    entra a SU cuenta y MercadoPago reparte nuestra comisión solo.
-  const mpItems = items.map((item) => {
+  // El título, la imagen y el precio que ve la persona en MercadoPago salen
+  // del cálculo del servidor: si vinieran del carrito, cualquiera podría poner
+  // el nombre y la imagen que quisiera en la pantalla de pago.
+  const mpItems = calculo.lineas.map((linea) => {
     const mpItem = {
-      id: String(item.productoId),
-      title: item.nombre + (item.variante ? ` (${item.variante})` : ''),
-      description: item.nombre,
-      quantity: item.cantidad,
-      unit_price: item.precio,
+      id: String(linea.productoId),
+      title: linea.nombre + (linea.variante ? ` (${linea.variante})` : ''),
+      description: linea.nombre,
+      quantity: linea.cantidad,
+      unit_price: linea.precio,
       currency_id: 'ARS',
       category_id: 'others',
     };
     // Sin foto no va la clave: nada de picture_url vacío.
-    if (item.foto) mpItem.picture_url = item.foto;
+    if (linea.foto) mpItem.picture_url = linea.foto;
     return mpItem;
   });
 
   // Si hay costo de envío, lo sumamos como un item más al pago.
-  if (costoEnvio > 0) {
+  if (calculo.costoEnvio > 0) {
     mpItems.push({
       title: 'Envío',
       quantity: 1,
-      unit_price: costoEnvio,
+      unit_price: calculo.costoEnvio,
       currency_id: 'ARS',
       category_id: 'others',
     });
