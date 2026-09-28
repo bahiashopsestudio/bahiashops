@@ -46,6 +46,7 @@ export async function GET() {
     .select(`
       id, estado, metodo_envio, subtotal_productos, costo_envio, total,
       comision_plataforma, turno_preferido, franja_horaria, creado_en, actualizado_en,
+      comprador_nombre, comprador_apellido, comprador_telefono, direccion_copia,
       items:pedido_items ( id, nombre, variante, cantidad, precio, foto_url ),
       direccion:direcciones ( calle, numero, piso_depto, telefono, barrio_id )
     `)
@@ -57,9 +58,10 @@ export async function GET() {
     return NextResponse.json({ error: 'No se pudieron cargar los pedidos.' }, { status: 500 });
   }
 
-  // De la dirección del comprador sale sólo lo que hace falta para entregar y
-  // para escribirle por WhatsApp. Nada más de su ficha viaja hasta acá: el
-  // select de arriba ya nombra las cinco columnas.
+  // Del comprador viaja lo que quedó congelado en el pedido (nombre, apellido,
+  // teléfono y, si el método pedía dirección, direccion_copia) más las cinco
+  // columnas de la dirección embebida. Nada más de su ficha: el select de
+  // arriba nombra cada columna.
   return NextResponse.json({
     vendedor: { id: vendedor.id, nombre_negocio: vendedor.nombre_negocio },
     pedidos: pedidos || [],

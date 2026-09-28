@@ -85,7 +85,7 @@ export async function POST(request) {
     const franja = typeof body.franja === 'string' ? body.franja.trim() : '';
     if (!FRANJAS_VALIDAS.includes(franja)) {
       return NextResponse.json(
-        { error: `La franja tiene que ser una de: ${FRANJAS_VALIDAS.join(', ')}.` },
+        { error: `La franja horaria tiene que ser una de: ${FRANJAS_VALIDAS.join(', ')}.` },
         { status: 400 }
       );
     }

@@ -4,6 +4,8 @@ import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { getValidAccessToken } from '@/lib/mercadopago/tokens';
 import { SITIO_URL } from '@/lib/sitio';
 import { calcularPedido, metodoPideDireccion } from '@/lib/precioPedido';
+import { normalizarTelefonoAR } from '@/lib/telefono';
+import { datosContactoComprador } from '@/lib/contactoComprador';
 
 export async function POST(request) {
   // 1. ¿Quién está comprando? (necesitamos su sesión)
@@ -129,7 +131,9 @@ export async function POST(request) {
   // se ignora y el pedido queda con direccion_id null: el vendedor no tiene por
   // qué ver la dirección de alguien que retira o coordina aparte.
   let direccionIdVerificada = null;
-  // El barrio sale de la misma lectura: hace falta para calcular la cadetería.
+  // La fila entera sale de la misma lectura: el barrio hace falta para la
+  // cadetería, y el resto para la copia de la dirección y el payer.
+  let direccionVerificada = null;
   let barrioDireccion = null;
 
   const hayDireccionId = direccionId !== null && direccionId !== undefined && direccionId !== '';
@@ -147,7 +151,7 @@ export async function POST(request) {
 
     const { data: direccionPropia, error: errorDueno } = await admin
       .from('direcciones')
-      .select('id, barrio_id')
+      .select('*')
       .eq('id', idNumerico)
       .eq('usuario_id', user.id)
       .maybeSingle();
@@ -173,6 +177,7 @@ export async function POST(request) {
     }
 
     direccionIdVerificada = idNumerico;
+    direccionVerificada = direccionPropia;
     barrioDireccion = direccionPropia.barrio_id ?? null;
   }
 
@@ -255,11 +260,69 @@ export async function POST(request) {
     );
   }
 
+  // 5b. Los datos de contacto de quien compra, congelados en el pedido.
+  //
+  // Por ahora es defensivo: si una lectura falla o no aparece un teléfono, el
+  // pedido se crea igual con esos campos en null. La misma lectura de usuarios
+  // sirve después para el payer de MercadoPago.
+  const pideDireccion = metodoPideDireccion(metodoEnvio);
+
+  const { data: comprador, error: errorComprador } = await admin
+    .from('usuarios')
+    .select('nombre, apellido, telefono')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  if (errorComprador) {
+    console.error('No se pudieron leer los datos del comprador', user.id, errorComprador.message);
+  }
+
+  // En retiro y acordar no hay dirección verificada. Si la cuenta no tiene un
+  // teléfono usable, se busca el número en la dirección más reciente.
+  let direccionReciente = null;
+  if (!pideDireccion && !normalizarTelefonoAR(comprador?.telefono)) {
+    const { data, error: errorReciente } = await admin
+      .from('direcciones')
+      .select('telefono')
+      .eq('usuario_id', user.id)
+      .order('creada_en', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (errorReciente) {
+      console.error('No se pudo leer la dirección más reciente del comprador', user.id, errorReciente.message);
+    }
+    direccionReciente = data || null;
+  }
+
+  const { telefonoParaCuenta, ...contactoComprador } = datosContactoComprador({
+    cuenta: comprador,
+    pideDireccion,
+    direccionVerificada,
+    direccionReciente,
+  });
+
+  // La cuenta no tenía teléfono y apareció uno en una dirección: se guarda
+  // también en la cuenta, para la próxima.
+  if (telefonoParaCuenta) {
+    const { error: errorGuardarTelefono } = await admin
+      .from('usuarios')
+      .update({ telefono: telefonoParaCuenta })
+      .eq('id', user.id);
+
+    if (errorGuardarTelefono) {
+      console.error('No se pudo guardar el teléfono en la cuenta', user.id, errorGuardarTelefono.message);
+    }
+  }
+
   // 6. Anotar el pedido en la libreta (estado: pendiente, porque todavía no pagó).
   const { data: pedido, error: errorPedido } = await admin
     .from('pedidos')
     .insert({
       comprador_id: user.id,
+      // comprador_nombre, comprador_apellido, comprador_telefono y
+      // direccion_copia (esta última sólo si el método pide dirección).
+      ...contactoComprador,
       vendedor_id: vendedorId,
       // Copia congelada: el historial del comprador tiene que poder nombrar la
       // tienda aunque después se bloquee o cambie de nombre.
@@ -349,53 +412,23 @@ export async function POST(request) {
   // Nunca se manda un phone sin número ni un address a medio llenar.
   const payer = { email: user.email };
 
-  const { data: comprador, error: errorComprador } = await admin
-    .from('usuarios')
-    .select('nombre, apellido, telefono')
-    .eq('id', user.id)
-    .maybeSingle();
+  // Nombre, apellido y teléfono son los mismos que quedaron en el pedido (paso
+  // 5b): nada de volver a leerlos. Con registro por Google puede faltar el
+  // apellido; el vacío ya llega como null.
+  if (contactoComprador.comprador_nombre) payer.name = contactoComprador.comprador_nombre;
+  if (contactoComprador.comprador_apellido) payer.surname = contactoComprador.comprador_apellido;
 
-  if (errorComprador) {
-    console.error('No se pudieron leer los datos del comprador', user.id, errorComprador.message);
+  // Teléfono ya normalizado a 10 dígitos. Sin area_code: no se separa la
+  // característica.
+  if (contactoComprador.comprador_telefono) {
+    payer.phone = { number: contactoComprador.comprador_telefono };
   }
 
-  // nombre y apellido son NOT NULL pero pueden venir vacíos: con registro por
-  // Google puede faltar el apellido. El vacío se trata igual que el nulo.
-  const nombreComprador = comprador?.nombre?.trim();
-  const apellidoComprador = comprador?.apellido?.trim();
-  if (nombreComprador) payer.name = nombreComprador;
-  if (apellidoComprador) payer.surname = apellidoComprador;
-
-  // La dirección sólo existe si el método de entrega la pidió. En retiro en
-  // local o "a coordinar", no hay dirección verificada y acá no se consulta
-  // nada. Esta lectura SÍ es defensiva: el dueño ya se comprobó en el paso 3b,
-  // y si ahora falla, se omite el address y la compra sigue.
-  let direccionComprador = null;
-  if (direccionIdVerificada) {
-    const { data, error: errorDireccion } = await admin
-      .from('direcciones')
-      .select('calle, numero, telefono')
-      .eq('id', direccionIdVerificada)
-      // Que la dirección sea de quien compra: el id viene del navegador.
-      .eq('usuario_id', user.id)
-      .maybeSingle();
-
-    if (errorDireccion) {
-      console.error('No se pudo leer la dirección del comprador', direccionIdVerificada, errorDireccion.message);
-    }
-    direccionComprador = data || null;
-  }
-
-  // Teléfono: primero el de la cuenta, después el de la dirección. Sin
-  // area_code, porque se guarda como un solo string y no vamos a adivinar
-  // dónde termina la característica.
-  const telefonoComprador =
-    comprador?.telefono?.trim() || direccionComprador?.telefono?.trim() || '';
-  if (telefonoComprador) payer.phone = { number: telefonoComprador };
-
-  // Sin código postal: no existe en la base y no se inventa.
-  const calle = direccionComprador?.calle?.trim();
-  const numero = direccionComprador?.numero?.trim();
+  // La dirección sólo existe si el método de entrega la pidió: es la fila que
+  // se verificó en el paso 3b. Sin código postal: no existe en la base y no se
+  // inventa.
+  const calle = direccionVerificada?.calle?.trim();
+  const numero = direccionVerificada?.numero?.trim();
   if (calle && numero) {
     payer.address = { street_name: calle, street_number: numero };
   }

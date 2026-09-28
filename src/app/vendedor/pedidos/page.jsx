@@ -6,6 +6,7 @@ import Navbar from '@/components/Navbar';
 import MenuTakeover from '@/components/MenuTakeover';
 import VolverAtras from '@/components/VolverAtras';
 import { linkWhatsApp } from '@/lib/telefono';
+import { metodoPideDireccion } from '@/lib/precioPedido';
 
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage'];
 
@@ -14,10 +15,32 @@ const ESTADOS = {
   pagado:     { label: 'Pagado',           color: 'text-emerald-700', bg: 'bg-emerald-100',  orden: 1 },
   rechazado:  { label: 'Pago rechazado',   color: 'text-red-600',     bg: 'bg-red-50',       orden: -1 },
   preparando: { label: 'Preparando',       color: 'text-blue-700',    bg: 'bg-blue-50',      orden: 2 },
-  franja:     { label: 'Franja avisada',   color: 'text-violet-600',  bg: 'bg-violet-100',   orden: 3 },
+  franja:     { label: 'Franja horaria avisada', color: 'text-violet-600',  bg: 'bg-violet-100',   orden: 3 },
   por_salir:  { label: 'Por salir',        color: 'text-amber-600',   bg: 'bg-amber-50',     orden: 4 },
   despachado: { label: 'Despachado',       color: 'text-emerald-700', bg: 'bg-emerald-100',  orden: 5 },
 };
+
+// Cómo le llega el pedido a quien compra, para elegir el texto del WhatsApp:
+// 'retiro', 'acordar' (cualquier otro método sin dirección) o 'envio'.
+function tipoEntrega(p) {
+  if (p.metodo_envio === 'retiro') return 'retiro';
+  if (!metodoPideDireccion(p.metodo_envio)) return 'acordar';
+  return 'envio';
+}
+
+// "Calle número" para el mensaje: primero la copia congelada en el pedido,
+// después la dirección embebida. Si no hay ninguna, null y el texto va sin
+// esa parte.
+function calleYNumero(p) {
+  for (const d of [p.direccion_copia, p.direccion]) {
+    const texto = [d?.calle, d?.numero]
+      .map((v) => (v == null ? '' : String(v).trim()))
+      .filter(Boolean)
+      .join(' ');
+    if (texto) return texto;
+  }
+  return null;
+}
 
 const ACCIONES = {
   pagado: {
@@ -34,12 +57,37 @@ const ACCIONES = {
   preparando: {
     label: 'Avisar franja horaria', siguiente: 'franja',
     btnClass: 'bg-violet-600 hover:bg-violet-700', whatsapp: true, pideFranja: true,
-    mensajeWA: (p, franja, nombre) => `¡Hola! Soy ${nombre}. Tu pedido #${p.id} sale hoy por la ${franja.toLowerCase()}. Lo enviamos a ${p.direccion?.calle} ${p.direccion?.numero}. ¡Estate atento/a!`,
+    mensajeWA: (p, franja, nombre) => {
+      const f = franja.toLowerCase();
+      const tipo = tipoEntrega(p);
+      if (tipo === 'retiro') {
+        return `¡Hola! Te escribimos de ${nombre}. Tu pedido #${p.id} va a estar listo para retirar por la ${f}.`;
+      }
+      if (tipo === 'acordar') {
+        return `¡Hola! Te escribimos de ${nombre} por tu pedido #${p.id}. Lo tendríamos listo por la ${f}. ¿Cómo te queda para coordinar la entrega?`;
+      }
+      const destino = calleYNumero(p);
+      return `¡Hola! Te escribimos de ${nombre}. Tu pedido #${p.id} sale hoy por la ${f}` +
+        (destino ? ` hacia ${destino}` : '') +
+        '.';
+    },
   },
   franja: {
     label: 'Avisar que sale', siguiente: 'por_salir',
     btnClass: 'bg-amber-600 hover:bg-amber-700', whatsapp: true,
-    mensajeWA: (p, franja, nombre) => `¡Hola! 🚀 Soy ${nombre}. Tu pedido #${p.id} ya está saliendo hacia ${p.direccion?.calle} ${p.direccion?.numero}. ¡Ya llega!`,
+    mensajeWA: (p, franja, nombre) => {
+      const tipo = tipoEntrega(p);
+      if (tipo === 'retiro') {
+        return `¡Hola! Tu pedido #${p.id} ya está listo para retirar en ${nombre}. ¡Te esperamos!`;
+      }
+      if (tipo === 'acordar') {
+        return `¡Hola! Tu pedido #${p.id} de ${nombre} ya está listo. Escribinos y coordinamos la entrega.`;
+      }
+      const destino = calleYNumero(p);
+      return `¡Hola! Te escribimos de ${nombre}. Tu pedido #${p.id} ya está en camino` +
+        (destino ? ` hacia ${destino}` : '') +
+        '. ¡Ya llega!';
+    },
   },
   por_salir: {
     label: 'Marcar como despachado', siguiente: 'despachado',
@@ -61,8 +109,13 @@ function fmt(n) { return Number(n).toLocaleString('es-AR'); }
 
 // Si el teléfono guardado no se puede convertir en un número de WhatsApp, no
 // se abre un link roto: se muestra tal como está para que el vendedor lo copie.
+// Sin ningún teléfono tampoco se queda en silencio: el paso ya avanzó, pero el
+// vendedor tiene que saber que no le llegó el mensaje a nadie.
 function abrirWhatsApp(telefono, mensaje) {
-  if (!telefono) return;
+  if (!telefono) {
+    alert('Este pedido no tiene teléfono de contacto');
+    return;
+  }
   const link = linkWhatsApp(telefono, mensaje);
   if (!link) {
     alert(`No pudimos armar el link de WhatsApp con el teléfono guardado. Copialo y escribile directamente: ${telefono}`);
@@ -179,8 +232,11 @@ export default function VendedorPedidosPage() {
         alert('El pedido se marcó como despachado, pero no se pudo enviar el email al comprador.');
       }
 
-      if (accion.whatsapp && pedido.direccion?.telefono) {
-        abrirWhatsApp(pedido.direccion.telefono, accion.mensajeWA(pedido, franja, nombreNegocio));
+      // El teléfono congelado en el pedido; el de la dirección queda de
+      // respaldo para los pedidos anteriores a esa columna.
+      if (accion.whatsapp) {
+        const telefono = pedido.comprador_telefono || pedido.direccion?.telefono;
+        abrirWhatsApp(telefono, accion.mensajeWA(pedido, franja, nombreNegocio));
       }
     } catch (err) {
       console.error('Error de red al avanzar el pedido', err);
@@ -277,7 +333,7 @@ export default function VendedorPedidosPage() {
                 onClick={() => setFranjaModal(null)}>
                 <div onClick={(e) => e.stopPropagation()}
                   className="bg-white rounded-2xl p-6 max-w-[380px] w-full">
-                  <h3 className="text-lg font-black text-[#0a0a0a] tracking-tight m-0 mb-2">¿En qué franja sale?</h3>
+                  <h3 className="text-lg font-black text-[#0a0a0a] tracking-tight m-0 mb-2">¿En qué franja horaria sale?</h3>
                   <p className="text-sm text-[#0a0a0a]/30 font-light m-0 mb-4">
                     Le avisamos al comprador en qué horario esperar el envío.
                   </p>
@@ -369,7 +425,14 @@ function PedidoCard({ pedido, abierto, items, avanzando, onToggle, onAvanzar }) 
               <p className="m-0 text-[11px] text-[#0a0a0a]/25 font-light">Preferencia: {p.turno_preferido.toLowerCase()}</p>
             )}
             {p.franja_horaria && (
-              <p className="m-0 text-[11px] text-[#0a0a0a]/40 font-light">Franja avisada: {p.franja_horaria.toLowerCase()}</p>
+              <p className="m-0 text-[11px] text-[#0a0a0a]/40 font-light">Franja horaria avisada: {p.franja_horaria.toLowerCase()}</p>
+            )}
+            {(p.comprador_nombre || p.comprador_apellido || p.comprador_telefono) && (
+              <p className="mt-1 mb-0 text-sm text-[#0a0a0a]/60 font-light">
+                {[p.comprador_nombre, p.comprador_apellido].filter(Boolean).join(' ')}
+                {(p.comprador_nombre || p.comprador_apellido) && p.comprador_telefono && <br />}
+                {p.comprador_telefono && <>Tel. {p.comprador_telefono}</>}
+              </p>
             )}
             {p.direccion && (
               <p className="mt-1 mb-0 text-sm text-[#0a0a0a]/60 font-light">

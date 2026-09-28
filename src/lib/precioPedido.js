@@ -16,7 +16,9 @@
 
 export const ZONAS_CORREO_VALIDAS = ['correo_1', 'correo_2', 'correo_3', 'correo_4']
 
-export const METODOS_SIN_COSTO = ['retiro', 'acordar']
+// 'coordinar' no se ofrece más en el checkout (no está en METODOS_CONOCIDOS),
+// pero hay pedidos viejos con ese método: se trata igual que 'acordar'.
+export const METODOS_SIN_COSTO = ['retiro', 'acordar', 'coordinar']
 
 // Si el método necesita una dirección de entrega. Es la misma regla que aplica
 // calcularEnvio: los métodos sin costo no piden dirección. La usan el servidor
