@@ -76,6 +76,7 @@ export default function PerfilVendedorPage() {
   const [mpConectado, setMpConectado] = useState(false);
   const [estadoValidacion, setEstadoValidacion] = useState(null);
   const [notasValidacion, setNotasValidacion] = useState(null);
+  const [errorNotas, setErrorNotas] = useState(false);
   const [slugTienda, setSlugTienda] = useState(null);
   const [bloqueado, setBloqueado] = useState(false);
   const [cargando, setCargando] = useState(true);
@@ -125,7 +126,7 @@ export default function PerfilVendedorPage() {
       if (!user) { setCargando(false); return; }
       const { data, error } = await supabase
         .from('vendedores')
-        .select('id, nombre_negocio, slug, logo_url, portada_url, mercadopago_conectado, estado_validacion, notas_validacion, bloqueado')
+        .select('id, nombre_negocio, slug, logo_url, portada_url, mercadopago_conectado, estado_validacion, bloqueado')
         .eq('usuario_id', user.id)
         .single();
       if (error) {
@@ -137,9 +138,23 @@ export default function PerfilVendedorPage() {
         setPortadaUrl(data.portada_url);
         setMpConectado(data.mercadopago_conectado || false);
         setEstadoValidacion(data.estado_validacion || 'aprobado');
-        setNotasValidacion(data.notas_validacion);
         setSlugTienda(data.slug || null);
         setBloqueado(data.bloqueado === true);
+
+        // El mensaje del admin sólo se muestra cuando pide cambios, y no se
+        // puede leer desde el navegador: va por la ruta de datos privados. Si
+        // falla, el cartel sale igual, sin el detalle y con un aviso.
+        if (data.estado_validacion === 'necesita_cambios') {
+          try {
+            const res = await fetch('/api/vendedor/datos-privados');
+            if (!res.ok) throw new Error('respuesta ' + res.status);
+            const privados = await res.json();
+            setNotasValidacion(privados.notas_validacion);
+          } catch (err) {
+            console.error('No se pudo cargar el mensaje de la revisión:', err);
+            setErrorNotas(true);
+          }
+        }
       }
       setCargando(false);
     }
@@ -287,6 +302,11 @@ export default function PerfilVendedorPage() {
                 slug={slugTienda}
                 bloqueado={bloqueado}
               />
+              {errorNotas && (
+                <p className="m-0 mt-2 text-xs text-[#0a0a0a]/40 font-light">
+                  No pudimos cargar el detalle de lo que hay que ajustar. Recargá la página para verlo.
+                </p>
+              )}
             </div>
 
             {/* ═══ PORTADA + LOGO ═══ */}

@@ -83,6 +83,9 @@ export default function MisDatosVendedorPage() {
   const [whatsapp, setWhatsapp] = useState('')
   const [usarOtroEmail, setUsarOtroEmail] = useState(false)
   const [emailContacto, setEmailContacto] = useState('')
+  // No se pudo leer el contacto guardado. Mientras tanto, guardar no lo toca:
+  // los campos vacíos no pueden borrar lo que el vendedor ya tenía cargado.
+  const [errorContacto, setErrorContacto] = useState(false)
   const [horarios, setHorarios] = useState(HORARIOS_INICIALES)
   const [notasHorarios, setNotasHorarios] = useState('')
   const [tiempoDespacho, setTiempoDespacho] = useState('')
@@ -109,7 +112,7 @@ export default function MisDatosVendedorPage() {
 
       const { data: vendedor } = await supabase
         .from('vendedores')
-        .select('id, nombre_negocio, categoria_id, descripcion_corta, descripcion_larga, instagram, plataforma_sitio, sitio_web, red_social_secundaria_tipo, red_social_secundaria_url, telefono_contacto, email_contacto, horarios_estructurados, notas_horarios, tiempo_despacho, metodos_entrega_default')
+        .select('id, nombre_negocio, categoria_id, descripcion_corta, descripcion_larga, instagram, plataforma_sitio, sitio_web, red_social_secundaria_tipo, red_social_secundaria_url, horarios_estructurados, notas_horarios, tiempo_despacho, metodos_entrega_default')
         .eq('usuario_id', user.id)
         .maybeSingle()
 
@@ -125,9 +128,20 @@ export default function MisDatosVendedorPage() {
       setSitioWeb(vendedor.sitio_web || '')
       setRedSecundariaTipo(vendedor.red_social_secundaria_tipo || '')
       setRedSecundariaUrl(vendedor.red_social_secundaria_url || '')
-      setWhatsapp(quitarPrefijo(vendedor.telefono_contacto))
-      setUsarOtroEmail(Boolean(vendedor.email_contacto))
-      setEmailContacto(vendedor.email_contacto || '')
+      // El contacto no se puede leer desde el navegador: va por la ruta de
+      // datos privados. Si falla, la pantalla carga igual con esos campos
+      // vacíos y un aviso.
+      try {
+        const res = await fetch('/api/vendedor/datos-privados')
+        if (!res.ok) throw new Error('respuesta ' + res.status)
+        const privados = await res.json()
+        setWhatsapp(quitarPrefijo(privados.telefono_contacto))
+        setUsarOtroEmail(Boolean(privados.email_contacto))
+        setEmailContacto(privados.email_contacto || '')
+      } catch (err) {
+        console.error('No se pudo cargar el contacto del vendedor:', err)
+        setErrorContacto(true)
+      }
       setHorarios(vendedor.horarios_estructurados || HORARIOS_INICIALES)
       setNotasHorarios(vendedor.notas_horarios || '')
       setTiempoDespacho(vendedor.tiempo_despacho || '')
@@ -184,8 +198,12 @@ export default function MisDatosVendedorPage() {
         sitio_web: tienePlataforma ? sitioWeb : null,
         red_social_secundaria_tipo: redSecundariaTipo || null,
         red_social_secundaria_url: tieneRedSecundaria ? redSecundariaUrl : null,
-        telefono_contacto: armarTelefonoCompleto(whatsapp),
-        email_contacto: usarOtroEmail ? emailContacto : null,
+        // Si el contacto guardado no se pudo leer, no se manda: quedan los
+        // valores que ya había.
+        ...(errorContacto ? {} : {
+          telefono_contacto: armarTelefonoCompleto(whatsapp),
+          email_contacto: usarOtroEmail ? emailContacto : null,
+        }),
         horarios_estructurados: horarios,
         notas_horarios: notasHorarios || null,
         tiempo_despacho: tiempoDespacho || null,
@@ -408,6 +426,12 @@ export default function MisDatosVendedorPage() {
                   <input type="text" required placeholder={placeholderRed} value={redSecundariaUrl}
                     onChange={(e) => setRedSecundariaUrl(e.target.value)} className={inputClasses} />
                 </label>
+              )}
+
+              {errorContacto && (
+                <p className="m-0 text-xs text-[#0a0a0a]/40 font-light">
+                  No pudimos cargar tu WhatsApp y tu email de contacto. Si guardás ahora, esos dos quedan como estaban. Recargá la página para verlos.
+                </p>
               )}
 
               <label className="flex flex-col gap-1.5">
