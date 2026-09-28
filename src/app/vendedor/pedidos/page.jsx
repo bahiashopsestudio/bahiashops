@@ -387,7 +387,11 @@ function PedidoCard({ pedido, abierto, items, avanzando, onToggle, onAvanzar }) 
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <strong className="text-sm text-[#0a0a0a]">Pedido #{p.id}</strong>
+              {/* Afuera va el apodo; nombre real y teléfono, sólo en el detalle. */}
+              <span className="text-sm text-[#0a0a0a]">
+                <strong>{p.comprador_apodo || 'Comprador'}</strong>
+                <span className="text-[#0a0a0a]/50"> · Pedido #{p.id}</span>
+              </span>
               <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${estado.bg} ${estado.color}`}>
                 {estado.label}
               </span>

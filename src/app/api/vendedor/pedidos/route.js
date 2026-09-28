@@ -46,7 +46,7 @@ export async function GET() {
     .select(`
       id, estado, metodo_envio, subtotal_productos, costo_envio, total,
       comision_plataforma, turno_preferido, franja_horaria, creado_en, actualizado_en,
-      comprador_nombre, comprador_apellido, comprador_telefono, direccion_copia,
+      comprador_id, comprador_nombre, comprador_apellido, comprador_telefono, direccion_copia,
       items:pedido_items ( id, nombre, variante, cantidad, precio, foto_url ),
       direccion:direcciones ( calle, numero, piso_depto, telefono, barrio_id )
     `)
@@ -58,12 +58,36 @@ export async function GET() {
     return NextResponse.json({ error: 'No se pudieron cargar los pedidos.' }, { status: 500 });
   }
 
-  // Del comprador viaja lo que quedó congelado en el pedido (nombre, apellido,
-  // teléfono y, si el método pedía dirección, direccion_copia) más las cinco
-  // columnas de la dirección embebida. Nada más de su ficha: el select de
-  // arriba nombra cada columna.
+  // El apodo de cada comprador, para la lista. Va en una segunda consulta por
+  // la lista de ids y no embebido, para no depender de que exista una
+  // relación declarada entre pedidos.comprador_id y usuarios. Si falla, la
+  // pantalla muestra "Comprador": no es motivo para no mostrar los pedidos.
+  const idsCompradores = [...new Set((pedidos || []).map((p) => p.comprador_id).filter(Boolean))];
+  const apodos = new Map();
+
+  if (idsCompradores.length > 0) {
+    const { data: compradores, error: errorApodos } = await admin
+      .from('usuarios')
+      .select('id, nombre_usuario')
+      .in('id', idsCompradores);
+
+    if (errorApodos) {
+      console.error('No se pudieron leer los apodos de los compradores', vendedor.id, errorApodos.message);
+    }
+    for (const c of compradores || []) apodos.set(c.id, c.nombre_usuario || null);
+  }
+
+  // Del comprador viaja su apodo, lo que quedó congelado en el pedido (nombre,
+  // apellido, teléfono y, si el método pedía dirección, direccion_copia) y las
+  // cinco columnas de la dirección embebida. El comprador_id no sale de acá:
+  // sólo se usó para buscar el apodo.
+  const respuesta = (pedidos || []).map(({ comprador_id, ...pedido }) => ({
+    ...pedido,
+    comprador_apodo: apodos.get(comprador_id) || null,
+  }));
+
   return NextResponse.json({
     vendedor: { id: vendedor.id, nombre_negocio: vendedor.nombre_negocio },
-    pedidos: pedidos || [],
+    pedidos: respuesta,
   });
 }

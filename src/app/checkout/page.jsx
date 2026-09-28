@@ -10,6 +10,8 @@ import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
 import VolverAtras from '@/components/VolverAtras'
 import FormularioDireccion from '@/components/FormularioDireccion'
+import { rutaInterna } from '@/lib/rutas'
+import { normalizarTelefonoAR, separarTelefonoAR, formatearTelefonoAR } from '@/lib/telefono'
 
 const MENU_CATEGORIAS = [
   'moda', 'belleza-y-bienestar', 'joyeria-y-accesorios',
@@ -25,6 +27,44 @@ const ZONAS_CORREO = [
   { key: 'correo_4', nombre: 'Zona 4', descripcion: 'Chubut, Santa Cruz, Tierra del Fuego' },
 ]
 
+// Los tres pasos del checkout, en orden.
+const PASO_DATOS = 1
+const PASO_ENTREGA = 2
+const PASO_PAGAR = 3
+const PASOS = ['Tus datos', 'Entrega', 'Pagar']
+
+const soloDigitos = (v) => String(v ?? '').replace(/\D/g, '')
+
+// Cómo va el celular que se está escribiendo, para la caja de abajo.
+// Si es válido o no lo decide normalizarTelefonoAR; acá sólo se cuenta cuántos
+// números faltan o sobran para el mensaje. Para contar se descartan el 54 y el
+// 0 de adelante, que la regla ignora igual.
+function estadoCelular(caracteristica, numero) {
+  if (!soloDigitos(numero)) return { tipo: 'vacio' }
+
+  const crudo = soloDigitos(caracteristica) + soloDigitos(numero)
+  const normalizado = normalizarTelefonoAR(caracteristica + numero)
+
+  if (normalizado) {
+    // Si el resultado no está tal cual al final de lo que escribieron, la regla
+    // sacó un 15 del medio.
+    const saco15 = !crudo.endsWith(normalizado) && crudo.length - normalizado.length >= 2 && crudo.includes('15')
+    // Para mostrarlo partido como lo escribió la persona.
+    const caracteristicaSin0 = soloDigitos(caracteristica).replace(/^0/, '')
+    const largo = caracteristicaSin0.length >= 2 && caracteristicaSin0.length <= 4 && normalizado.startsWith(caracteristicaSin0)
+      ? caracteristicaSin0.length
+      : undefined
+    return { tipo: 'valido', telefono: normalizado, texto: formatearTelefonoAR(normalizado, largo), saco15 }
+  }
+
+  let contados = crudo
+  if (contados.startsWith('54')) contados = contados.slice(2)
+  if (contados.startsWith('0')) contados = contados.slice(1)
+
+  if (contados.length < 10) return { tipo: 'faltan', cantidad: 10 - contados.length }
+  return { tipo: 'sobran', cantidad: Math.max(contados.length - 10, 1) }
+}
+
 function CheckoutContenido() {
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -36,7 +76,20 @@ function CheckoutContenido() {
   // Firma de los items del local: cambia cuando se agrega o se saca algo.
   const firmaItems = (local?.items || []).map((it) => it.productoId).join(',')
 
-  const [paso, setPaso] = useState(1)
+  const [paso, setPaso] = useState(PASO_DATOS)
+
+  // Paso 1: los datos de quien compra. datosCuenta son los que ya están
+  // guardados y completos; el formulario se abre si falta algo o si tocan
+  // "Cambiar".
+  const [datosCuenta, setDatosCuenta] = useState(null)
+  const [editandoDatos, setEditandoDatos] = useState(false)
+  const [formNombre, setFormNombre] = useState('')
+  const [formApellido, setFormApellido] = useState('')
+  const [formCaracteristica, setFormCaracteristica] = useState('291')
+  const [formNumero, setFormNumero] = useState('')
+  const [guardandoDatos, setGuardandoDatos] = useState(false)
+  const [errorDatos, setErrorDatos] = useState('')
+
   const [direcciones, setDirecciones] = useState([])
   const [direccionElegida, setDireccionElegida] = useState(null)
   const [mostrarFormDir, setMostrarFormDir] = useState(false)
@@ -85,15 +138,50 @@ function CheckoutContenido() {
   const metodoPideDir = !!metodoElegido && metodoPideDireccion(metodoElegido)
   const cadeteriaSinCosto = metodoElegido === 'cadeteria' && costoCadeteria === null && !calculandoZona
   const correoSinZona = metodoElegido === 'correo' && !zonaCorreoElegida
-  const paso1Listo = metodoElegido && (!metodoPideDir || direccionElegida) && !cadeteriaSinCosto && !correoSinZona && !sinBarrio
+  const entregaLista = metodoElegido && (!metodoPideDir || direccionElegida) && !cadeteriaSinCosto && !correoSinZona && !sinBarrio
+
+  const celular = estadoCelular(formCaracteristica, formNumero)
+  const datosListos = !!formNombre.trim() && !!formApellido.trim() && celular.tipo === 'valido'
 
   useEffect(() => {
     async function cargar() {
       const { data: cats } = await supabase.from('categorias').select('id, nombre, slug').eq('activa', true).order('orden')
       if (cats) setCategorias(cats)
 
+      // La sesión se pide al entrar, no al final: sin cuenta no hay a quién
+      // guardarle los datos ni las direcciones. Vuelve acá mismo después de
+      // entrar, con el vendedor en la query.
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { setCargando(false); return }
+      if (!user) {
+        const aca = rutaInterna(window.location.pathname + window.location.search, '/carrito')
+        router.replace(`/login?next=${encodeURIComponent(aca)}`)
+        return
+      }
+
+      // Los datos de la propia cuenta: la policy deja leer sólo la fila propia.
+      const { data: cuenta } = await supabase
+        .from('usuarios')
+        .select('nombre, apellido, telefono')
+        .eq('id', user.id)
+        .maybeSingle()
+
+      const nombre = cuenta?.nombre?.trim() || ''
+      const apellido = cuenta?.apellido?.trim() || ''
+      const telefono = normalizarTelefonoAR(cuenta?.telefono)
+
+      setFormNombre(nombre)
+      setFormApellido(apellido)
+      if (telefono) {
+        const partes = separarTelefonoAR(telefono)
+        setFormCaracteristica(partes.caracteristica)
+        setFormNumero(partes.numero)
+      }
+
+      if (nombre && apellido && telefono) {
+        setDatosCuenta({ nombre, apellido, telefono })
+      } else {
+        setEditandoDatos(true)
+      }
 
       const { data: dirs } = await supabase.from('direcciones').select('*').eq('usuario_id', user.id).order('creada_en')
       if (dirs && dirs.length > 0) {
@@ -158,6 +246,39 @@ function CheckoutContenido() {
     setMostrarFormDir(false)
   }
 
+  // Guarda los datos del formulario en la cuenta y, si salió bien, pasa a la
+  // entrega. Si falla, el error queda arriba del botón y no se avanza.
+  async function guardarDatos() {
+    setGuardandoDatos(true)
+    setErrorDatos('')
+    try {
+      const res = await fetch('/api/cuenta/datos', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nombre: formNombre,
+          apellido: formApellido,
+          caracteristica: formCaracteristica,
+          numero: formNumero,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+
+      if (!res.ok) {
+        setErrorDatos(data.error || 'No pudimos guardar tus datos. Probá de nuevo.')
+        setGuardandoDatos(false)
+        return
+      }
+
+      setDatosCuenta({ nombre: data.nombre, apellido: data.apellido, telefono: data.telefono })
+      setEditandoDatos(false)
+      setGuardandoDatos(false)
+      setPaso(PASO_ENTREGA)
+    } catch {
+      setErrorDatos('No pudimos conectarnos. Revisá tu conexión y probá de nuevo.')
+      setGuardandoDatos(false)
+    }
+  }
+
   // Los costos de envío del vendedor. Se recargan si el servidor avisa que el
   // envío cambió mientras la persona estaba en esta pantalla.
   async function cargarVendedor() {
@@ -204,6 +325,16 @@ function CheckoutContenido() {
       // Cambió un precio o el costo de envío desde que se armó el carrito. No
       // se cobró nada: se corrige lo que hay en pantalla y la persona vuelve a
       // confirmar con los números nuevos.
+      // Al servidor le faltan nombre o teléfono (por ejemplo, se borraron en
+      // otra pestaña): de vuelta al primer paso, con el formulario abierto.
+      if (data?.codigo === 'faltan_datos') {
+        setErrorDatos(data.error || '')
+        setEditandoDatos(true)
+        setPaso(PASO_DATOS)
+        setPagando(false)
+        return
+      }
+
       if (data?.codigo === 'PRECIO_CAMBIO') {
         await aplicarCambiosDePrecio(data)
         setPagando(false)
@@ -405,11 +536,27 @@ function CheckoutContenido() {
 
   const metodoActual = metodos.find(m => m.id === metodoElegido)
   const dirElegida = direcciones.find((d) => d.id === direccionElegida)
-  const pasos = ['Entrega', 'Revisar y pagar']
+  // Estilos del paso "Tus datos": los mismos del resto del sitio.
+  const estiloTitulo = { fontFamily: 'Fraunces, serif', fontWeight: 500, fontSize: '24px', color: '#0a0a0a', letterSpacing: '-0.02em', marginBottom: '6px' }
+  const estiloParrafo = { fontFamily: 'Poppins, sans-serif', fontWeight: 300, fontSize: '14px', color: 'rgba(10,10,10,0.5)', lineHeight: 1.6 }
+  const estiloBoton = { fontFamily: "'Inter', sans-serif", fontWeight: 500, fontSize: '14px', borderRadius: '4px', padding: '14px 28px' }
+  const claseEtiqueta = 'block text-sm text-[#0a0a0a]/40 font-light mb-1.5'
+  const claseCampo = 'w-full px-4 py-3 rounded-xl border text-sm text-[#0a0a0a] focus:outline-none transition bg-white'
+  const bordeNormal = 'border-[#0a0a0a]/10 focus:border-[#0a0a0a]/30'
+  const numeroConError = celular.tipo === 'faltan' || celular.tipo === 'sobran'
+
+  function claseBotonNegro(habilitado) {
+    return `w-full transition-colors border ${
+      habilitado
+        ? 'bg-[#0a0a0a] text-white border-[#0a0a0a] hover:bg-transparent hover:text-[#0a0a0a] cursor-pointer'
+        : 'bg-[#0a0a0a]/10 text-[#0a0a0a]/20 border-transparent cursor-not-allowed'
+    }`
+  }
 
   return (
     <>
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&display=swap" />
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,100..900&family=Poppins:wght@300;400;500&display=swap" />
       <div className="min-h-screen bg-white" style={{ fontFamily: "'Inter', sans-serif" }}>
         {menuOpen && <MenuTakeover categorias={menuCats} onClose={() => setMenuOpen(false)} />}
         <Navbar onToggleMenu={() => setMenuOpen(!menuOpen)} variant="solid" />
@@ -417,28 +564,120 @@ function CheckoutContenido() {
         <div className="pt-20 pb-24 px-4 md:px-8">
           <div className="max-w-xl mx-auto">
 
-            {/* Progreso */}
-            <div className="flex items-center justify-center gap-2 mb-8">
-              {pasos.map((nombre, i) => {
+            {/* Progreso: tres barritas, la activa en azul */}
+            <div className="flex gap-2 mb-8">
+              {PASOS.map((nombre, i) => {
                 const num = i + 1
                 const activo = num === paso
                 const listo = num < paso
                 return (
-                  <div key={nombre} className="flex items-center gap-2">
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium ${
-                      listo ? 'bg-[#0a0a0a] text-white' : activo ? 'bg-[#0a0a0a] text-white' : 'border border-[#0a0a0a]/15 text-[#0a0a0a]/30'
-                    }`}>
-                      {listo ? '✓' : num}
-                    </div>
-                    <span className={`text-sm ${activo ? 'text-[#0a0a0a] font-medium' : 'text-[#0a0a0a]/30 font-light'}`}>{nombre}</span>
-                    {i < pasos.length - 1 && <div className={`w-8 h-px ${listo ? 'bg-[#0a0a0a]' : 'bg-[#0a0a0a]/10'} mx-1`} />}
+                  <div key={nombre} className="flex-1">
+                    <div
+                      className="h-1 rounded-full"
+                      style={{ backgroundColor: activo ? '#4164fe' : listo ? '#0a0a0a' : 'rgba(10,10,10,0.1)' }}
+                    />
+                    <span className={`block mt-2 text-xs ${activo ? 'text-[#0a0a0a] font-medium' : 'text-[#0a0a0a]/30 font-light'}`}>
+                      {num} · {nombre}
+                    </span>
                   </div>
                 )
               })}
             </div>
 
-            {/* ═══ PASO 1 ═══ */}
-            {paso === 1 && (
+            {/* ═══ PASO 1: TUS DATOS ═══ */}
+            {paso === PASO_DATOS && (
+              <div>
+                <h2 style={estiloTitulo}>Tus datos para esta compra</h2>
+
+                {!editandoDatos && datosCuenta ? (
+                  <>
+                    <div className="rounded-2xl border border-[#0a0a0a]/5 p-5 mt-4 mb-6 flex items-start justify-between gap-4">
+                      <div>
+                        <p className="m-0 text-sm font-medium text-[#0a0a0a]">{datosCuenta.nombre} {datosCuenta.apellido}</p>
+                        <p className="m-0 mt-1 text-sm text-[#0a0a0a]/50 font-light">{formatearTelefonoAR(datosCuenta.telefono)}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => { setErrorDatos(''); setEditandoDatos(true) }}
+                        className="text-sm text-[#0a0a0a] font-medium underline underline-offset-2 cursor-pointer shrink-0"
+                      >
+                        Cambiar
+                      </button>
+                    </div>
+
+                    <button type="button" onClick={() => setPaso(PASO_ENTREGA)} className={claseBotonNegro(true)} style={estiloBoton}>
+                      Seguir a la entrega
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p style={{ ...estiloParrafo, marginBottom: '24px' }}>
+                      Estos datos sólo los verá el vendedor y los usará para comunicarse con vos y/o completar tus pedidos.
+                    </p>
+
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                      <div>
+                        <label className={claseEtiqueta}>Nombre</label>
+                        <input type="text" value={formNombre} maxLength={60} autoComplete="given-name"
+                          onChange={(e) => setFormNombre(e.target.value)} className={`${claseCampo} ${bordeNormal}`} />
+                      </div>
+                      <div>
+                        <label className={claseEtiqueta}>Apellido</label>
+                        <input type="text" value={formApellido} maxLength={60} autoComplete="family-name"
+                          onChange={(e) => setFormApellido(e.target.value)} className={`${claseCampo} ${bordeNormal}`} />
+                      </div>
+                    </div>
+
+                    <label className={claseEtiqueta}>Celular con WhatsApp</label>
+                    <div className="flex gap-2 items-stretch">
+                      <span className="px-3 flex items-center rounded-xl border border-[#0a0a0a]/10 bg-[#F5F2EC] text-sm text-[#0a0a0a]/40 font-light shrink-0">
+                        +54 9
+                      </span>
+                      <input type="tel" inputMode="numeric" value={formCaracteristica} maxLength={5} aria-label="Característica"
+                        onChange={(e) => setFormCaracteristica(soloDigitos(e.target.value))}
+                        className={`${claseCampo} ${bordeNormal} !w-20 shrink-0 text-center`} />
+                      <input type="tel" inputMode="numeric" value={formNumero} maxLength={12} aria-label="Número" autoComplete="tel-local"
+                        onChange={(e) => setFormNumero(soloDigitos(e.target.value))}
+                        className={`${claseCampo} flex-1 min-w-0 ${numeroConError ? 'border-red-400 focus:border-red-500' : bordeNormal}`} />
+                    </div>
+                    <div className="flex justify-between mt-1.5 text-[11px] text-[#0a0a0a]/35 font-light">
+                      <span>Característica sin el 0</span>
+                      <span>Número sin el 15</span>
+                    </div>
+
+                    {/* Cómo lo va a ver el vendedor, mientras se escribe */}
+                    <div className={`mt-3 p-3 rounded-lg text-sm font-light ${
+                      celular.tipo === 'valido' ? 'bg-green-50 text-green-800'
+                        : numeroConError ? 'bg-red-50 text-red-700'
+                          : 'bg-[#0a0a0a]/[0.04] text-[#0a0a0a]/50'
+                    }`}>
+                      {celular.tipo === 'vacio' && 'Escribí tu número y te mostramos cómo lo va a ver el vendedor.'}
+                      {celular.tipo === 'faltan' && `Faltan ${celular.cantidad} ${celular.cantidad === 1 ? 'número' : 'números'}. Entre característica y número son 10.`}
+                      {celular.tipo === 'sobran' && `Sobran ${celular.cantidad} ${celular.cantidad === 1 ? 'número' : 'números'}. ¿Pusiste el 0 o el 15?`}
+                      {celular.tipo === 'valido' && `Así lo va a ver el vendedor: ${celular.texto}${celular.saco15 ? ' (le sacamos el 15)' : ''}`}
+                    </div>
+
+                    <p className="mt-4 mb-6 text-xs text-[#0a0a0a]/40 font-light">
+                      Se guardan en tu cuenta: la próxima vez ya aparecen completos.
+                    </p>
+
+                    {errorDatos && (
+                      <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
+                        {errorDatos}
+                      </div>
+                    )}
+
+                    <button type="button" disabled={!datosListos || guardandoDatos} onClick={guardarDatos}
+                      className={claseBotonNegro(datosListos && !guardandoDatos)} style={estiloBoton}>
+                      {guardandoDatos ? 'Guardando...' : 'Seguir a la entrega'}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* ═══ PASO 2: ENTREGA ═══ */}
+            {paso === PASO_ENTREGA && (
               <div>
                 <h2 className="text-xl font-black text-[#0a0a0a] tracking-tight mb-1">¿Cómo lo recibís?</h2>
                 <p className="text-sm text-[#0a0a0a]/30 font-light mb-6">Comprando en {local.vendedorNombre}.</p>
@@ -570,19 +809,19 @@ function CheckoutContenido() {
                   </div>
                 )}
 
-                <button type="button" disabled={!paso1Listo} onClick={() => setPaso(2)} className={`w-full py-3.5 rounded-full text-sm font-medium transition cursor-pointer mt-2 ${paso1Listo ? 'bg-[#0a0a0a] text-white hover:bg-[#2a2a2a]' : 'bg-[#0a0a0a]/10 text-[#0a0a0a]/20 cursor-not-allowed'}`}>
+                <button type="button" disabled={!entregaLista} onClick={() => setPaso(PASO_PAGAR)} className={`w-full py-3.5 rounded-full text-sm font-medium transition cursor-pointer mt-2 ${entregaLista ? 'bg-[#0a0a0a] text-white hover:bg-[#2a2a2a]' : 'bg-[#0a0a0a]/10 text-[#0a0a0a]/20 cursor-not-allowed'}`}>
                   Continuar
                 </button>
               </div>
             )}
 
-            {/* ═══ PASO 2 ═══ */}
-            {paso === 2 && (
+            {/* ═══ PASO 3: PAGAR ═══ */}
+            {paso === PASO_PAGAR && (
               <div>
                 <VolverAtras href="#" texto="Volver a entrega" />
-                <div className="-mt-4 mb-6" onClick={(e) => { e.preventDefault(); setPaso(1) }} />
+                <div className="-mt-4 mb-6" onClick={(e) => { e.preventDefault(); setPaso(PASO_ENTREGA) }} />
 
-                <button type="button" onClick={() => setPaso(1)} className="text-sm text-[#0a0a0a]/30 font-light mb-6 flex items-center gap-2 cursor-pointer hover:text-[#0a0a0a] transition">
+                <button type="button" onClick={() => setPaso(PASO_ENTREGA)} className="text-sm text-[#0a0a0a]/30 font-light mb-6 flex items-center gap-2 cursor-pointer hover:text-[#0a0a0a] transition">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
                   </svg>

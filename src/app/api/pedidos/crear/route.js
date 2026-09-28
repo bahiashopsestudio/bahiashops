@@ -244,27 +244,13 @@ export async function POST(request) {
 
   const comision = calculo.comision;
 
-  // 5. Obtener un token válido del vendedor (se auto-renueva si está por vencer).
-  let accessToken;
-  try {
-    accessToken = await getValidAccessToken(vendedorId, admin);
-  } catch (err) {
-    const mensajes = {
-      VENDEDOR_SIN_MP: 'Este vendedor no tiene MercadoPago conectado.',
-      TOKEN_SIN_REFRESH: 'La conexión de MercadoPago del vendedor venció y no se pudo renovar.',
-      REFRESH_RECHAZADO: 'La conexión de MercadoPago del vendedor fue revocada. Tiene que reconectar.',
-    };
-    return NextResponse.json(
-      { error: mensajes[err.message] || 'Error con la conexión de MercadoPago del vendedor.' },
-      { status: 400 }
-    );
-  }
-
-  // 5b. Los datos de contacto de quien compra, congelados en el pedido.
+  // 4b. Los datos de contacto de quien compra, congelados en el pedido.
   //
-  // Por ahora es defensivo: si una lectura falla o no aparece un teléfono, el
-  // pedido se crea igual con esos campos en null. La misma lectura de usuarios
-  // sirve después para el payer de MercadoPago.
+  // Nadie compra sin nombre, apellido y teléfono: el vendedor tiene que poder
+  // escribirle.
+  // Va antes del token del vendedor (que puede salir a MercadoPago a
+  // renovarse) y antes del INSERT: sin datos no se toca nada. La misma lectura
+  // de usuarios sirve después para el payer.
   const pideDireccion = metodoPideDireccion(metodoEnvio);
 
   const { data: comprador, error: errorComprador } = await admin
@@ -273,12 +259,19 @@ export async function POST(request) {
     .eq('id', user.id)
     .maybeSingle();
 
+  // Sin esta lectura no se puede saber si hay datos: no se crea el pedido.
   if (errorComprador) {
-    console.error('No se pudieron leer los datos del comprador', user.id, errorComprador.message);
+    console.error('Compra rechazada: no se pudieron leer los datos del comprador', user.id, errorComprador.message);
+    return NextResponse.json(
+      { error: 'No pudimos verificar tus datos. Probá de nuevo.' },
+      { status: 500 }
+    );
   }
 
   // En retiro y acordar no hay dirección verificada. Si la cuenta no tiene un
-  // teléfono usable, se busca el número en la dirección más reciente.
+  // teléfono usable, se busca el número en la dirección más reciente. Esta
+  // lectura sigue siendo de respaldo: si falla, el teléfono queda en null y
+  // la compra se frena abajo por falta de datos.
   let direccionReciente = null;
   if (!pideDireccion && !normalizarTelefonoAR(comprador?.telefono)) {
     const { data, error: errorReciente } = await admin
@@ -302,6 +295,23 @@ export async function POST(request) {
     direccionReciente,
   });
 
+  if (
+    !contactoComprador.comprador_nombre ||
+    !contactoComprador.comprador_apellido ||
+    !contactoComprador.comprador_telefono
+  ) {
+    console.warn('Compra rechazada: faltan datos del comprador', {
+      usuario: user.id,
+      nombre: !!contactoComprador.comprador_nombre,
+      apellido: !!contactoComprador.comprador_apellido,
+      telefono: !!contactoComprador.comprador_telefono,
+    });
+    return NextResponse.json(
+      { codigo: 'faltan_datos', error: 'Completá tus datos para seguir.' },
+      { status: 400 }
+    );
+  }
+
   // La cuenta no tenía teléfono y apareció uno en una dirección: se guarda
   // también en la cuenta, para la próxima.
   if (telefonoParaCuenta) {
@@ -313,6 +323,22 @@ export async function POST(request) {
     if (errorGuardarTelefono) {
       console.error('No se pudo guardar el teléfono en la cuenta', user.id, errorGuardarTelefono.message);
     }
+  }
+
+  // 5. Obtener un token válido del vendedor (se auto-renueva si está por vencer).
+  let accessToken;
+  try {
+    accessToken = await getValidAccessToken(vendedorId, admin);
+  } catch (err) {
+    const mensajes = {
+      VENDEDOR_SIN_MP: 'Este vendedor no tiene MercadoPago conectado.',
+      TOKEN_SIN_REFRESH: 'La conexión de MercadoPago del vendedor venció y no se pudo renovar.',
+      REFRESH_RECHAZADO: 'La conexión de MercadoPago del vendedor fue revocada. Tiene que reconectar.',
+    };
+    return NextResponse.json(
+      { error: mensajes[err.message] || 'Error con la conexión de MercadoPago del vendedor.' },
+      { status: 400 }
+    );
   }
 
   // 6. Anotar el pedido en la libreta (estado: pendiente, porque todavía no pagó).
@@ -413,7 +439,7 @@ export async function POST(request) {
   const payer = { email: user.email };
 
   // Nombre, apellido y teléfono son los mismos que quedaron en el pedido (paso
-  // 5b): nada de volver a leerlos. Con registro por Google puede faltar el
+  // 4b): nada de volver a leerlos. Con registro por Google puede faltar el
   // apellido; el vacío ya llega como null.
   if (contactoComprador.comprador_nombre) payer.name = contactoComprador.comprador_nombre;
   if (contactoComprador.comprador_apellido) payer.surname = contactoComprador.comprador_apellido;
