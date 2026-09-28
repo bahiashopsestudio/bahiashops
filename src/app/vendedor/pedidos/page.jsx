@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import Navbar from '@/components/Navbar';
 import MenuTakeover from '@/components/MenuTakeover';
 import VolverAtras from '@/components/VolverAtras';
+import { linkWhatsApp } from '@/lib/telefono';
 
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage'];
 
@@ -22,7 +23,13 @@ const ACCIONES = {
   pagado: {
     label: 'Empezar a preparar', siguiente: 'preparando',
     btnClass: 'bg-blue-700 hover:bg-blue-800', whatsapp: true,
-    mensajeWA: (p, franja, nombre) => `¡Hola! 👋 Soy ${nombre}. Ya estamos preparando tu pedido #${p.id}. ¡Te avisamos cuando esté por salir!`,
+    // Retiro es el único método en el que el pedido no "sale": la persona lo
+    // viene a buscar.
+    mensajeWA: (p, franja, nombre) =>
+      `¡Hola! Te escribimos de ${nombre}. Ya estamos preparando tu pedido con el código número #${p.id}. ` +
+      (p.metodo_envio === 'retiro'
+        ? '¡Te avisamos cuando esté listo para retirar!'
+        : '¡Te avisamos cuando esté por salir!'),
   },
   preparando: {
     label: 'Avisar franja horaria', siguiente: 'franja',
@@ -52,11 +59,16 @@ function tiempoRelativo(iso) {
 
 function fmt(n) { return Number(n).toLocaleString('es-AR'); }
 
+// Si el teléfono guardado no se puede convertir en un número de WhatsApp, no
+// se abre un link roto: se muestra tal como está para que el vendedor lo copie.
 function abrirWhatsApp(telefono, mensaje) {
   if (!telefono) return;
-  const tel = telefono.replace(/\D/g, '');
-  const telCompleto = tel.startsWith('54') ? tel : `54${tel}`;
-  window.open(`https://wa.me/${telCompleto}?text=${encodeURIComponent(mensaje)}`, '_blank');
+  const link = linkWhatsApp(telefono, mensaje);
+  if (!link) {
+    alert(`No pudimos armar el link de WhatsApp con el teléfono guardado. Copialo y escribile directamente: ${telefono}`);
+    return;
+  }
+  window.open(link, '_blank');
 }
 
 export default function VendedorPedidosPage() {

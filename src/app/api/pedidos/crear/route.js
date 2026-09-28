@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { getValidAccessToken } from '@/lib/mercadopago/tokens';
 import { SITIO_URL } from '@/lib/sitio';
-import { calcularPedido } from '@/lib/precioPedido';
+import { calcularPedido, metodoPideDireccion } from '@/lib/precioPedido';
 
 export async function POST(request) {
   // 1. ¿Quién está comprando? (necesitamos su sesión)
@@ -124,11 +124,17 @@ export async function POST(request) {
   //
   // Una dirección inexistente y una ajena reciben la misma respuesta, para que
   // esto no sirva para averiguar qué ids existen.
+  //
+  // Si el método no usa dirección (retiro, acordar), el direccionId que llegue
+  // se ignora y el pedido queda con direccion_id null: el vendedor no tiene por
+  // qué ver la dirección de alguien que retira o coordina aparte.
   let direccionIdVerificada = null;
   // El barrio sale de la misma lectura: hace falta para calcular la cadetería.
   let barrioDireccion = null;
 
-  if (direccionId !== null && direccionId !== undefined && direccionId !== '') {
+  const hayDireccionId = direccionId !== null && direccionId !== undefined && direccionId !== '';
+
+  if (hayDireccionId && metodoPideDireccion(metodoEnvio)) {
     const idNumerico = Number(direccionId);
 
     if (!Number.isInteger(idNumerico) || idNumerico <= 0) {

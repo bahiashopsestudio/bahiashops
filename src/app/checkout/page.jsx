@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { idsDisponibles, itemsNoDisponibles } from '@/lib/disponibilidad'
-import { metodosOfrecidos } from '@/lib/precioPedido'
+import { metodosOfrecidos, metodoPideDireccion } from '@/lib/precioPedido'
 import { useCarrito } from '@/context/CarritoContext'
 import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
@@ -82,7 +82,7 @@ function CheckoutContenido() {
   const subtotal = subtotalLocal(vendedorId)
   const total = subtotal + costoEnvio
 
-  const metodoPideDir = metodoElegido === 'cadeteria' || metodoElegido === 'correo'
+  const metodoPideDir = !!metodoElegido && metodoPideDireccion(metodoElegido)
   const cadeteriaSinCosto = metodoElegido === 'cadeteria' && costoCadeteria === null && !calculandoZona
   const correoSinZona = metodoElegido === 'correo' && !zonaCorreoElegida
   const paso1Listo = metodoElegido && (!metodoPideDir || direccionElegida) && !cadeteriaSinCosto && !correoSinZona && !sinBarrio
@@ -183,7 +183,9 @@ function CheckoutContenido() {
           vendedorId: local.vendedorId,
           items: local.items,
           metodoEnvio: metodoElegido,
-          direccionId: direccionElegida,
+          // Retiro y acordar no usan dirección: no se manda. El servidor igual
+          // la descarta si llega.
+          direccionId: metodoPideDir ? direccionElegida : null,
           turnoPreferido: turno,
           zonaCorreo: metodoElegido === 'correo' ? zonaCorreoElegida : null,
           costoEnvio,
@@ -605,7 +607,7 @@ function CheckoutContenido() {
                   <div className="font-medium text-sm text-[#0a0a0a] mb-2">Entrega</div>
                   <p className="text-sm text-[#0a0a0a]/50 font-light">{metodoActual?.label}</p>
                   {metodoActual?.pideTurno && <p className="text-xs text-[#0a0a0a]/30 font-light mt-1">Preferencia: {turno.toLowerCase()}</p>}
-                  {dirElegida && (
+                  {metodoPideDir && dirElegida && (
                     <p className="text-xs text-[#0a0a0a]/40 font-light mt-2">
                       {dirElegida.calle} {dirElegida.numero}{dirElegida.piso_depto ? `, ${dirElegida.piso_depto}` : ''} · Tel. {dirElegida.telefono}
                     </p>

@@ -18,6 +18,14 @@ export const ZONAS_CORREO_VALIDAS = ['correo_1', 'correo_2', 'correo_3', 'correo
 
 export const METODOS_SIN_COSTO = ['retiro', 'acordar']
 
+// Si el método necesita una dirección de entrega. Es la misma regla que aplica
+// calcularEnvio: los métodos sin costo no piden dirección. La usan el servidor
+// (para no guardar una dirección que el método no usa) y el checkout (para no
+// mandarla), así que no hay una segunda lista que se desfase.
+export function metodoPideDireccion(metodoEnvio) {
+  return !METODOS_SIN_COSTO.includes(metodoEnvio)
+}
+
 // Los únicos métodos que el checkout sabe ofrecer.
 //
 // 'metodos_entrega_default' guarda además otros valores que la pantalla no
@@ -98,7 +106,7 @@ function calcularEnvio({ vendedor, metodoEnvio, hayDireccion, zonaCadeteria, zon
     return rechazo(400, 'METODO_INVALIDO', 'Ese método de entrega no está disponible para esta tienda.')
   }
 
-  if (METODOS_SIN_COSTO.includes(metodoEnvio)) {
+  if (!metodoPideDireccion(metodoEnvio)) {
     return { costo: 0 }
   }
 

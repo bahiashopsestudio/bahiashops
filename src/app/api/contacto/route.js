@@ -4,6 +4,17 @@
 import { NextResponse } from 'next/server';
 import { EMAIL_NOTIFICACIONES, REMITENTE_NO_REPLY } from '@/lib/contacto';
 
+// Lo que escribe la persona va adentro del HTML del mail: sin escapar, podría
+// meter etiquetas o links propios en nuestra casilla.
+function escaparHtml(texto) {
+  return String(texto)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export async function POST(request) {
   const { email, mensaje } = await request.json();
 
@@ -29,9 +40,9 @@ export async function POST(request) {
         html: `
           <div style="font-family: sans-serif; max-width: 500px;">
             <h2 style="color: #4164fe;">Nuevo mensaje de contacto</h2>
-            <p><strong>De:</strong> ${email}</p>
+            <p><strong>De:</strong> ${escaparHtml(email)}</p>
             <hr style="border: none; border-top: 1px solid #eee; margin: 16px 0;" />
-            <p style="white-space: pre-wrap;">${mensaje}</p>
+            <p style="white-space: pre-wrap;">${escaparHtml(mensaje)}</p>
           </div>
         `,
       }),
