@@ -14,10 +14,14 @@ const ESTADOS = {
   pendiente:  { label: 'Esperando pago',  color: 'text-amber-700',   bg: 'bg-amber-100',   orden: 0 },
   pagado:     { label: 'Pagado',           color: 'text-emerald-700', bg: 'bg-emerald-100',  orden: 1 },
   rechazado:  { label: 'Pago rechazado',   color: 'text-red-600',     bg: 'bg-red-50',       orden: -1 },
+  cancelado:  { label: 'Cancelado',        color: 'text-red-600',     bg: 'bg-red-50',       orden: -1 },
   preparando: { label: 'Preparando',       color: 'text-blue-700',    bg: 'bg-blue-50',      orden: 2 },
   franja:     { label: 'Franja horaria avisada', color: 'text-violet-600',  bg: 'bg-violet-100',   orden: 3 },
   por_salir:  { label: 'Por salir',        color: 'text-amber-600',   bg: 'bg-amber-50',     orden: 4 },
   despachado: { label: 'Despachado',       color: 'text-emerald-700', bg: 'bg-emerald-100',  orden: 5 },
+  // Lo escribe sólo el webhook cuando el pago vuelve como reembolso o
+  // contracargo. No tiene entrada en ACCIONES: no se muestra ningún botón.
+  reembolsado: { label: 'Cancelado · dinero devuelto', color: 'text-red-600', bg: 'bg-red-50', orden: -1 },
 };
 
 // Cómo le llega el pedido a quien compra, para elegir el texto del WhatsApp:
@@ -276,7 +280,9 @@ export default function VendedorPedidosPage() {
   }
 
   const activos = pedidos.filter(p => ['pagado', 'preparando', 'franja', 'por_salir'].includes(p.estado));
-  const completados = pedidos.filter(p => ['despachado', 'rechazado', 'pendiente'].includes(p.estado));
+  // 'cancelado' y 'reembolsado' van al historial: el pedido terminó, no hay
+  // nada que preparar, pero no puede desaparecer del panel.
+  const completados = pedidos.filter(p => ['despachado', 'rechazado', 'pendiente', 'cancelado', 'reembolsado'].includes(p.estado));
 
   return (
     <>

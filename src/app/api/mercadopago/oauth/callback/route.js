@@ -79,6 +79,18 @@ export async function GET(request) {
     return conError(request, 'canje_rechazado');
   }
 
+  // Sin el id de la cuenta de MercadoPago no se guarda nada: el webhook lo usa
+  // para confirmar que un pago lo cobró este vendedor, y sin él ninguna de
+  // sus ventas se marcaría como pagada. Mejor que reintente ahora.
+  const mpUserId = datos?.user_id === undefined || datos?.user_id === null
+    ? ''
+    : String(datos.user_id).trim();
+
+  if (!mpUserId) {
+    console.error('MercadoPago no devolvió user_id al conectar el vendedor', vendedor.id);
+    return conError(request, 'canje_rechazado');
+  }
+
   // 3. Guardar las llaves con la "llave maestra" (service role).
   const admin = createAdminClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -91,7 +103,7 @@ export async function GET(request) {
     .from('mercadopago_cuentas')
     .upsert({
       vendedor_id: vendedor.id,
-      mp_user_id: String(datos.user_id),
+      mp_user_id: mpUserId,
       access_token: datos.access_token,
       refresh_token: datos.refresh_token,
       public_key: datos.public_key,

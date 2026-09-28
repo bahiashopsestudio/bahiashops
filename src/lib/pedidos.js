@@ -18,11 +18,20 @@ export const TRANSICIONES = {
   preparando: 'franja',
   franja: 'por_salir',
   por_salir: 'despachado',
+  // Estado final: la plata volvió al comprador (reembolso del vendedor o
+  // contracargo). Desde acá no se avanza a ningún paso.
+  reembolsado: null,
 }
 
 // Los estados que sólo escribe el webhook. Están acá para poder dar un error
 // que explique por qué, en vez de un "transición inválida" seco.
 export const ESTADOS_DE_PAGO = ['pendiente', 'pagado', 'rechazado', 'cancelado']
+
+// El pago guardado en el pedido volvió como refunded o charged_back. También
+// lo escribe sólo el webhook, pero va aparte de ESTADOS_DE_PAGO: esos son los
+// estados en los que un pedido todavía admite un pago, y a un pedido
+// reembolsado no le entra ninguno.
+export const ESTADO_REEMBOLSADO = 'reembolsado'
 
 // El único estado en el que se pide la franja horaria.
 export const ESTADO_PIDE_FRANJA = 'franja'
@@ -47,6 +56,15 @@ export function validarAvance({ pedido, vendedorId, destino }) {
 
   const siguiente = TRANSICIONES[pedido.estado]
 
+  if (pedido.estado === ESTADO_REEMBOLSADO) {
+    return {
+      ok: false,
+      motivo: 'reembolsado',
+      status: 409,
+      error: 'Este pedido se canceló y el dinero volvió al comprador: no hay que prepararlo ni entregarlo.',
+    }
+  }
+
   if (!siguiente) {
     return {
       ok: false,
@@ -61,7 +79,7 @@ export function validarAvance({ pedido, vendedorId, destino }) {
   }
 
   if (destino !== siguiente) {
-    if (ESTADOS_DE_PAGO.includes(destino)) {
+    if (ESTADOS_DE_PAGO.includes(destino) || destino === ESTADO_REEMBOLSADO) {
       return {
         ok: false,
         motivo: 'estado_de_pago',

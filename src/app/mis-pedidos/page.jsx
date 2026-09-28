@@ -19,6 +19,7 @@ const ESTADOS = {
   despachado: { label: 'Despachado', color: 'bg-green-50 text-green-700' },
   cancelado: { label: 'Cancelado', color: 'bg-red-50 text-[#dc2626]' },
   rechazado: { label: 'Rechazado', color: 'bg-red-50 text-[#dc2626]' },
+  reembolsado: { label: 'Cancelado · dinero devuelto', color: 'bg-red-50 text-[#dc2626]' },
 }
 
 export default function MisPedidosPage() {
