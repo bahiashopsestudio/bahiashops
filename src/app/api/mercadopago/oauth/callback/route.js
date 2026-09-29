@@ -37,10 +37,12 @@ export async function GET(request) {
 
   if (!user) {
     // Perdió la cookie mientras estaba en MercadoPago. Mandarlo al perfil
-    // solo lo rebotaría al login, así que va derecho ahí, con vuelta al perfil.
-    const url = new URL('/login', request.url);
+    // solo lo rebotaría a /entrar, así que va derecho ahí, con vuelta al
+    // perfil. Ya tiene cuenta: se abre "Ya tengo cuenta".
+    const url = new URL('/entrar', request.url);
     url.searchParams.set('next', PERFIL);
     url.searchParams.set('motivo', 'sesion_mp');
+    url.searchParams.set('modo', 'cuenta');
     return NextResponse.redirect(url);
   }
 

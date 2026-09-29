@@ -145,7 +145,7 @@ export default function FavoritosPage() {
               <div className="text-center py-20">
                 <p className="text-[#0a0a0a]/30 font-light mb-6">Iniciá sesión para ver tus productos guardados</p>
                 <Link
-                  href="/login"
+                  href="/entrar?next=%2Ffavoritos"
                   className="inline-block bg-[#0a0a0a] text-white border border-[#0a0a0a] hover:bg-transparent hover:text-[#0a0a0a] transition-colors"
                   style={{ fontFamily: "'Inter', sans-serif", fontWeight: 500, fontSize: '14px', borderRadius: '4px', padding: '14px 28px' }}
                 >

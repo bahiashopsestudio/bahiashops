@@ -28,9 +28,10 @@ export default function NuevoVendedorPage() {
       const { data } = await supabase.from('categorias').select('id, nombre, slug').eq('activa', true).order('orden')
       if (data) setCategorias(data)
 
+      // Sin sesión no hay alta posible: a /entrar, con vuelta acá mismo.
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
-        setVerificando(false)
+        router.replace('/entrar?next=%2Fvendedor%2Fnuevo')
         return
       }
 

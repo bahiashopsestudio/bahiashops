@@ -42,7 +42,7 @@ export default function MisPedidosPage() {
       if (cats) setCategorias(cats)
 
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
+      if (!user) { router.replace('/entrar?next=%2Fmis-pedidos'); return }
 
       // El historial se arma con lo que quedó congelado al comprar, no con lo
       // que exista hoy: pedido_items guarda el nombre, el precio y la foto de

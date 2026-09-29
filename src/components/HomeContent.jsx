@@ -207,7 +207,7 @@ export default function HomeContent({ categorias, recientes, elegidos, vendedore
               >
                 ¿Querés encontrar productos en Bahía?{' '}
                 <Link
-                  href="/registro"
+                  href="/entrar"
                   style={{
                     fontFamily: 'Inter, sans-serif',
                     fontWeight: 400,

@@ -154,7 +154,7 @@ function CheckoutContenido() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
         const aca = rutaInterna(window.location.pathname + window.location.search, '/carrito')
-        router.replace(`/login?next=${encodeURIComponent(aca)}`)
+        router.replace(`/entrar?next=${encodeURIComponent(aca)}`)
         return
       }
 

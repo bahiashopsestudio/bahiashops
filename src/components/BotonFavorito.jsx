@@ -34,7 +34,9 @@ export default function BotonFavorito({ productoId, className = '', onToggle }) 
     e.stopPropagation()
 
     if (!userId) {
-      window.location.href = '/login'
+      // Vuelve a la misma página después de entrar.
+      const aca = window.location.pathname + window.location.search
+      window.location.href = `/entrar?next=${encodeURIComponent(aca)}`
       return
     }
 

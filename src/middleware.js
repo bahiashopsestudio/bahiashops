@@ -11,6 +11,8 @@ const COMING_SOON = false
 // Rutas que siempre quedan accesibles (sin login)
 const PUBLIC_PATHS = [
   '/proximamente',
+  '/entrar',
+  '/bienvenida',
   '/login',
   '/registro',
   '/auth',

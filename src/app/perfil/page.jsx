@@ -32,7 +32,7 @@ export default function PerfilPage() {
       if (cats) setCategorias(cats)
 
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
+      if (!user) { router.replace('/entrar?next=%2Fperfil'); return }
       setUser(user)
 
       const { data: perfil } = await supabase

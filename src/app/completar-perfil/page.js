@@ -28,7 +28,7 @@ export default function CompletarPerfilPage() {
       if (cats) setCategorias(cats)
 
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
+      if (!user) { router.replace('/entrar?next=%2Fcompletar-perfil'); return }
 
       const { data: perfil } = await supabase
         .from('perfiles')

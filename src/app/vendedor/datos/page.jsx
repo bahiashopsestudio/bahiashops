@@ -108,7 +108,7 @@ export default function MisDatosVendedorPage() {
       if (slls) setSellos(slls)
 
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
+      if (!user) { router.replace('/entrar?next=%2Fvendedor%2Fdatos'); return }
 
       const { data: vendedor } = await supabase
         .from('vendedores')

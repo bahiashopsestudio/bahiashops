@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { usePathname, useRouter } from 'next/navigation'
 import Buscador from '@/components/Buscador'
 import { createClient } from '@/lib/supabase/client'
 import { useCarrito } from '@/context/CarritoContext'
@@ -33,6 +34,27 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
   const [todasCategorias, setTodasCategorias] = useState([])
   const [todasCapsulas, setTodasCapsulas] = useState([])
   const [usuario, setUsuario] = useState(null)
+
+  // Ícono de cuenta: con sesión, al perfil; sin sesión, a /entrar con vuelta
+  // a la página donde está la persona. El href lleva sólo la ruta (lo mismo
+  // en el servidor y en el navegador); al tocarlo se le suma la query actual,
+  // para no perder, por ejemplo, el ?vendedor= del checkout.
+  const router = useRouter()
+  const pathname = usePathname()
+  // En /entrar y /bienvenida no se pasa next: volvería a la misma puerta.
+  const enEntrada = pathname?.startsWith('/entrar') || pathname?.startsWith('/bienvenida')
+
+  function entrarDesde(ruta) {
+    return enEntrada || !ruta || ruta === '/' ? '/entrar' : `/entrar?next=${encodeURIComponent(ruta)}`
+  }
+
+  const hrefCuenta = usuario ? '/perfil' : entrarDesde(pathname)
+
+  function irACuenta(e) {
+    if (usuario) return
+    e.preventDefault()
+    router.push(entrarDesde(window.location.pathname + window.location.search))
+  }
 
   const isSolid = variant === 'solid'
 
@@ -193,7 +215,7 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
                 </span>
               )}
             </Link>
-            <Link href="/perfil" className={`${iconColorClass} transition-colors`} aria-label="Perfil">
+            <Link href={hrefCuenta} onClick={irACuenta} className={`${iconColorClass} transition-colors`} aria-label="Perfil">
               <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0" />
               </svg>
@@ -442,7 +464,7 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
               </span>
             )}
           </Link>
-          <Link href="/perfil" className="w-7 h-7 rounded-full overflow-hidden shrink-0 flex items-center justify-center bg-[#0a0a0a] text-white text-xs font-medium">
+          <Link href={hrefCuenta} onClick={irACuenta} className="w-7 h-7 rounded-full overflow-hidden shrink-0 flex items-center justify-center bg-[#0a0a0a] text-white text-xs font-medium">
             {avatarUrl ? (
               <img src={avatarUrl} alt="Perfil" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
             ) : (
@@ -518,7 +540,7 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
             </svg>
             <span className="text-[10px] font-light">Favoritos</span>
           </Link>
-          <Link href="/perfil" className="flex flex-col items-center gap-0.5 text-[#0a0a0a]/40 hover:text-[#0a0a0a] transition">
+          <Link href={hrefCuenta} onClick={irACuenta} className="flex flex-col items-center gap-0.5 text-[#0a0a0a]/40 hover:text-[#0a0a0a] transition">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0" />
             </svg>

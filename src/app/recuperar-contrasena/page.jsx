@@ -70,7 +70,7 @@ export default function RecuperarContrasenaPage() {
                 <p className="text-xs text-[#0a0a0a]/20 font-light mb-8">
                   Revisá tu casilla (y la carpeta de spam). El enlace expira en 1 hora.
                 </p>
-                <Link href="/login" className="inline-block bg-[#0a0a0a] text-white px-8 py-3.5 rounded-full text-sm font-medium hover:bg-[#2a2a2a] transition">
+                <Link href="/entrar?modo=cuenta" className="inline-block bg-[#0a0a0a] text-white px-8 py-3.5 rounded-full text-sm font-medium hover:bg-[#2a2a2a] transition">
                   Volver a iniciar sesión
                 </Link>
               </div>
@@ -114,7 +114,7 @@ export default function RecuperarContrasenaPage() {
                 </div>
 
                 <p className="text-center text-sm text-[#0a0a0a]/30 font-light mt-6">
-                  <Link href="/login" className="text-[#0a0a0a] font-medium underline underline-offset-2">
+                  <Link href="/entrar?modo=cuenta" className="text-[#0a0a0a] font-medium underline underline-offset-2">
                     ← Volver a iniciar sesión
                   </Link>
                 </p>
