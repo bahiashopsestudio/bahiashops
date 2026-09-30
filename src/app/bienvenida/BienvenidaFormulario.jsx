@@ -10,11 +10,10 @@ const estiloParrafo = { fontFamily: 'Poppins, sans-serif', fontWeight: 300, font
 const estiloBoton = { fontFamily: "'Inter', sans-serif", fontWeight: 500, fontSize: '14px', borderRadius: '4px', padding: '14px 24px' }
 const claseCampo = 'w-full px-4 py-3 rounded-xl border border-[#0a0a0a]/10 text-sm text-[#0a0a0a] focus:outline-none focus:border-[#4164fe]/60 transition bg-white'
 
-export default function BienvenidaFormulario({ next, apodoInicial, imagenInicial, faltantes }) {
+export default function BienvenidaFormulario({ next, apodoInicial, faltantes }) {
   const router = useRouter()
 
   const [apodo, setApodo] = useState(apodoInicial)
-  const [imagen, setImagen] = useState(imagenInicial)
   const [nombre, setNombre] = useState(faltantes?.nombre || '')
   const [apellido, setApellido] = useState(faltantes?.apellido || '')
   const [guardando, setGuardando] = useState(false)
@@ -36,7 +35,8 @@ export default function BienvenidaFormulario({ next, apodoInicial, imagenInicial
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           apodo: validacion.apodo,
-          imagen_perfil: imagen,
+          // Por ahora la única imagen es el dibujo del apodo.
+          imagen_perfil: 'dibujo',
           ...(faltantes?.pedirNombre ? { nombre } : {}),
           ...(faltantes?.pedirApellido ? { apellido } : {}),
           marcarBienvenida: true,
@@ -67,12 +67,7 @@ export default function BienvenidaFormulario({ next, apodoInicial, imagenInicial
           En reseñas y comentarios aparecés con un apodo, nunca con tu nombre real. Elegimos este para vos, podés cambiarlo:
         </p>
 
-        <EditorApodo
-          apodoInicial={apodoInicial}
-          imagen={imagen}
-          onCambiarApodo={setApodo}
-          onCambiarImagen={setImagen}
-        />
+        <EditorApodo apodoInicial={apodoInicial} onCambiarApodo={setApodo} />
 
         {faltantes && (
           <div className="mt-6 rounded-lg border border-[#4164fe]/15 p-5" style={{ backgroundColor: '#eef3ff' }}>

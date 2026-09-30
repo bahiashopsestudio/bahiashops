@@ -1,14 +1,13 @@
 'use client'
 
-// El bloque para elegir apodo e imagen: lo usan la bienvenida y el perfil.
-// No guarda nada: le avisa a quien lo usa qué apodo e imagen quedaron
-// elegidos, y quien lo usa guarda con /api/cuenta/apodo.
+// El bloque para elegir apodo: lo usan la bienvenida y el perfil. No guarda
+// nada: le avisa a quien lo usa qué apodo quedó elegido, y quien lo usa
+// guarda con /api/cuenta/apodo. La imagen es siempre el dibujo del apodo: por
+// ahora no hay nada que elegir.
 //
 // Props:
 //   apodoInicial        el apodo que ya tiene la cuenta (el que asignó la base)
-//   imagen              'dibujo' | 'foto'
 //   onCambiarApodo(a)   cada vez que cambia el apodo elegido
-//   onCambiarImagen(i)  cada vez que cambia la imagen elegida
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -37,16 +36,7 @@ function IconoLapiz() {
   )
 }
 
-function IconoFoto() {
-  return (
-    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M6.83 6.18A2.31 2.31 0 0 1 5.2 7.25c-.38.05-.76.11-1.13.17C3 7.6 2.25 8.52 2.25 9.57V18A2.25 2.25 0 0 0 4.5 20.25h15A2.25 2.25 0 0 0 21.75 18V9.57c0-1.05-.75-1.97-1.82-2.15a47.9 47.9 0 0 0-1.13-.17 2.31 2.31 0 0 1-1.64-1.07l-.82-1.31a2.19 2.19 0 0 0-1.74-1.04 48.8 48.8 0 0 0-5.2 0 2.19 2.19 0 0 0-1.74 1.04l-.82 1.31Z" />
-      <circle cx="12" cy="13" r="3.75" />
-    </svg>
-  )
-}
-
-export default function EditorApodo({ apodoInicial = '', imagen = 'dibujo', onCambiarApodo, onCambiarImagen }) {
+export default function EditorApodo({ apodoInicial = '', onCambiarApodo }) {
   const supabase = createClient()
 
   const [azar, setAzar] = useState(apodoInicial)
@@ -87,11 +77,6 @@ export default function EditorApodo({ apodoInicial = '', imagen = 'dibujo', onCa
     setPropio(valor)
     avisar(valor)
   }
-
-  const opcionesImagen = [
-    { id: 'dibujo', titulo: 'El dibujo de mi apodo', ayuda: 'Cambia si cambiás de apodo', habilitada: true },
-    { id: 'foto', titulo: 'Subir una foto', ayuda: 'La van a ver junto a tu apodo', habilitada: false },
-  ]
 
   return (
     <div>
@@ -135,35 +120,6 @@ export default function EditorApodo({ apodoInicial = '', imagen = 'dibujo', onCa
             </p>
           </div>
         )}
-      </div>
-
-      {/* Imagen */}
-      <p className="mt-6 mb-2 text-sm text-[#0a0a0a]/50 font-light">Tu imagen</p>
-      <div className="grid grid-cols-2 gap-3">
-        {opcionesImagen.map((op) => {
-          const elegida = imagen === op.id
-          return (
-            <button key={op.id} type="button" disabled={!op.habilitada}
-              onClick={() => op.habilitada && onCambiarImagen?.(op.id)}
-              aria-pressed={elegida}
-              className={`relative text-left bg-white rounded-lg p-4 border-2 transition-colors ${
-                elegida ? 'border-[#4164fe]' : 'border-[#0a0a0a]/8'
-              } ${op.habilitada ? 'cursor-pointer hover:border-[#4164fe]/50' : 'cursor-not-allowed opacity-60'}`}>
-              {!op.habilitada && (
-                <span className="absolute top-2 right-2 text-[10px] font-medium text-[#4164fe] bg-[#4164fe]/10 px-2 py-0.5 rounded-full">
-                  Próximamente
-                </span>
-              )}
-              <div className="mb-3 h-10 flex items-center">
-                {op.id === 'dibujo'
-                  ? <AvatarApodo apodo={apodoElegido || azar} tamano={40} />
-                  : <span className="w-10 h-10 rounded-full bg-[#0a0a0a]/5 text-[#0a0a0a]/40 inline-flex items-center justify-center"><IconoFoto /></span>}
-              </div>
-              <span className="block text-sm font-medium text-[#0a0a0a]" style={{ fontFamily: "'Inter', sans-serif" }}>{op.titulo}</span>
-              <span className="block mt-0.5 text-[12px] text-[#0a0a0a]/45 font-light">{op.ayuda}</span>
-            </button>
-          )
-        })}
       </div>
     </div>
   )

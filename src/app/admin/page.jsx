@@ -128,6 +128,71 @@ function Tarjeta({ href, disabled, icono, iconoFondo, iconoColor, titulo, desc, 
   return <Link href={href}>{contenido}</Link>
 }
 
+function IconoVoto() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
+    </svg>
+  )
+}
+
+// "Qué quiere la gente": los resultados de las preguntas "¿te gustaría…?".
+// No lleva a otra página: los números se ven acá mismo.
+function TarjetaVotos({ preguntas, error }) {
+  return (
+    <div
+      style={{
+        backgroundColor: '#ffffff',
+        borderRadius: '10px',
+        padding: '28px',
+        border: '1px solid rgba(10,10,10,0.06)',
+        minHeight: '160px',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      <div
+        style={{
+          width: '36px', height: '36px', borderRadius: '8px',
+          backgroundColor: '#e1e7ff', color: '#4164fe',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px',
+        }}
+      >
+        <IconoVoto />
+      </div>
+
+      <p style={{ fontFamily: "'Inter', sans-serif", fontSize: '15px', fontWeight: 500, color: '#0a0a0a', marginBottom: '6px' }}>
+        Qué quiere la gente
+      </p>
+
+      {error ? (
+        <p style={{ fontFamily: "'Inter', sans-serif", fontSize: '12px', fontWeight: 300, color: '#cc152b', lineHeight: 1.5 }}>
+          {error}
+        </p>
+      ) : preguntas.length === 0 ? (
+        <p style={{ fontFamily: "'Inter', sans-serif", fontSize: '12px', fontWeight: 300, color: 'rgba(10,10,10,0.5)', lineHeight: 1.5 }}>
+          No hay preguntas activas.
+        </p>
+      ) : (
+        preguntas.map((p) => (
+          <div key={p.id} style={{ marginTop: '10px' }}>
+            <p style={{ fontFamily: "'Inter', sans-serif", fontSize: '12px', fontWeight: 300, color: 'rgba(10,10,10,0.5)', lineHeight: 1.5 }}>
+              {p.texto}
+            </p>
+            <p style={{ fontFamily: "'Inter', sans-serif", fontSize: '13px', fontWeight: 400, color: '#0a0a0a', marginTop: '4px' }}>
+              <strong style={{ fontWeight: 600 }}>{p.si}</strong> Sí
+              <span style={{ color: 'rgba(10,10,10,0.25)' }}> · </span>
+              <strong style={{ fontWeight: 600 }}>{p.no}</strong> No
+              <span style={{ color: 'rgba(10,10,10,0.25)' }}> · </span>
+              <span style={{ color: 'rgba(10,10,10,0.5)' }}>{p.total} en total</span>
+            </p>
+          </div>
+        ))
+      )}
+    </div>
+  )
+}
+
 export default function AdminDashboard() {
   const [esAdmin, setEsAdmin] = useState(null)
   const [cargando, setCargando] = useState(true)
@@ -138,6 +203,8 @@ export default function AdminDashboard() {
   const [errorConteo, setErrorConteo] = useState('')
   const [tesorosActivos, setTesorosActivos] = useState(0)
   const [ideasPendientes, setIdeasPendientes] = useState(0)
+  const [votos, setVotos] = useState([])
+  const [errorVotos, setErrorVotos] = useState('')
 
   const menuCats = MENU_CATEGORIAS.map((s) => categorias.find((c) => c.slug === s)).filter(Boolean)
 
@@ -205,6 +272,18 @@ export default function AdminDashboard() {
       if (resIdeas.ok) {
         const { ideas } = await resIdeas.json()
         setIdeasPendientes(ideas?.length || 0)
+      }
+
+      // Resultados de las preguntas "¿te gustaría…?". La tabla está cerrada al
+      // navegador: los cuenta la API de admin con service role.
+      try {
+        const resVotos = await fetch('/api/admin/votos')
+        const datosVotos = await resVotos.json()
+        if (!resVotos.ok) throw new Error(datosVotos.error || 'respuesta ' + resVotos.status)
+        setVotos(datosVotos.preguntas || [])
+      } catch (err) {
+        console.error('No se pudieron cargar los votos:', err)
+        setErrorVotos('No pudimos cargar los votos.')
       }
 
       setCargando(false)
@@ -327,6 +406,7 @@ export default function AdminDashboard() {
               badgeTipo="gris"
               flecha="Ver ideas →"
             />
+            <TarjetaVotos preguntas={votos} error={errorVotos} />
           </div>
         </div>
       </div>

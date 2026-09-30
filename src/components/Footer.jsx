@@ -3,6 +3,7 @@
 
 import Link from 'next/link'
 import { EMAIL_ARREPENTIMIENTO, EMAIL_CONTACTO } from '@/lib/contacto'
+import { FONDO_BAHIA, CELESTE_BAHIA } from '@/lib/coloresBahia'
 
 export default function Footer() {
   return (
@@ -15,8 +16,8 @@ export default function Footer() {
         className="w-full px-4 md:px-8 pt-15 pb-32"
         style={{
           fontFamily: "'Inter', sans-serif",
-          backgroundColor: '#015444',
-          color: '#9cc3ea',
+          backgroundColor: FONDO_BAHIA,
+          color: CELESTE_BAHIA,
         }}
       >
       <div className="max-w-3xl mx-auto">

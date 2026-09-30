@@ -1,5 +1,5 @@
 // La bienvenida: la primera vez que entra una cuenta nueva, antes de seguir a
-// next. Acá elige cómo la van a ver (apodo e imagen) y, si faltan, completa
+// next. Acá elige cómo la van a ver (su apodo) y, si faltan, completa
 // nombre y apellido. Al tocar "Listo, seguir" se marca bienvenida_vista_en y
 // no vuelve a aparecer.
 
@@ -46,7 +46,7 @@ export default async function BienvenidaPage({ searchParams }) {
 
   const { data: cuenta } = await supabase
     .from('usuarios')
-    .select('nombre, apellido, nombre_usuario, imagen_perfil, bienvenida_vista_en')
+    .select('nombre, apellido, nombre_usuario, bienvenida_vista_en')
     .eq('id', user.id)
     .maybeSingle()
 
@@ -60,7 +60,6 @@ export default async function BienvenidaPage({ searchParams }) {
       <BienvenidaFormulario
         next={next}
         apodoInicial={cuenta?.nombre_usuario || ''}
-        imagenInicial={cuenta?.imagen_perfil === 'foto' ? 'foto' : 'dibujo'}
         faltantes={datosFaltantes(cuenta?.nombre, cuenta?.apellido)}
       />
     </>

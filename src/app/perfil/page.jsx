@@ -8,6 +8,7 @@ import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
 import AvatarApodo from '@/components/AvatarApodo'
 import EditorApodo from '@/components/EditorApodo'
+import PreguntaFuncion from '@/components/PreguntaFuncion'
 import { validarApodo, avisarApodoCambiado } from '@/lib/apodos'
 
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage']
@@ -20,7 +21,6 @@ export default function PerfilPage() {
   // "Cambiar apodo": el mismo bloque de la bienvenida.
   const [editandoApodo, setEditandoApodo] = useState(false)
   const [apodoElegido, setApodoElegido] = useState('')
-  const [imagenElegida, setImagenElegida] = useState('dibujo')
   const [guardandoApodo, setGuardandoApodo] = useState(false)
   const [errorApodo, setErrorApodo] = useState('')
   const [vendedorSlug, setVendedorSlug] = useState(null)
@@ -47,7 +47,7 @@ export default function PerfilPage() {
       // La propia fila de usuarios: la policy deja leer sólo la de uno.
       const { data: cuenta } = await supabase
         .from('usuarios')
-        .select('nombre, apellido, nombre_usuario, imagen_perfil, es_admin')
+        .select('nombre, apellido, nombre_usuario, es_admin')
         .eq('id', user.id)
         .maybeSingle()
       setCuenta(cuenta)
@@ -77,7 +77,6 @@ export default function PerfilPage() {
 
   function abrirEditorApodo() {
     setApodoElegido(cuenta?.nombre_usuario || '')
-    setImagenElegida(cuenta?.imagen_perfil === 'foto' ? 'foto' : 'dibujo')
     setErrorApodo('')
     setEditandoApodo(true)
   }
@@ -92,7 +91,8 @@ export default function PerfilPage() {
     try {
       const res = await fetch('/api/cuenta/apodo', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apodo: validacion.apodo, imagen_perfil: imagenElegida, marcarBienvenida: false }),
+        // Por ahora la única imagen es el dibujo del apodo.
+        body: JSON.stringify({ apodo: validacion.apodo, imagen_perfil: 'dibujo', marcarBienvenida: false }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
@@ -100,7 +100,7 @@ export default function PerfilPage() {
         setGuardandoApodo(false)
         return
       }
-      setCuenta((actual) => ({ ...actual, nombre_usuario: data.nombre_usuario, imagen_perfil: data.imagen_perfil }))
+      setCuenta((actual) => ({ ...actual, nombre_usuario: data.nombre_usuario }))
       // Los íconos de cuenta del Navbar muestran el apodo nuevo sin recargar.
       avisarApodoCambiado(data.nombre_usuario)
       setEditandoApodo(false)
@@ -171,12 +171,7 @@ export default function PerfilPage() {
 
             {editandoApodo && (
               <div className="mb-10 -mt-4">
-                <EditorApodo
-                  apodoInicial={apodo}
-                  imagen={imagenElegida}
-                  onCambiarApodo={setApodoElegido}
-                  onCambiarImagen={setImagenElegida}
-                />
+                <EditorApodo apodoInicial={apodo} onCambiarApodo={setApodoElegido} />
                 {errorApodo && (
                   <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">{errorApodo}</div>
                 )}
@@ -194,6 +189,9 @@ export default function PerfilPage() {
                 </div>
               </div>
             )}
+
+            {/* Preguntas "¿te gustaría…?": si la ruta falla, no se muestra. */}
+            <PreguntaFuncion id="foto_perfil" className="mb-6" />
 
             {/* Panel de admin */}
             {esAdmin && (
