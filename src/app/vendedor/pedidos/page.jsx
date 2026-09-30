@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
@@ -138,6 +138,8 @@ export default function VendedorPedidosPage() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
   const [abierto, setAbierto] = useState(null);
+  // El pedido al que hay que bajar cuando la lista ya se dibujó (link del mail).
+  const aScrollear = useRef(null);
   const [avanzando, setAvanzando] = useState(null);
   const [nombreNegocio, setNombreNegocio] = useState('');
   const [franjaModal, setFranjaModal] = useState(null);
@@ -161,7 +163,7 @@ export default function VendedorPedidosPage() {
   useEffect(() => {
     async function cargar() {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.replace('/entrar?next=%2Fvendedor%2Fpedidos'); return; }
+      if (!user) { router.replace(`/entrar?next=${encodeURIComponent('/vendedor/pedidos' + window.location.search)}`); return; }
 
       // Los pedidos vienen del servidor: el navegador no puede leer 'pedidos',
       // 'pedido_items' ni la dirección del comprador. La ruta ya verifica que
@@ -179,6 +181,15 @@ export default function VendedorPedidosPage() {
 
         setNombreNegocio(datos.vendedor?.nombre_negocio || '');
         setPedidos(datos.pedidos || []);
+
+        // El link del mail de venta trae ?pedido=N: si ese pedido está en la
+        // lista (o sea, es de esta tienda), se abre desplegado. Si no está, la
+        // lista se muestra normal, sin error.
+        const pedidoDelLink = Number(new URLSearchParams(window.location.search).get('pedido'));
+        if (pedidoDelLink && (datos.pedidos || []).some((p) => p.id === pedidoDelLink)) {
+          setAbierto(pedidoDelLink);
+          aScrollear.current = pedidoDelLink;
+        }
       } catch (err) {
         console.error('Error de red cargando los pedidos', err);
         setError('No pudimos conectarnos. Revisá tu conexión y probá de nuevo.');
@@ -187,6 +198,13 @@ export default function VendedorPedidosPage() {
     }
     cargar();
   }, []);
+
+  // Baja hasta el pedido del link una vez que la lista salió de "Cargando...".
+  useEffect(() => {
+    if (cargando || aScrollear.current === null) return;
+    document.getElementById(`pedido-${aScrollear.current}`)?.scrollIntoView({ block: 'start' });
+    aScrollear.current = null;
+  }, [cargando]);
 
   // Los items ya vienen con cada pedido: desplegar es sólo abrir y cerrar.
   function toggleDetalle(pedidoId) {
@@ -385,7 +403,8 @@ function PedidoCard({ pedido, abierto, items, avanzando, onToggle, onAvanzar }) 
   const primerItem = items[0];
 
   return (
-    <div className="border border-[#0a0a0a]/5 rounded-2xl px-5 py-4 mb-3">
+    // scroll-mt: que la barra fija de arriba no tape el pedido al bajar.
+    <div id={`pedido-${p.id}`} className="scroll-mt-24 border border-[#0a0a0a]/5 rounded-2xl px-5 py-4 mb-3">
       <div onClick={onToggle} className="cursor-pointer">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-xl bg-[#F5F2EC] shrink-0 overflow-hidden flex items-center justify-center text-[#0a0a0a]/15 text-xl">

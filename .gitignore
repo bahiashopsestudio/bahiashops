@@ -44,5 +44,8 @@ next-env.d.ts
 .env*.local
 
 
+# mails de prueba que arma scripts/preview-mails.mjs
+/vista-mails/
+
 # script de prueba local que usaba la service_role key
 .probe-columnas.mjs

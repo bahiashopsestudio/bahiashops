@@ -5,6 +5,7 @@ import { ESTADOS_DE_PAGO, ESTADO_REEMBOLSADO } from '@/lib/pedidos';
 import {
   validarPago, estadoDelPedido, MOTIVOS_DE_FRAUDE, ESTADOS_REEMPLAZABLES, DEVOLUCIONES_MP, SIN_CAMBIOS_MP,
 } from '@/lib/validarPago';
+import { avisarPago } from '@/lib/mailsPedidos';
 
 // ── Verificar que el webhook realmente viene de MercadoPago ──
 // MercadoPago firma cada notificación con HMAC-SHA256.
@@ -131,7 +132,7 @@ export async function POST(request) {
     if (/^[1-9]\d*$/.test(referencia)) {
       const { data, error: errorPedido } = await admin
         .from('pedidos')
-        .select('id, vendedor_id, total, estado, mp_payment_id')
+        .select('id, vendedor_id, total, estado, mp_payment_id, aviso_vendedor_en, aviso_comprador_en')
         .eq('id', Number(referencia))
         .maybeSingle();
 
@@ -187,6 +188,19 @@ export async function POST(request) {
     // El mismo aviso otra vez, sin nada nuevo: no se toca el pedido.
     if (String(pedido.mp_payment_id ?? '') === idPago && pedido.estado === nuestroEstado) {
       console.log(`Pedido ${pedido.id}: aviso repetido del pago ${idPago}, sin cambios.`);
+
+      // Si un mail falló la primera vez, la columna quedó en null: este aviso
+      // repetido es la oportunidad de mandarlo. Sólo mientras el pedido sigue
+      // en 'pagado'; si el vendedor ya lo movió, ya no tiene sentido. El
+      // reclamo con "where ... is null" evita que se duplique el que sí salió.
+      if (pedido.estado === 'pagado' && (!pedido.aviso_vendedor_en || !pedido.aviso_comprador_en)) {
+        console.log(`Pedido ${pedido.id}: reintento de aviso (vendedor ${pedido.aviso_vendedor_en ? 'ya enviado' : 'pendiente'}, comprador ${pedido.aviso_comprador_en ? 'ya enviado' : 'pendiente'}).`);
+        try {
+          await avisarPago({ admin, pedidoId: pedido.id });
+        } catch (errMails) {
+          console.error(`Pedido ${pedido.id}: error en el reintento de aviso`, errMails);
+        }
+      }
       return NextResponse.json({ recibido: true });
     }
 
@@ -241,6 +255,19 @@ export async function POST(request) {
       console.error(`Pedido ${pedido.id}: no se pudo escribir el pago ${idPago} — ${errorEscritura.message}`);
     } else if (pedidoNuevo) {
       console.log(`Pedido ${pedido.id}: pago ${idPago} aplicado -> ${pedidoNuevo.estado}`);
+
+      // El pedido quedó pagado con esta escritura: aviso de venta al vendedor
+      // y confirmación a quien compró. Se esperan antes de responder (en Vercel
+      // lo que queda después de la respuesta puede no ejecutarse), pero no
+      // cambian la respuesta: avisarPago no lanza y cada mail se reclama una
+      // sola vez por pedido, así que un aviso repetido no manda nada.
+      if (pedidoNuevo.estado === 'pagado') {
+        try {
+          await avisarPago({ admin, pedidoId: pedido.id });
+        } catch (errMails) {
+          console.error(`Pedido ${pedido.id}: error en los mails del pago`, errMails);
+        }
+      }
     } else {
       console.log(`Pedido ${pedido.id}: cambió entre la lectura y la escritura; el pago ${idPago} no se aplicó.`);
     }

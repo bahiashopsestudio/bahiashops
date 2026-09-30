@@ -52,12 +52,10 @@ function ExitoContenido() {
             </div>
 
             <h1 className="text-2xl font-black text-[#0a0a0a] tracking-tight mb-2">¡Compra realizada con éxito!</h1>
-            <p className="text-[#0a0a0a]/50 font-light">Tu pedido se está preparando.</p>
-            {pedidoId && <p className="text-[#0a0a0a]/20 text-sm font-light mt-1">Orden #{pedidoId}</p>}
+            {pedidoId && <p className="text-[#0a0a0a]/20 text-sm font-light mt-1">Pedido #{pedidoId}</p>}
 
             <div className="bg-[#F5F2EC] rounded-2xl p-5 text-left mt-8 mb-8">
-              <p className="text-sm font-medium text-[#0a0a0a] mb-1">Te enviamos el detalle por mail.</p>
-              <p className="text-sm text-[#0a0a0a]/40 font-light">También le avisamos al vendedor de tu compra.</p>
+              <p className="text-sm font-medium text-[#0a0a0a]">Te mandamos la confirmación por mail y ya le avisamos al vendedor. Te va a escribir por WhatsApp para coordinar la entrega.</p>
             </div>
 
             <button
