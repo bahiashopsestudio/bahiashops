@@ -113,7 +113,7 @@ export default function NuevoProductoPage() {
   useEffect(() => {
     async function cargarDatosIniciales() {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) { router.replace('/entrar?next=%2Fvendedor%2Fproductos%2Fnuevo'); return; }
 
       // Vendedor
       const { data: vendedor, error } = await supabase

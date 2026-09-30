@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { createClient } from '@/lib/supabase/client'
+import { useRouter } from 'next/navigation'
 import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
 import VolverAtras from '@/components/VolverAtras'
@@ -29,6 +30,7 @@ const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','ho
 
 export default function UbicacionVendedorPage() {
   const supabase = createClient()
+  const router = useRouter()
 
   const [menuOpen, setMenuOpen] = useState(false)
   const [categorias, setCategorias] = useState([])
@@ -69,7 +71,7 @@ export default function UbicacionVendedorPage() {
       if (cats) setCategorias(cats)
 
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { setCargando(false); return }
+      if (!user) { router.replace('/entrar?next=%2Fvendedor%2Fubicacion'); return }
 
       const { data: vendedor } = await supabase
         .from('vendedores')

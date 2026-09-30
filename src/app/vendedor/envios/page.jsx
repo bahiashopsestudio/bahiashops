@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import MenuTakeover from '@/components/MenuTakeover';
 import VolverAtras from '@/components/VolverAtras';
@@ -27,6 +28,7 @@ const inputPrecioClasses =
 
 export default function EnviosPage() {
   const supabase = createClient();
+  const router = useRouter();
 
   const [vendedorId, setVendedorId] = useState(null);
   const [cargando, setCargando] = useState(true);
@@ -56,7 +58,7 @@ export default function EnviosPage() {
   useEffect(() => {
     async function cargar() {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setCargando(false); return; }
+      if (!user) { router.replace('/entrar?next=%2Fvendedor%2Fenvios'); return; }
 
       const { data, error } = await supabase
         .from('vendedores')

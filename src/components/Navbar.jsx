@@ -7,6 +7,8 @@ import Buscador from '@/components/Buscador'
 import { createClient } from '@/lib/supabase/client'
 import { useCarrito } from '@/context/CarritoContext'
 import LogoAnimado from '@/components/LogoAnimado'
+import AvatarApodo from '@/components/AvatarApodo'
+import { EVENTO_APODO_CAMBIADO } from '@/lib/apodos'
 
 export const SELLOS = [
   { nombre: 'Hecho en Bahía', slug: 'hecho-en-bahia' },
@@ -58,11 +60,18 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
 
   const isSolid = variant === 'solid'
 
-  const avatarUrl = usuario?.user_metadata?.avatar_url
-  const nombreUsuario = usuario?.user_metadata?.nombre_completo || usuario?.user_metadata?.full_name || ''
-  const inicialUsuario = nombreUsuario
-    ? nombreUsuario.charAt(0).toUpperCase()
-    : (usuario?.email?.charAt(0).toUpperCase() || 'R')
+  // El apodo de la persona, para su avatar. Nunca la foto de Google. Es una
+  // sola lectura para los tres íconos de cuenta. Mientras no llega (o sin
+  // sesión) se muestra el ícono genérico, del mismo tamaño que el avatar.
+  const [apodo, setApodo] = useState('')
+  const mostrarAvatar = !!usuario && !!apodo
+
+  // Si el apodo cambia desde /perfil, los íconos se actualizan sin recargar.
+  useEffect(() => {
+    const alCambiar = (e) => setApodo(e.detail || '')
+    window.addEventListener(EVENTO_APODO_CAMBIADO, alCambiar)
+    return () => window.removeEventListener(EVENTO_APODO_CAMBIADO, alCambiar)
+  }, [])
 
   useEffect(() => {
     const supabase = createClient()
@@ -94,7 +103,14 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
     const supabase = createClient()
     async function cargarUsuario() {
       const { data: { user } } = await supabase.auth.getUser()
-      if (user) setUsuario(user)
+      if (!user) return
+      setUsuario(user)
+      const { data: cuenta } = await supabase
+        .from('usuarios')
+        .select('nombre_usuario')
+        .eq('id', user.id)
+        .maybeSingle()
+      if (cuenta?.nombre_usuario) setApodo(cuenta.nombre_usuario)
     }
     cargarUsuario()
   }, [])
@@ -215,10 +231,14 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
                 </span>
               )}
             </Link>
-            <Link href={hrefCuenta} onClick={irACuenta} className={`${iconColorClass} transition-colors`} aria-label="Perfil">
-              <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0" />
-              </svg>
+            <Link href={hrefCuenta} onClick={irACuenta} className={`${iconColorClass} transition-colors`} aria-label={usuario ? 'Perfil' : 'Entrar'}>
+              {mostrarAvatar ? (
+                <AvatarApodo apodo={apodo} tamano={18} bloque />
+              ) : (
+                <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0" />
+                </svg>
+              )}
             </Link>
           </div>
         </div>
@@ -464,11 +484,16 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
               </span>
             )}
           </Link>
-          <Link href={hrefCuenta} onClick={irACuenta} className="w-7 h-7 rounded-full overflow-hidden shrink-0 flex items-center justify-center bg-[#0a0a0a] text-white text-xs font-medium">
-            {avatarUrl ? (
-              <img src={avatarUrl} alt="Perfil" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+          <Link href={hrefCuenta} onClick={irACuenta} aria-label={usuario ? 'Perfil' : 'Entrar'}
+            className="w-7 h-7 rounded-full overflow-hidden shrink-0 flex items-center justify-center">
+            {mostrarAvatar ? (
+              <AvatarApodo apodo={apodo} tamano={28} bloque />
             ) : (
-              inicialUsuario
+              <span className="w-7 h-7 rounded-full bg-[#0a0a0a]/5 text-[#0a0a0a]/50 flex items-center justify-center">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0" />
+                </svg>
+              </span>
             )}
           </Link>
         </div>
@@ -541,9 +566,13 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
             <span className="text-[10px] font-light">Favoritos</span>
           </Link>
           <Link href={hrefCuenta} onClick={irACuenta} className="flex flex-col items-center gap-0.5 text-[#0a0a0a]/40 hover:text-[#0a0a0a] transition">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0" />
-            </svg>
+            {mostrarAvatar ? (
+              <AvatarApodo apodo={apodo} tamano={20} bloque />
+            ) : (
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0" />
+              </svg>
+            )}
             <span className="text-[10px] font-light">Perfil</span>
           </Link>
         </div>

@@ -123,7 +123,7 @@ export default function PerfilVendedorPage() {
       if (cats) setCategorias(cats);
 
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setCargando(false); return; }
+      if (!user) { router.replace('/entrar?next=%2Fvendedor%2Fperfil'); return; }
       const { data, error } = await supabase
         .from('vendedores')
         .select('id, nombre_negocio, slug, logo_url, portada_url, mercadopago_conectado, estado_validacion, bloqueado')

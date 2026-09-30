@@ -6,6 +6,9 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
+import AvatarApodo from '@/components/AvatarApodo'
+import EditorApodo from '@/components/EditorApodo'
+import { validarApodo, avisarApodoCambiado } from '@/lib/apodos'
 
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage']
 
@@ -13,7 +16,13 @@ export default function PerfilPage() {
   const supabase = createClient()
   const router = useRouter()
   const [user, setUser] = useState(null)
-  const [perfil, setPerfil] = useState(null)
+  const [cuenta, setCuenta] = useState(null)
+  // "Cambiar apodo": el mismo bloque de la bienvenida.
+  const [editandoApodo, setEditandoApodo] = useState(false)
+  const [apodoElegido, setApodoElegido] = useState('')
+  const [imagenElegida, setImagenElegida] = useState('dibujo')
+  const [guardandoApodo, setGuardandoApodo] = useState(false)
+  const [errorApodo, setErrorApodo] = useState('')
   const [vendedorSlug, setVendedorSlug] = useState(null)
   const [esVendedor, setEsVendedor] = useState(false)
   const [cargando, setCargando] = useState(true)
@@ -35,18 +44,13 @@ export default function PerfilPage() {
       if (!user) { router.replace('/entrar?next=%2Fperfil'); return }
       setUser(user)
 
-      const { data: perfil } = await supabase
-        .from('perfiles')
-        .select('*')
-        .eq('id', user.id)
-        .single()
-      setPerfil(perfil)
-
+      // La propia fila de usuarios: la policy deja leer sólo la de uno.
       const { data: cuenta } = await supabase
         .from('usuarios')
-        .select('es_admin')
+        .select('nombre, apellido, nombre_usuario, imagen_perfil, es_admin')
         .eq('id', user.id)
-        .single()
+        .maybeSingle()
+      setCuenta(cuenta)
       if (cuenta?.es_admin) setEsAdmin(true)
 
       // Cargar slug del vendedor si tiene cuenta
@@ -71,6 +75,43 @@ export default function PerfilPage() {
     router.refresh()
   }
 
+  function abrirEditorApodo() {
+    setApodoElegido(cuenta?.nombre_usuario || '')
+    setImagenElegida(cuenta?.imagen_perfil === 'foto' ? 'foto' : 'dibujo')
+    setErrorApodo('')
+    setEditandoApodo(true)
+  }
+
+  // Guarda con la misma ruta que la bienvenida, sin tocar bienvenida_vista_en.
+  async function guardarApodo() {
+    setErrorApodo('')
+    const validacion = validarApodo(apodoElegido)
+    if (!validacion.ok) { setErrorApodo(validacion.motivo); return }
+
+    setGuardandoApodo(true)
+    try {
+      const res = await fetch('/api/cuenta/apodo', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apodo: validacion.apodo, imagen_perfil: imagenElegida, marcarBienvenida: false }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setErrorApodo(data.error || 'No pudimos guardar. Probá de nuevo.')
+        setGuardandoApodo(false)
+        return
+      }
+      setCuenta((actual) => ({ ...actual, nombre_usuario: data.nombre_usuario, imagen_perfil: data.imagen_perfil }))
+      // Los íconos de cuenta del Navbar muestran el apodo nuevo sin recargar.
+      avisarApodoCambiado(data.nombre_usuario)
+      setEditandoApodo(false)
+      setGuardandoApodo(false)
+      router.refresh()
+    } catch {
+      setErrorApodo('No pudimos conectarnos. Revisá tu conexión y probá de nuevo.')
+      setGuardandoApodo(false)
+    }
+  }
+
   const menuCats = MENU_CATEGORIAS.map(s => categorias.find(c => c.slug === s)).filter(Boolean)
 
   if (cargando) {
@@ -84,9 +125,8 @@ export default function PerfilPage() {
     )
   }
 
-  const nombre = perfil?.nombre_completo || user?.user_metadata?.nombre_completo || user?.user_metadata?.full_name || ''
-  const avatar = user?.user_metadata?.avatar_url
-  const inicial = nombre ? nombre.charAt(0).toUpperCase() : (user?.email?.charAt(0).toUpperCase() || '?')
+  const apodo = cuenta?.nombre_usuario || ''
+  const nombreReal = [cuenta?.nombre, cuenta?.apellido].map((v) => (v || '').trim()).filter(Boolean).join(' ')
 
   const links = [
     { href: '/mis-pedidos', label: 'Mis pedidos', icon: 'M15.75 10.5V6a3.75 3.75 0 1 0-7.5 0v4.5m11.356-1.993 1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 0 1-1.12-1.243l1.264-12A1.125 1.125 0 0 1 5.513 7.5h12.974c.576 0 1.059.435 1.119 1.007Z' },
@@ -107,22 +147,53 @@ export default function PerfilPage() {
         <div className="pt-20 pb-24 px-4 md:px-8">
           <div className="max-w-lg mx-auto">
 
-            {/* Avatar + nombre */}
+            {/* Avatar + apodo: así te ven en el sitio. El nombre real, sólo acá. */}
             <div className="flex flex-col items-center mb-10 mt-4">
-              {avatar ? (
-                <img src={avatar} alt={nombre} className="w-20 h-20 rounded-full object-cover mb-4" />
-              ) : (
-                <div className="w-20 h-20 rounded-full bg-[#0a0a0a] text-white flex items-center justify-center text-2xl font-bold mb-4">
-                  {inicial}
-                </div>
-              )}
+              <AvatarApodo apodo={apodo} tamano={80} className="mb-4" />
               <h1 className="text-[22px]" style={{ fontFamily: 'Fraunces, serif', fontWeight: 500, color: '#0a0a0a' }}>
-                {nombre || 'Tu cuenta'}
+                {apodo || 'Tu cuenta'}
               </h1>
-              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 300, fontSize: '13px', color: 'rgba(10,10,10,0.4)', marginTop: '4px' }}>
+              {nombreReal && (
+                <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 300, fontSize: '14px', color: 'rgba(10,10,10,0.6)', marginTop: '2px' }}>
+                  {nombreReal}
+                </p>
+              )}
+              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 300, fontSize: '13px', color: 'rgba(10,10,10,0.4)', marginTop: '2px' }}>
                 {user?.email}
               </p>
+              {!editandoApodo && (
+                <button type="button" onClick={abrirEditorApodo}
+                  className="mt-3 text-sm text-[#4164fe] font-medium underline underline-offset-2 cursor-pointer">
+                  Cambiar apodo
+                </button>
+              )}
             </div>
+
+            {editandoApodo && (
+              <div className="mb-10 -mt-4">
+                <EditorApodo
+                  apodoInicial={apodo}
+                  imagen={imagenElegida}
+                  onCambiarApodo={setApodoElegido}
+                  onCambiarImagen={setImagenElegida}
+                />
+                {errorApodo && (
+                  <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">{errorApodo}</div>
+                )}
+                <div className="mt-4 flex gap-3">
+                  <button type="button" onClick={guardarApodo} disabled={guardandoApodo}
+                    className={`flex-1 border transition-colors ${guardandoApodo ? 'bg-[#0a0a0a]/20 text-white border-transparent cursor-wait' : 'bg-[#0a0a0a] text-white border-[#0a0a0a] hover:bg-[#2a2a2a] cursor-pointer'}`}
+                    style={{ fontFamily: "'Inter', sans-serif", fontWeight: 500, fontSize: '14px', borderRadius: '4px', padding: '12px 20px' }}>
+                    {guardandoApodo ? 'Guardando...' : 'Guardar'}
+                  </button>
+                  <button type="button" onClick={() => setEditandoApodo(false)} disabled={guardandoApodo}
+                    className="flex-1 border border-[#0a0a0a]/15 text-[#0a0a0a]/60 bg-white hover:border-[#0a0a0a]/40 transition-colors cursor-pointer"
+                    style={{ fontFamily: "'Inter', sans-serif", fontWeight: 500, fontSize: '14px', borderRadius: '4px', padding: '12px 20px' }}>
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Panel de admin */}
             {esAdmin && (

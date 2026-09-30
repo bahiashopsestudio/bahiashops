@@ -146,7 +146,7 @@ export default function EditarProductoPage() {
     async function cargar() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) { setErrorPagina('No hay sesión iniciada.'); setCargandoPagina(false); return; }
+        if (!user) { router.replace(`/entrar?next=${encodeURIComponent(window.location.pathname)}`); return; }
 
         const { data: vendedor } = await supabase
           .from('vendedores')

@@ -2,9 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import MenuTakeover from '@/components/MenuTakeover';
 import VolverAtras from '@/components/VolverAtras';
+import AvatarApodo from '@/components/AvatarApodo';
 import { linkWhatsApp } from '@/lib/telefono';
 import { metodoPideDireccion } from '@/lib/precioPedido';
 
@@ -130,6 +132,7 @@ function abrirWhatsApp(telefono, mensaje) {
 
 export default function VendedorPedidosPage() {
   const supabase = createClient();
+  const router = useRouter();
 
   const [pedidos, setPedidos] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -158,7 +161,7 @@ export default function VendedorPedidosPage() {
   useEffect(() => {
     async function cargar() {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setError('No hay sesión iniciada.'); setCargando(false); return; }
+      if (!user) { router.replace('/entrar?next=%2Fvendedor%2Fpedidos'); return; }
 
       // Los pedidos vienen del servidor: el navegador no puede leer 'pedidos',
       // 'pedido_items' ni la dirección del comprador. La ruta ya verifica que
@@ -394,7 +397,8 @@ function PedidoCard({ pedido, abierto, items, avanzando, onToggle, onAvanzar }) 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               {/* Afuera va el apodo; nombre real y teléfono, sólo en el detalle. */}
-              <span className="text-sm text-[#0a0a0a]">
+              <span className="text-sm text-[#0a0a0a] inline-flex items-center gap-2">
+                <AvatarApodo apodo={p.comprador_apodo} tamano={28} />
                 <strong>{p.comprador_apodo || 'Comprador'}</strong>
                 <span className="text-[#0a0a0a]/50"> · Pedido #{p.id}</span>
               </span>

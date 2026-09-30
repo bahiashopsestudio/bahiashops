@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Navbar from '@/components/Navbar';
 import MenuTakeover from '@/components/MenuTakeover';
@@ -32,6 +33,7 @@ function extraerRutaStorage(url, bucket) {
 
 export default function MisProductosPage() {
   const supabase = createClient();
+  const router = useRouter();
 
   const [cargando, setCargando] = useState(true);
   const [productos, setProductos] = useState([]);
@@ -58,7 +60,7 @@ export default function MisProductosPage() {
     async function cargarProductos() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) { setError('No hay una sesión iniciada.'); setCargando(false); return; }
+        if (!user) { router.replace('/entrar?next=%2Fvendedor%2Fproductos'); return; }
 
         const { data: vendedor, error: errVendedor } = await supabase
           .from('vendedores')
