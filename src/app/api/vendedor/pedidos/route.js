@@ -64,17 +64,23 @@ export async function GET() {
   // pantalla muestra "Comprador": no es motivo para no mostrar los pedidos.
   const idsCompradores = [...new Set((pedidos || []).map((p) => p.comprador_id).filter(Boolean))];
   const apodos = new Map();
+  // Las cuentas eliminadas: en sus pedidos la persona figura como "Cuenta
+  // eliminada" (sus datos ya no existen, ni en el pedido).
+  const eliminados = new Set();
 
   if (idsCompradores.length > 0) {
     const { data: compradores, error: errorApodos } = await admin
       .from('usuarios')
-      .select('id, nombre_usuario')
+      .select('id, nombre_usuario, cerrada_en')
       .in('id', idsCompradores);
 
     if (errorApodos) {
       console.error('No se pudieron leer los apodos de los compradores', vendedor.id, errorApodos.message);
     }
-    for (const c of compradores || []) apodos.set(c.id, c.nombre_usuario || null);
+    for (const c of compradores || []) {
+      apodos.set(c.id, c.nombre_usuario || null);
+      if (c.cerrada_en) eliminados.add(c.id);
+    }
   }
 
   // Del comprador viaja su apodo, lo que quedó congelado en el pedido (nombre,
@@ -84,6 +90,7 @@ export async function GET() {
   const respuesta = (pedidos || []).map(({ comprador_id, ...pedido }) => ({
     ...pedido,
     comprador_apodo: apodos.get(comprador_id) || null,
+    comprador_eliminado: eliminados.has(comprador_id),
   }));
 
   return NextResponse.json({

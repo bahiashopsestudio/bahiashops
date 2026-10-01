@@ -4,8 +4,9 @@ import crypto from 'crypto';
 import { ESTADOS_DE_PAGO, ESTADO_REEMBOLSADO } from '@/lib/pedidos';
 import {
   validarPago, estadoDelPedido, MOTIVOS_DE_FRAUDE, ESTADOS_REEMPLAZABLES, DEVOLUCIONES_MP, SIN_CAMBIOS_MP,
+  MOTIVO_PEDIDO_CANCELADO,
 } from '@/lib/validarPago';
-import { avisarPago } from '@/lib/mailsPedidos';
+import { avisarPago, avisarPagoTardio } from '@/lib/mailsPedidos';
 
 // ── Verificar que el webhook realmente viene de MercadoPago ──
 // MercadoPago firma cada notificación con HMAC-SHA256.
@@ -73,6 +74,25 @@ async function consultarPago(paymentId, cuentas) {
     }
   }
   return null;
+}
+
+// Un pago que llega sobre un pedido cancelado (la persona eliminó su cuenta
+// antes de que se acreditara). No se revive el pedido ni se descarta en
+// silencio: queda un log claro y, si el pago está aprobado (la plata ya le llegó
+// al vendedor), un mail interno para coordinar el reembolso. Un pago pendiente
+// o en proceso sólo deja el log: si después se aprueba, llega otro aviso.
+// Nunca lanza.
+async function pagoSobrePedidoCancelado({ admin, pedidoId, pago }) {
+  console.error(
+    `[webhook] PAGO SOBRE PEDIDO CANCELADO — pedido ${pedidoId}, pago ${pago.id} (${pago.status}), ` +
+    `monto ${pago.transaction_amount}. El pedido NO se modificó: hay que coordinar el reembolso con el vendedor.`
+  );
+  if (pago.status !== 'approved') return;
+  try {
+    await avisarPagoTardio({ admin, pedidoId, pago });
+  } catch (err) {
+    console.error(`Pedido ${pedidoId}: error en el aviso de pago tardío`, err);
+  }
 }
 
 export async function POST(request) {
@@ -150,6 +170,11 @@ export async function POST(request) {
       : null;
 
     const veredicto = validarPago(pago, pedido, cuentaDelPedido, cuentaDelToken.vendedor_id);
+
+    if (!veredicto.ok && veredicto.motivo === MOTIVO_PEDIDO_CANCELADO) {
+      await pagoSobrePedidoCancelado({ admin, pedidoId: pedido.id, pago });
+      return NextResponse.json({ recibido: true });
+    }
 
     if (!veredicto.ok) {
       const detalle = {
@@ -247,6 +272,9 @@ export async function POST(request) {
       })
       .eq('id', pedido.id)
       .in('estado', ESTADOS_DE_PAGO)
+      // Un pedido cancelado no se revive, ni siquiera si se cancela entre la
+      // lectura y esta escritura (la persona eliminando su cuenta justo ahora).
+      .neq('estado', 'cancelado')
       .or(`mp_payment_id.is.null,mp_payment_id.eq.${idPago},estado.in.(${ESTADOS_REEMPLAZABLES.join(',')})`)
       .select('id, estado')
       .maybeSingle();
@@ -270,6 +298,23 @@ export async function POST(request) {
       }
     } else {
       console.log(`Pedido ${pedido.id}: cambió entre la lectura y la escritura; el pago ${idPago} no se aplicó.`);
+
+      // Si un pago aprobado no se pudo escribir, puede ser porque el pedido se
+      // canceló justo ahora (la validación lo leyó 'pendiente' antes de que la
+      // cuenta se eliminara). Se vuelve a leer: si quedó 'cancelado', es un
+      // pago sobre un pedido cancelado.
+      if (pago.status === 'approved') {
+        const { data: actual, error: errorRelectura } = await admin
+          .from('pedidos')
+          .select('estado')
+          .eq('id', pedido.id)
+          .maybeSingle();
+        if (errorRelectura) {
+          console.error(`Pedido ${pedido.id}: no se pudo volver a leer el estado — ${errorRelectura.message}`);
+        } else if (actual?.estado === 'cancelado') {
+          await pagoSobrePedidoCancelado({ admin, pedidoId: pedido.id, pago });
+        }
+      }
     }
 
     return NextResponse.json({ recibido: true });

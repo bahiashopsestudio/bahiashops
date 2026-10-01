@@ -417,8 +417,13 @@ function PedidoCard({ pedido, abierto, items, avanzando, onToggle, onAvanzar }) 
             <div className="flex items-center gap-2 flex-wrap">
               {/* Afuera va el apodo; nombre real y teléfono, sólo en el detalle. */}
               <span className="text-sm text-[#0a0a0a] inline-flex items-center gap-2">
-                <AvatarApodo apodo={p.comprador_apodo} tamano={28} />
-                <strong>{p.comprador_apodo || 'Comprador'}</strong>
+                {p.comprador_eliminado ? (
+                  // Cuenta eliminada: círculo gris claro, sin letra.
+                  <span aria-hidden="true" className="inline-block shrink-0 rounded-full" style={{ width: '28px', height: '28px', backgroundColor: '#e8e5df' }} />
+                ) : (
+                  <AvatarApodo apodo={p.comprador_apodo} tamano={28} />
+                )}
+                <strong>{p.comprador_eliminado ? 'Cuenta eliminada' : (p.comprador_apodo || 'Comprador')}</strong>
                 <span className="text-[#0a0a0a]/50"> · Pedido #{p.id}</span>
               </span>
               <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${estado.bg} ${estado.color}`}>
@@ -451,29 +456,34 @@ function PedidoCard({ pedido, abierto, items, avanzando, onToggle, onAvanzar }) 
             ))}
           </div>
 
-          <div className="mb-4">
-            <p className="m-0 mb-1.5 text-[11px] text-[#0a0a0a]/25 font-light uppercase tracking-wider">Entrega</p>
-            <p className="m-0 text-sm text-[#0a0a0a]/60 font-light">{p.metodo_envio}</p>
-            {p.turno_preferido && (
-              <p className="m-0 text-[11px] text-[#0a0a0a]/25 font-light">Preferencia: {p.turno_preferido.toLowerCase()}</p>
-            )}
-            {p.franja_horaria && (
-              <p className="m-0 text-[11px] text-[#0a0a0a]/40 font-light">Franja horaria avisada: {p.franja_horaria.toLowerCase()}</p>
-            )}
-            {(p.comprador_nombre || p.comprador_apellido || p.comprador_telefono) && (
-              <p className="mt-1 mb-0 text-sm text-[#0a0a0a]/60 font-light">
-                {[p.comprador_nombre, p.comprador_apellido].filter(Boolean).join(' ')}
-                {(p.comprador_nombre || p.comprador_apellido) && p.comprador_telefono && <br />}
-                {p.comprador_telefono && <>Tel. {p.comprador_telefono}</>}
-              </p>
-            )}
-            {p.direccion && (
-              <p className="mt-1 mb-0 text-sm text-[#0a0a0a]/60 font-light">
-                {p.direccion.calle} {p.direccion.numero}{p.direccion.piso_depto ? `, ${p.direccion.piso_depto}` : ''}<br />
-                Tel. {p.direccion.telefono}
-              </p>
-            )}
-          </div>
+          {p.comprador_eliminado ? (
+            <p className="m-0 mb-4 text-sm text-[#0a0a0a]/40 font-light">Quien hizo esta compra eliminó su cuenta.</p>
+          ) : (
+            <div className="mb-4">
+              <p className="m-0 mb-1.5 text-[11px] text-[#0a0a0a]/25 font-light uppercase tracking-wider">Entrega</p>
+              <p className="m-0 text-sm text-[#0a0a0a]/60 font-light">{p.metodo_envio}</p>
+              {p.turno_preferido && (
+                <p className="m-0 text-[11px] text-[#0a0a0a]/25 font-light">Preferencia: {p.turno_preferido.toLowerCase()}</p>
+              )}
+              {p.franja_horaria && (
+                <p className="m-0 text-[11px] text-[#0a0a0a]/40 font-light">Franja horaria avisada: {p.franja_horaria.toLowerCase()}</p>
+              )}
+              {(p.comprador_nombre || p.comprador_apellido || p.comprador_telefono) && (
+                <p className="mt-1 mb-0 text-sm text-[#0a0a0a]/60 font-light">
+                  {[p.comprador_nombre, p.comprador_apellido].filter(Boolean).join(' ')}
+                  {(p.comprador_nombre || p.comprador_apellido) && p.comprador_telefono && <br />}
+                  {p.comprador_telefono && <>Tel. {p.comprador_telefono}</>}
+                </p>
+              )}
+              {p.direccion && (
+                <p className="mt-1 mb-0 text-sm text-[#0a0a0a]/60 font-light">
+                  {p.direccion.calle} {p.direccion.numero}{p.direccion.piso_depto ? `, ${p.direccion.piso_depto}` : ''}<br />
+                  Tel. {p.direccion.telefono}
+                </p>
+              )}
+            </div>
+
+          )}
 
           <div className="pt-2 border-t border-[#0a0a0a]/5 mb-4">
             <div className="flex justify-between text-sm py-0.5">

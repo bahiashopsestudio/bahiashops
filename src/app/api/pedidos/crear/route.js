@@ -368,6 +368,14 @@ export async function POST(request) {
     .single();
 
   if (errorPedido) {
+    // El disparador de la base rechaza pedidos a nombre de una cuenta eliminada
+    // (sesión que sigue viva un rato después de eliminarla).
+    if (String(errorPedido.message || '').includes('cuenta_cerrada')) {
+      return NextResponse.json(
+        { error: 'Esta cuenta fue eliminada.', codigo: 'cuenta_cerrada' },
+        { status: 403 }
+      );
+    }
     return NextResponse.json(
       { error: 'No se pudo crear el pedido.', detalle: errorPedido.message },
       { status: 500 }

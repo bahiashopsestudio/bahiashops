@@ -38,6 +38,11 @@ export const SIN_CAMBIOS_MP = { in_mediation: 'reclamo abierto' }
 // pedido. El webhook usa la misma lista en la condición de su escritura.
 export const ESTADOS_REEMPLAZABLES = ['pendiente', 'rechazado']
 
+// Un pago que llega sobre un pedido cancelado: la persona eliminó su cuenta
+// antes de pagar. El pedido no se revive; el webhook avisa para coordinar el
+// reembolso, porque la plata ya le llegó al vendedor.
+export const MOTIVO_PEDIDO_CANCELADO = 'pedido cancelado'
+
 // Los motivos que indican un intento de cobrar un pedido ajeno.
 export const MOTIVOS_DE_FRAUDE = ['cobrador distinto', 'token de otro vendedor', 'monto distinto', 'cuenta de MP sin id']
 
@@ -99,6 +104,11 @@ export function validarPago(pago, pedido, cuentaMp, idVendedorDelToken) {
     if (!pagoGuardadoDevuelto || pagoGuardadoDevuelto !== idOVacio(pago.id)) return rechazo('devolución de otro pago')
     return { ok: true }
   }
+
+  // 3b. Un pedido cancelado no admite ningún pago nuevo: se cancela cuando la
+  // persona elimina su cuenta, y desde ahí no vuelve a pagado. Va antes que la
+  // lista de estados de cobro, que incluye 'cancelado'.
+  if (pedido.estado === 'cancelado') return rechazo(MOTIVO_PEDIDO_CANCELADO)
 
   // 4. El pedido todavía está en un estado de cobro.
   if (!ESTADOS_DE_PAGO.includes(pedido.estado)) return rechazo('estado no admite pago')

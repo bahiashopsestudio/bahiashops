@@ -78,7 +78,16 @@ ejecuta. **En orden numérico**, y cada una una sola vez.
 007_vendedores_publicacion_automatica.sql  alta publicada sola + el bloqueo pasa a ser efectivo
 008_categorias_al_dia.sql                abre las categorías que ya tenían vendedores
 009_pedidos_franja_y_tienda.sql          franja de despacho + nombre de tienda congelado
+010_cerrar_lectura_usuarios.sql          cada persona lee solo su propia fila de usuarios
+011_registro_apodos_datos.sql            apodos, nombre y apellido por separado, copias de contacto en el pedido
+012                                      PENDIENTE DE SUBIR AL REPO (ya corrida en Supabase)
+013                                      PENDIENTE DE SUBIR AL REPO (ya corrida en Supabase)
+014                                      PENDIENTE DE SUBIR AL REPO (ya corrida en Supabase)
+015_avisos_pago.sql                      marca de "mail ya enviado" al vendedor y a quien compró
+016_eliminar_cuenta.sql                  eliminar mi cuenta: cerrada_en, disparadores y las funciones del proceso
 ```
+
+Las pruebas de la 016 (contra una base local, sin tocar Supabase): `npm run probar:sql`.
 
 Algunas piden un paso manual antes (crear un bucket de Storage desde el panel, por ejemplo). Está
 aclarado en el encabezado de cada archivo — vale la pena leerlos, tienen escrito el *por qué* de

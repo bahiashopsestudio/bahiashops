@@ -60,6 +60,12 @@ export default function Footer() {
             >
               Política de Privacidad
             </Link>
+            <Link
+              href="/perfil/eliminar-cuenta"
+              className="hover:text-[#9cc3ea] transition-colors underline-offset-2 hover:underline"
+            >
+              Eliminar mi cuenta
+            </Link>
             <div className="flex gap-4 mt-2">
               <a
                 href="https://instagram.com/bahiashops"

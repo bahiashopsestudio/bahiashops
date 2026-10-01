@@ -7,134 +7,26 @@
 // borró. Ahora el envío se hace desde adentro de la ruta que ya comprobó que
 // quien pide el despacho es el vendedor dueño del pedido.
 //
-// El archivo tiene tres partes:
-//   1. La plantilla y las piezas que comparten los tres mails.
+// La plantilla y las piezas comunes están en mailBase.js. Este archivo tiene
+// tres partes:
+//   1. Las piezas propias de los mails de pedido.
 //   2. El armado: funciones puras que reciben los datos y devuelven
 //      { asunto, html, texto }. No tocan la base ni la red, así que se pueden
 //      ver sin mandar nada (scripts/preview-mails.mjs).
 //   3. El envío: las lecturas, el reclamo de "una sola vez" y Resend.
 
-import { EMAIL_CONTACTO, REMITENTE_CONTACTO } from '@/lib/contacto'
+import { EMAIL_NOTIFICACIONES, REMITENTE_NO_REPLY } from '@/lib/contacto'
 import { SITIO_URL } from '@/lib/sitio'
+import {
+  FUENTE_TITULO, FUENTE_TEXTO, FUENTE_UI, TEXTO, ACENTO, GRIS, BORDE, TABLA,
+  escapar, pesos, negrita, plantilla, lineaAzul, tituloImagen, tituloTexto, parrafo,
+  tarjeta, boton, filaMonto, enviarPorResend,
+} from '@/lib/mailBase'
 import { normalizarTelefonoAR, formatearTelefonoAR, linkWhatsApp } from '@/lib/telefono'
 import { inicialDeApodo, colorDeApodo } from '@/lib/apodos'
 import { metodoPideDireccion } from '@/lib/precioPedido'
 
-// ── 1. Plantilla y piezas ───────────────────────────────────────────────────
-
-const FUENTE_TITULO = 'Fraunces, Georgia, serif'
-const FUENTE_TEXTO = 'Poppins, Arial, sans-serif'
-const FUENTE_UI = 'Inter, Arial, sans-serif'
-
-const FONDO = '#faf9f7'
-const TEXTO = '#0a0a0a'
-const ACENTO = '#4164fe'
-const GRIS = '#6f6f6f'
-const BORDE = '#e8e5df'
-
-const TABLA = 'role="presentation" cellpadding="0" cellspacing="0" border="0"'
-const ESTILO_PARRAFO = `margin:0 0 20px;font-family:${FUENTE_TEXTO};font-size:15px;font-weight:300;line-height:1.6;color:${TEXTO};`
-const ESTILO_TITULO = `font-family:${FUENTE_TITULO};font-size:26px;font-weight:500;line-height:1.25;color:${TEXTO};`
-
-function escapar(texto) {
-  return String(texto ?? '')
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
-}
-
-// "$ 14.500": punto de miles, sin decimales si el monto es entero.
-function pesos(n) {
-  return `$ ${Number(n || 0).toLocaleString('es-AR')}`
-}
-
-function negrita(html) {
-  return `<strong style="font-weight:500;">${html}</strong>`
-}
-
-// La base visual de los tres mails. `cuerpo` ya viene escapado.
-function plantilla({ asunto, cuerpo }) {
-  return `<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="light">
-<meta name="supported-color-schemes" content="light">
-<title>${escapar(asunto)}</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500&amp;family=Poppins:wght@300;500&amp;family=Inter:wght@500;600&amp;display=swap">
-</head>
-<body style="margin:0;padding:0;background-color:${FONDO};">
-<table ${TABLA} width="100%" bgcolor="${FONDO}" style="background-color:${FONDO};">
-<tr><td align="center" style="padding:32px 16px;">
-<table ${TABLA} width="600" style="width:100%;max-width:600px;">
-<tr><td align="center" style="padding:0 0 32px;">
-<img src="${SITIO_URL}/mail/logo.png" width="160" alt="Bahía Shops" style="display:block;border:0;font-family:${FUENTE_TITULO};font-size:22px;color:${TEXTO};">
-</td></tr>
-<tr><td align="left" style="font-family:${FUENTE_TEXTO};font-size:15px;font-weight:300;line-height:1.6;color:${TEXTO};">
-${cuerpo}
-</td></tr>
-</table>
-</td></tr>
-</table>
-</body>
-</html>`
-}
-
-// La línea azul en mayúsculas chicas que va arriba del título.
-function lineaAzul(texto) {
-  return `<p style="margin:0 0 10px;font-family:${FUENTE_UI};font-size:12px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:${ACENTO};">${escapar(texto)}</p>`
-}
-
-// El título es una imagen. Si el programa de mail no la muestra, se ve el alt
-// con el estilo del título.
-function tituloImagen(archivo, texto) {
-  return `<img src="${SITIO_URL}/mail/${archivo}" width="500" height="40" alt="${escapar(texto)}" style="display:block;border:0;max-width:100%;height:auto;margin:0 0 20px;${ESTILO_TITULO}">`
-}
-
-function tituloTexto(texto) {
-  return `<h1 style="margin:0 0 20px;${ESTILO_TITULO}">${escapar(texto)}</h1>`
-}
-
-function parrafo(html) {
-  return `<p style="${ESTILO_PARRAFO}">${html}</p>`
-}
-
-function tarjeta(etiqueta, contenido) {
-  return `<table ${TABLA} width="100%" style="margin:0 0 20px;">
-<tr><td bgcolor="#ffffff" style="background-color:#ffffff;border:1px solid ${BORDE};border-radius:8px;padding:20px;">
-<p style="margin:0 0 12px;font-family:${FUENTE_UI};font-size:11px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:${GRIS};">${escapar(etiqueta)}</p>
-${contenido}
-</td></tr>
-</table>`
-}
-
-// Un <a> dentro de una celda: el color de fondo va en la celda, que es lo que
-// respeta Outlook.
-function boton(texto, href, { blanco = false } = {}) {
-  const fondo = blanco ? '#ffffff' : TEXTO
-  const color = blanco ? TEXTO : '#ffffff'
-  return `<table ${TABLA} width="100%">
-<tr><td align="center" bgcolor="${fondo}" style="background-color:${fondo};border:1px solid ${TEXTO};border-radius:4px;">
-<a href="${escapar(href)}" target="_blank" style="display:block;padding:14px 20px;font-family:${FUENTE_UI};font-size:14px;font-weight:600;line-height:1.2;color:${color};text-decoration:none;border-radius:4px;">${escapar(texto)}</a>
-</td></tr>
-</table>`
-}
-
-// Una fila de la tarjeta de la compra: descripción a la izquierda, monto a la
-// derecha. `izquierda` y `derecha` ya vienen escapados.
-function filaMonto(izquierda, derecha, { fuerte = false, chica = false, borde = false } = {}) {
-  const base =
-    `padding:${borde ? '12px' : '5px'} 0 5px;` +
-    (borde ? `border-top:1px solid ${BORDE};` : '') +
-    `font-size:${chica ? '13px' : '15px'};line-height:1.5;` +
-    `color:${chica ? GRIS : TEXTO};`
-  const pesoTexto = fuerte ? 500 : 300
-  const pesoMonto = fuerte ? 600 : 500
-  return `<tr>
-<td align="left" valign="top" style="${base}font-family:${FUENTE_TEXTO};font-weight:${pesoTexto};">${izquierda}</td>
-<td align="right" valign="top" style="${base}padding-left:16px;white-space:nowrap;font-family:${FUENTE_UI};font-weight:${pesoMonto};">${derecha}</td>
-</tr>`
-}
+// ── 1. Piezas propias de los mails de pedido ──────────────────────────────────
 
 function descripcionItem(item) {
   return `${item.cantidad} × ${item.nombre}${item.variante ? ` · ${item.variante}` : ''}`
@@ -413,40 +305,12 @@ export function armarMailDespacho({ pedido, nombreVendedor, direccion, franja })
 
 // ── 3. Envío ────────────────────────────────────────────────────────────────
 
-// Manda un mail por Resend. Devuelve { ok: true } o { ok: false, motivo }.
-// Puede lanzar (red caída, tiempo agotado): quien llama lo ataja.
-async function enviarPorResend({ para, mail }) {
-  const respuesta = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: REMITENTE_CONTACTO,
-      to: para,
-      reply_to: EMAIL_CONTACTO,
-      subject: mail.asunto,
-      html: mail.html,
-      text: mail.texto,
-    }),
-    // Que un Resend colgado no deje esperando a quien llama.
-    signal: AbortSignal.timeout(10000),
-  })
-
-  if (!respuesta.ok) {
-    const detalle = await respuesta.text()
-    return { ok: false, motivo: `Resend respondió ${respuesta.status}: ${detalle.slice(0, 300)}` }
-  }
-  return { ok: true }
-}
-
 // Manda uno de los mails del pago, una sola vez por pedido. Antes de mandar
 // reclama el envío marcando la columna (aviso_vendedor_en / aviso_comprador_en)
 // sólo si estaba en null: si dos avisos de MercadoPago llegan a la vez, uno
 // solo se lleva la fila. Si Resend falla, la columna vuelve a null.
 // Nunca lanza.
-async function enviarUnaVez({ admin, pedidoId, columna, destinatario, para, armar }) {
+async function enviarUnaVez({ admin, pedidoId, columna, destinatario, para, armar, desde, responderA }) {
   const etiqueta = `Pedido ${pedidoId}: mail al ${destinatario}`
   try {
     if (!para) {
@@ -480,7 +344,7 @@ async function enviarUnaVez({ admin, pedidoId, columna, destinatario, para, arma
 
     let falla = null
     try {
-      const resultado = await enviarPorResend({ para, mail })
+      const resultado = await enviarPorResend({ para, mail, ...(desde ? { desde } : {}), ...(responderA ? { responderA } : {}) })
       if (!resultado.ok) falla = resultado.motivo
     } catch (err) {
       falla = err?.message || String(err)
@@ -549,13 +413,16 @@ export async function avisarPago({ admin, pedidoId }) {
     const idsCuentas = [vendedor.usuario_id, pedido.comprador_id].filter(Boolean)
     const { data: cuentas, error: errorCuentas } = await admin
       .from('usuarios')
-      .select('id, email, nombre_usuario')
+      .select('id, email, nombre_usuario, cerrada_en')
       .in('id', idsCuentas)
 
     if (errorCuentas) {
       console.error(`Pedido ${pedidoId}: no se pudieron leer las cuentas para los mails — ${errorCuentas.message}`)
     }
     const cuentaDe = (id) => (cuentas || []).find((c) => c.id === id) || null
+    // Una cuenta eliminada no recibe mails (no debería pasar: no se puede
+    // eliminar con un pedido en curso). El mail que le queda es de mentira.
+    const mailDe = (cuenta) => (cuenta && !cuenta.cerrada_en && !/.invalid$/i.test(cuenta.email || '') ? cuenta.email : null)
     const dueno = cuentaDe(vendedor.usuario_id)
     const comprador = cuentaDe(pedido.comprador_id)
 
@@ -594,11 +461,11 @@ export async function avisarPago({ admin, pedidoId }) {
     const [resultadoVendedor, resultadoComprador] = await Promise.all([
       enviarUnaVez({
         admin, pedidoId: pedido.id, columna: 'aviso_vendedor_en', destinatario: 'vendedor',
-        para: dueno?.email || null, armar: () => armarMailVenta(datos),
+        para: mailDe(dueno), armar: () => armarMailVenta(datos),
       }),
       enviarUnaVez({
         admin, pedidoId: pedido.id, columna: 'aviso_comprador_en', destinatario: 'comprador',
-        para: comprador?.email || null, armar: () => armarMailCompra(datos),
+        para: mailDe(comprador), armar: () => armarMailCompra(datos),
       }),
     ])
 
@@ -606,6 +473,77 @@ export async function avisarPago({ admin, pedidoId }) {
   } catch (err) {
     console.error(`Pedido ${pedidoId}: error armando los mails del pago`, err)
     return { vendedor: sinDatos, comprador: sinDatos }
+  }
+}
+
+// ── Pago sobre un pedido cancelado ───────────────────────────────────────────
+//
+// Pasa cuando alguien elimina su cuenta con un pedido todavía sin pagar (se
+// cancela) y después se acredita un pago sobre ese pedido. La plata ya le llegó
+// al vendedor, así que alguien tiene que coordinar el reembolso: el pedido NO
+// se toca, y este mail interno es el aviso. No lleva ningún dato de la persona.
+
+export function armarMailPagoTardio({ pedidoId, tienda, monto, pagoId, estado }) {
+  const asunto = `Pago sobre un pedido cancelado · Pedido #${pedidoId}`
+  const titulo = 'Llegó un pago sobre un pedido cancelado'
+  const explicacion =
+    'La persona que hizo este pedido eliminó su cuenta antes de que el pago se acreditara, y el pedido quedó cancelado. ' +
+    'El pago se aprobó igual y la plata ya está en la cuenta de MercadoPago de la tienda. El pedido no se modificó. ' +
+    'Hay que coordinar el reembolso con la tienda.'
+  const datos = [
+    ['Pedido', `#${pedidoId}`],
+    ['Tienda', tienda || 'Sin nombre'],
+    ['Monto', pesos(monto)],
+    ['Pago de MercadoPago', String(pagoId)],
+    ['Estado del pago', String(estado)],
+  ]
+
+  const cuerpo = [
+    tituloTexto(titulo),
+    parrafo(escapar(explicacion)),
+    tarjeta('Datos del pago', `<table ${TABLA} width="100%">${datos.map(([etiqueta, valor]) => filaMonto(escapar(etiqueta), escapar(valor))).join('\n')}</table>`),
+  ].join('\n')
+
+  const texto = [titulo, explicacion, ['Datos del pago', ...datos.map(([e, v]) => `${e}: ${v}`)].join('\n')].join('\n\n')
+
+  return { asunto, html: plantilla({ asunto, cuerpo }), texto }
+}
+
+// Manda el aviso interno, una sola vez por pedido (el mismo reclamo atómico de
+// los otros mails, con pedidos.aviso_pago_tardio_en). Si falla, suelta el
+// reclamo: el próximo aviso de MercadoPago lo reintenta. Nunca lanza.
+export async function avisarPagoTardio({ admin, pedidoId, pago }) {
+  try {
+    const { data: pedido, error } = await admin
+      .from('pedidos')
+      .select('id, vendedor_nombre, vendedor:vendedores ( nombre_negocio )')
+      .eq('id', pedidoId)
+      .maybeSingle()
+
+    if (error || !pedido) {
+      console.error(`Pedido ${pedidoId}: aviso de pago tardío no enviado — no se pudo leer el pedido.`, error?.message)
+      return { enviado: false, motivo: 'pedido_no_encontrado' }
+    }
+
+    return await enviarUnaVez({
+      admin,
+      pedidoId: pedido.id,
+      columna: 'aviso_pago_tardio_en',
+      destinatario: 'equipo (pago sobre pedido cancelado)',
+      para: EMAIL_NOTIFICACIONES,
+      desde: REMITENTE_NO_REPLY,
+      responderA: EMAIL_NOTIFICACIONES,
+      armar: () => armarMailPagoTardio({
+        pedidoId: pedido.id,
+        tienda: pedido.vendedor_nombre || pedido.vendedor?.nombre_negocio,
+        monto: pago.transaction_amount,
+        pagoId: pago.id,
+        estado: pago.status,
+      }),
+    })
+  } catch (err) {
+    console.error(`Pedido ${pedidoId}: error en el aviso de pago tardío`, err)
+    return { enviado: false, motivo: 'excepcion' }
   }
 }
 
@@ -639,6 +577,12 @@ export async function avisarDespacho({ admin, pedidoId }) {
     if (errorUsuario || !user?.email) {
       console.error('Aviso de despacho: sin mail del comprador', pedidoId, errorUsuario?.message)
       return { enviado: false, motivo: 'sin_destinatario' }
+    }
+
+    // Una cuenta eliminada queda con un mail .invalid: no se le manda nada.
+    if (/.invalid$/i.test(user.email)) {
+      console.error('Aviso de despacho: la cuenta del comprador fue eliminada', pedidoId)
+      return { enviado: false, motivo: 'cuenta_eliminada' }
     }
 
     if (!process.env.RESEND_API_KEY) {

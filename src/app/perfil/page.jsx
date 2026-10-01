@@ -13,6 +13,32 @@ import { validarApodo, avisarApodoCambiado } from '@/lib/apodos'
 
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage']
 
+// Una lista de filas con flecha, la misma para los links de arriba y para "Tu
+// cuenta": mismo tamaño, mismo color.
+function ListaDeLinks({ items }) {
+  return (
+    <div className="rounded-2xl border border-[#0a0a0a]/5 overflow-hidden mb-6">
+      {items.map((link, i) => (
+        <Link
+          key={link.href}
+          href={link.href}
+          className={`flex items-center gap-3 px-5 py-4 hover:bg-[#F5F2EC] transition ${
+            i < items.length - 1 ? 'border-b border-[#0a0a0a]/5' : ''
+          }`}
+        >
+          <svg className="w-5 h-5 text-[#0a0a0a]/25 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d={link.icon} />
+          </svg>
+          <span className="flex-1 text-sm text-[#0a0a0a] font-light">{link.label}</span>
+          <svg className="w-4 h-4 text-[#0a0a0a]/15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+          </svg>
+        </Link>
+      ))}
+    </div>
+  )
+}
+
 export default function PerfilPage() {
   const supabase = createClient()
   const router = useRouter()
@@ -132,7 +158,11 @@ export default function PerfilPage() {
     { href: '/mis-pedidos', label: 'Mis pedidos', icon: 'M15.75 10.5V6a3.75 3.75 0 1 0-7.5 0v4.5m11.356-1.993 1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 0 1-1.12-1.243l1.264-12A1.125 1.125 0 0 1 5.513 7.5h12.974c.576 0 1.059.435 1.119 1.007Z' },
     { href: '/favoritos', label: 'Mis favoritos', icon: 'M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z' },
     { href: '/mis-direcciones', label: 'Mis direcciones', icon: 'M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z' },
+  ]
+
+  const linksCuenta = [
     { href: '/actualizar-contrasena', label: 'Cambiar contraseña', icon: 'M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z' },
+    { href: '/perfil/eliminar-cuenta', label: 'Eliminar mi cuenta', icon: 'm14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0' },
   ]
 
   return (
@@ -211,25 +241,7 @@ export default function PerfilPage() {
             )}
 
             {/* Links */}
-            <div className="rounded-2xl border border-[#0a0a0a]/5 overflow-hidden mb-6">
-              {links.map((link, i) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className={`flex items-center gap-3 px-5 py-4 hover:bg-[#F5F2EC] transition ${
-                    i < links.length - 1 ? 'border-b border-[#0a0a0a]/5' : ''
-                  }`}
-                >
-                  <svg className="w-5 h-5 text-[#0a0a0a]/25 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d={link.icon} />
-                  </svg>
-                  <span className="flex-1 text-sm text-[#0a0a0a] font-light">{link.label}</span>
-                  <svg className="w-4 h-4 text-[#0a0a0a]/15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-                  </svg>
-                </Link>
-              ))}
-            </div>
+            <ListaDeLinks items={links} />
 
             {/* Vendedor */}
             <div className="rounded-2xl border border-[#0a0a0a]/5 overflow-hidden mb-6">
@@ -276,14 +288,22 @@ export default function PerfilPage() {
               )}
             </div>
 
-            {/* Cerrar sesión */}
-            <button
-              type="button"
-              onClick={cerrarSesion}
-              className="w-full py-3.5 border border-[#0a0a0a]/10 rounded-full text-sm text-[#0a0a0a]/40 font-light hover:border-[#4164fe]/30 hover:text-[#4164fe] transition cursor-pointer"
-            >
-              Cerrar sesión
-            </button>
+            {/* Tu cuenta: las filas son iguales a las de arriba, a la vista */}
+            <p style={{ fontFamily: "'Inter', sans-serif", fontWeight: 600, fontSize: '11px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(10,10,10,0.4)', margin: '0 0 8px 4px' }}>
+              Tu cuenta
+            </p>
+            <ListaDeLinks items={linksCuenta} />
+
+            {/* Cerrar sesión: abajo de todo y aparte */}
+            <div className="mt-10">
+              <button
+                type="button"
+                onClick={cerrarSesion}
+                className="w-full py-3.5 border border-[#0a0a0a]/10 rounded-full text-sm text-[#0a0a0a]/40 font-light hover:border-[#4164fe]/30 hover:text-[#4164fe] transition cursor-pointer"
+              >
+                Cerrar sesión
+              </button>
+            </div>
 
           </div>
         </div>

@@ -56,6 +56,14 @@ function IconoBombilla() {
   )
 }
 
+function IconoUsuario() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+    </svg>
+  )
+}
+
 function Tarjeta({ href, disabled, icono, iconoFondo, iconoColor, titulo, desc, badge, badgeTipo, flecha }) {
   const [hover, setHover] = useState(false)
 
@@ -405,6 +413,15 @@ export default function AdminDashboard() {
               badge={ideasPendientes > 0 ? ideasPendientes : null}
               badgeTipo="gris"
               flecha="Ver ideas →"
+            />
+            <Tarjeta
+              href="/admin/cuentas"
+              icono={<IconoUsuario />}
+              iconoFondo="#e1e7ff"
+              iconoColor="#4164fe"
+              titulo="Cuentas"
+              desc="Buscá una cuenta por mail y eliminala. Pensado para las cuentas de prueba."
+              flecha="Buscar una cuenta →"
             />
             <TarjetaVotos preguntas={votos} error={errorVotos} />
           </div>

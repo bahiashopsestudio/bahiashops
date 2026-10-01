@@ -23,8 +23,9 @@ export function resolve(especificador, contexto, siguiente) {
 `
 register('data:text/javascript,' + encodeURIComponent(alias))
 
-const { armarMailVenta, armarMailCompra, armarMailDespacho } =
+const { armarMailVenta, armarMailCompra, armarMailDespacho, armarMailPagoTardio } =
   await import('../src/lib/mailsPedidos.js')
+const { armarMailCuentaEliminada } = await import('../src/lib/mailsCuenta.js')
 
 const base = {
   pedidoId: 1042,
@@ -84,6 +85,16 @@ mails.despacho = armarMailDespacho({
   nombreVendedor: 'Cerámica del Puerto',
   direccion: 'Alsina 235, 2B',
   franja: 'Tarde',
+})
+
+// Eliminar mi cuenta: con nombre y sin nombre ("Hola:").
+mails['cuenta-eliminada'] = armarMailCuentaEliminada({ nombre: 'Lucía' })
+mails['cuenta-eliminada-sin-nombre'] = armarMailCuentaEliminada({ nombre: null })
+mails['cuenta-eliminada-escapado'] = armarMailCuentaEliminada({ nombre: '<b>Ana</b> & "Co"' })
+
+// Aviso interno de un pago sobre un pedido cancelado (a notificaciones@).
+mails['interno-pago-tardio'] = armarMailPagoTardio({
+  pedidoId: 1042, tienda: '<b>Lo de "Pepa" & Co</b>', monto: 22800, pagoId: 123456789, estado: 'approved',
 })
 
 const carpeta = new URL('vista-mails/', raiz)
