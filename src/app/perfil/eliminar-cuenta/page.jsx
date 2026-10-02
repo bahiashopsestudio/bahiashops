@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
-import { EMAIL_CONTACTO } from '@/lib/contacto'
+import ModalContacto from '@/components/ModalContacto'
 
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage']
 
@@ -17,9 +17,6 @@ const ROJO = '#b3261e'
 const NEGRO = '#0a0a0a'
 const FONDO = '#faf9f7'
 const BORDE = '#e8e5df'
-
-const MAIL_BAJA_TIENDA =
-  `mailto:${EMAIL_CONTACTO}?subject=${encodeURIComponent('Quiero dar de baja mi tienda')}`
 
 // ── Piezas de la página ──────────────────────────────────────────────────────
 
@@ -81,11 +78,7 @@ const estiloBoton = {
 
 function BotonNegro({ href, onClick, children }) {
   const estilo = { ...estiloBoton, backgroundColor: NEGRO }
-  if (href) {
-    return href.startsWith('mailto:')
-      ? <a href={href} style={estilo}>{children}</a>
-      : <Link href={href} style={estilo}>{children}</Link>
-  }
+  if (href) return <Link href={href} style={estilo}>{children}</Link>
   return <button type="button" onClick={onClick} style={estilo}>{children}</button>
 }
 
@@ -100,7 +93,7 @@ function LinkVolver({ children = 'Volver a mi perfil' }) {
 }
 
 // Una sección por impedimento, con el texto de cada uno.
-function SeccionMotivo({ motivo, datos }) {
+function SeccionMotivo({ motivo, datos, onContacto }) {
   if (motivo === 'TIENDA') {
     return (
       <div style={{ marginBottom: '24px' }}>
@@ -108,7 +101,8 @@ function SeccionMotivo({ motivo, datos }) {
           Tenés una tienda en Bahía Shops: <strong style={negrita}>{datos.tienda?.nombre}</strong>. Para eliminar tu cuenta, primero hay que darla de baja.
         </Caja>
         <Parrafo>Así tus clientes no se quedan con compras sin respuesta y tu MercadoPago se desconecta bien.</Parrafo>
-        <BotonNegro href={MAIL_BAJA_TIENDA}>Escribirnos para darla de baja</BotonNegro>
+        {/* Abre el formulario de contacto de siempre, con el mensaje ya escrito. */}
+        <BotonNegro onClick={onContacto}>Escribirnos para darla de baja</BotonNegro>
       </div>
     )
   }
@@ -175,6 +169,7 @@ export default function EliminarCuentaPage() {
   const [errorEnvio, setErrorEnvio] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
   const [categorias, setCategorias] = useState([])
+  const [contactoAbierto, setContactoAbierto] = useState(false)
 
   useEffect(() => {
     if (menuOpen) { document.body.style.overflow = 'hidden' } else { document.body.style.overflow = '' }
@@ -360,7 +355,7 @@ export default function EliminarCuentaPage() {
                   <LineaSuperior>ELIMINAR MI CUENTA</LineaSuperior>
                   <Titulo>{titulo}</Titulo>
                   <div style={{ marginTop: '20px' }}>
-                    {motivos.map((m) => <SeccionMotivo key={m} motivo={m} datos={datos} />)}
+                    {motivos.map((m) => <SeccionMotivo key={m} motivo={m} datos={datos} onContacto={() => setContactoAbierto(true)} />)}
                   </div>
                   <LinkVolver />
                 </>
@@ -411,6 +406,16 @@ export default function EliminarCuentaPage() {
           </div>
         </div>
       </div>
+
+      {/* El mensaje llega precargado; la persona lo puede editar antes de mandarlo. */}
+      <ModalContacto
+        abierto={contactoAbierto}
+        onClose={() => setContactoAbierto(false)}
+        titulo="Dar de baja mi tienda"
+        subtitulo="Revisá el mensaje y mandalo."
+        mensajeInicial={`Hola, quiero dar de baja mi tienda ${datos?.tienda?.nombre || ''} para poder eliminar mi cuenta.`}
+        contexto="Baja de tienda — eliminar cuenta"
+      />
     </>
   )
 }

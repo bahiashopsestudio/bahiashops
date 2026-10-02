@@ -456,34 +456,37 @@ function PedidoCard({ pedido, abierto, items, avanzando, onToggle, onAvanzar }) 
             ))}
           </div>
 
-          {p.comprador_eliminado ? (
-            <p className="m-0 mb-4 text-sm text-[#0a0a0a]/40 font-light">Quien hizo esta compra eliminó su cuenta.</p>
-          ) : (
-            <div className="mb-4">
-              <p className="m-0 mb-1.5 text-[11px] text-[#0a0a0a]/25 font-light uppercase tracking-wider">Entrega</p>
-              <p className="m-0 text-sm text-[#0a0a0a]/60 font-light">{p.metodo_envio}</p>
-              {p.turno_preferido && (
-                <p className="m-0 text-[11px] text-[#0a0a0a]/25 font-light">Preferencia: {p.turno_preferido.toLowerCase()}</p>
-              )}
-              {p.franja_horaria && (
-                <p className="m-0 text-[11px] text-[#0a0a0a]/40 font-light">Franja horaria avisada: {p.franja_horaria.toLowerCase()}</p>
-              )}
-              {(p.comprador_nombre || p.comprador_apellido || p.comprador_telefono) && (
-                <p className="mt-1 mb-0 text-sm text-[#0a0a0a]/60 font-light">
-                  {[p.comprador_nombre, p.comprador_apellido].filter(Boolean).join(' ')}
-                  {(p.comprador_nombre || p.comprador_apellido) && p.comprador_telefono && <br />}
-                  {p.comprador_telefono && <>Tel. {p.comprador_telefono}</>}
-                </p>
-              )}
-              {p.direccion && (
-                <p className="mt-1 mb-0 text-sm text-[#0a0a0a]/60 font-light">
-                  {p.direccion.calle} {p.direccion.numero}{p.direccion.piso_depto ? `, ${p.direccion.piso_depto}` : ''}<br />
-                  Tel. {p.direccion.telefono}
-                </p>
-              )}
-            </div>
-
-          )}
+          <div className="mb-4">
+            <p className="m-0 mb-1.5 text-[11px] text-[#0a0a0a]/25 font-light uppercase tracking-wider">Entrega</p>
+            <p className="m-0 text-sm text-[#0a0a0a]/60 font-light">{p.metodo_envio}</p>
+            {p.turno_preferido && (
+              <p className="m-0 text-[11px] text-[#0a0a0a]/25 font-light">Preferencia: {p.turno_preferido.toLowerCase()}</p>
+            )}
+            {p.franja_horaria && (
+              <p className="m-0 text-[11px] text-[#0a0a0a]/40 font-light">Franja horaria avisada: {p.franja_horaria.toLowerCase()}</p>
+            )}
+            {p.comprador_eliminado ? (
+              // Cuenta eliminada: el método de entrega queda a la vista; el nombre,
+              // el teléfono y la dirección ya no existen.
+              <p className="mt-1 mb-0 text-sm text-[#0a0a0a]/40 font-light">Quien hizo esta compra eliminó su cuenta.</p>
+            ) : (
+              <>
+                {(p.comprador_nombre || p.comprador_apellido || p.comprador_telefono) && (
+                  <p className="mt-1 mb-0 text-sm text-[#0a0a0a]/60 font-light">
+                    {[p.comprador_nombre, p.comprador_apellido].filter(Boolean).join(' ')}
+                    {(p.comprador_nombre || p.comprador_apellido) && p.comprador_telefono && <br />}
+                    {p.comprador_telefono && <>Tel. {p.comprador_telefono}</>}
+                  </p>
+                )}
+                {p.direccion && (
+                  <p className="mt-1 mb-0 text-sm text-[#0a0a0a]/60 font-light">
+                    {p.direccion.calle} {p.direccion.numero}{p.direccion.piso_depto ? `, ${p.direccion.piso_depto}` : ''}<br />
+                    Tel. {p.direccion.telefono}
+                  </p>
+                )}
+              </>
+            )}
+          </div>
 
           <div className="pt-2 border-t border-[#0a0a0a]/5 mb-4">
             <div className="flex justify-between text-sm py-0.5">
