@@ -86,9 +86,11 @@ ejecuta. **En orden numérico**, y cada una una sola vez.
 015_avisos_pago.sql                      marca de "mail ya enviado" al vendedor y a quien compró
 016_eliminar_cuenta.sql                  eliminar mi cuenta: cerrada_en, disparadores y las funciones del proceso
 017_localidades_activa.sql               localidades.activa: Cerri y White fuera de los selectores, la base rechaza altas ahí
+018_vendedores_zona.sql                  dirección exacta o zona aproximada; la ubicación la escribe solo el servidor
 ```
 
 Las pruebas de la 016 (contra una base local, sin tocar Supabase): `npm run probar:sql`.
+Las de la 018 (estado a medias y de cero, redondeo, permisos): `npm run probar:018`.
 
 Algunas piden un paso manual antes (crear un bucket de Storage desde el panel, por ejemplo). Está
 aclarado en el encabezado de cada archivo — vale la pena leerlos, tienen escrito el *por qué* de

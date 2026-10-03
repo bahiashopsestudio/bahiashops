@@ -1,7 +1,12 @@
 'use client'
 
 // El mapa público de vendedores: el de la home (MapaDestacado) y el de /mapa.
-// Antes eran dos copias casi idénticas (MapaHome y MapaVendedoresLeaflet).
+//
+// Quien eligió mostrar su dirección exacta aparece con un pin en su punto.
+// Quien no, con un círculo alrededor de su punto redondeado (migración 018):
+// nunca con un pin. Las tiendas que caen en la misma celda de la grilla
+// comparten un solo círculo, con todas en la ventanita; correrlas un poco
+// para separarlas sería inventar ubicaciones.
 //
 // Se importa siempre con dynamic(..., { ssr: false }): Leaflet necesita
 // window al cargarse.
@@ -12,12 +17,13 @@ import L from 'leaflet'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { TILES_VENDEDORES } from '@/lib/mapaTiles'
+import { textoZona } from '@/lib/zonaVendedor'
+import CirculoZona from '@/components/CirculoZona'
 import 'leaflet/dist/leaflet.css'
 
 const CENTRO_BB = [-38.7183, -62.2663]
 
-const COLOR_LOCAL = '#ff1010'
-const COLOR_CASA = '#9cc3ea'
+const COLOR_EXACTA = '#ff1010'
 
 function iniciales(nombre) {
   if (!nombre) return ''
@@ -44,74 +50,118 @@ function crearIconoPin(color) {
   })
 }
 
-const ICONO_LOCAL = crearIconoPin(COLOR_LOCAL)
-const ICONO_CASA = crearIconoPin(COLOR_CASA)
+const ICONO_EXACTA = crearIconoPin(COLOR_EXACTA)
 
-function MarcadorVendedor({ v, icono, nombreBarrio }) {
-  const markerRef = useRef(null)
+// La ventanita se abre al pasar el mouse y se queda abierta mientras el mouse
+// esté sobre ella. Sirve igual para un pin que para un círculo.
+function usePopupAlPasar() {
+  const capaRef = useRef(null)
   const cierreTimeout = useRef(null)
 
   function abrirPopup() {
     clearTimeout(cierreTimeout.current)
-    markerRef.current?.openPopup()
+    capaRef.current?.openPopup()
   }
 
   function cerrarPopupConDemora() {
     cierreTimeout.current = setTimeout(() => {
-      markerRef.current?.closePopup()
+      capaRef.current?.closePopup()
     }, 150)
   }
 
+  const eventHandlers = {
+    mouseover: abrirPopup,
+    mouseout: cerrarPopupConDemora,
+    popupopen: (e) => {
+      const el = e.popup.getElement()
+      if (!el) return
+      el.addEventListener('mouseenter', abrirPopup)
+      el.addEventListener('mouseleave', cerrarPopupConDemora)
+    },
+  }
+
+  return { capaRef, eventHandlers }
+}
+
+function FichaTienda({ v, nombreBarrio, compacta = false }) {
+  const zona = v.direccion_visible ? null : textoZona(v.zona_calle, v.zona_entre, v.zona_y)
+  const lado = compacta ? '32px' : '40px'
   return (
-    <Marker
-      ref={markerRef}
-      position={[v.latitud, v.longitud]}
-      icon={icono}
-      eventHandlers={{
-        mouseover: abrirPopup,
-        mouseout: cerrarPopupConDemora,
-        popupopen: (e) => {
-          const el = e.popup.getElement()
-          if (!el) return
-          el.addEventListener('mouseenter', abrirPopup)
-          el.addEventListener('mouseleave', cerrarPopupConDemora)
-        },
-      }}
-    >
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+        {v.logo_url ? (
+          <img src={v.logo_url} alt="" style={{ width: lado, height: lado, borderRadius: '8px', objectFit: 'cover' }} />
+        ) : (
+          <div style={{ width: lado, height: lado, borderRadius: '8px', background: '#4164fe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ fontSize: '13px', fontWeight: 700, color: 'white' }}>{iniciales(v.nombre_negocio)}</span>
+          </div>
+        )}
+        <div>
+          <div style={{ fontWeight: 700, fontSize: '14px', color: '#0a0a0a' }}>{v.nombre_negocio}</div>
+          {nombreBarrio && (
+            <div style={{ fontSize: '11px', fontWeight: 500, color: '#4164fe', marginTop: '1px' }}>{nombreBarrio}</div>
+          )}
+          {zona && (
+            <div style={{ fontSize: '11px', color: 'rgba(10,10,10,0.5)', marginTop: '1px' }}>{zona}</div>
+          )}
+        </div>
+      </div>
+      {!compacta && v.descripcion_corta && (
+        <p style={{ fontSize: '12px', color: 'rgba(10,10,10,0.5)', margin: '0 0 10px', lineHeight: '1.4' }}>
+          {v.descripcion_corta}
+        </p>
+      )}
+      <Link
+        href={`/tienda/${v.slug}`}
+        style={{
+          display: 'inline-block', color: '#4164fe',
+          fontSize: '12px', fontWeight: 600, textDecoration: 'none',
+        }}
+      >
+        Ver tienda →
+      </Link>
+    </div>
+  )
+}
+
+function PinTienda({ v, nombreBarrio }) {
+  const { capaRef, eventHandlers } = usePopupAlPasar()
+  return (
+    <Marker ref={capaRef} position={[v.latitud, v.longitud]} icon={ICONO_EXACTA} eventHandlers={eventHandlers}>
       <Popup className="mapa-popup" autoPan={false}>
         <div style={{ fontFamily: "'Inter', sans-serif", minWidth: '180px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-            {v.logo_url ? (
-              <img src={v.logo_url} alt="" style={{ width: '40px', height: '40px', borderRadius: '8px', objectFit: 'cover' }} />
-            ) : (
-              <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: '#4164fe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ fontSize: '13px', fontWeight: 700, color: 'white' }}>{iniciales(v.nombre_negocio)}</span>
-              </div>
-            )}
-            <div>
-              <div style={{ fontWeight: 700, fontSize: '14px', color: '#0a0a0a' }}>{v.nombre_negocio}</div>
-              {nombreBarrio && (
-                <div style={{ fontSize: '11px', fontWeight: 500, color: '#4164fe', marginTop: '1px' }}>{nombreBarrio}</div>
-              )}
-            </div>
-          </div>
-          {v.descripcion_corta && (
-            <p style={{ fontSize: '12px', color: 'rgba(10,10,10,0.5)', margin: '0 0 10px', lineHeight: '1.4' }}>
-              {v.descripcion_corta}
-            </p>
-          )}
-          <Link
-            href={`/tienda/${v.slug}`}
-            style={{
-              display: 'inline-block', color: '#4164fe',
-              fontSize: '12px', fontWeight: 600, textDecoration: 'none',
-            }}
-          >
-            Ver tienda →
-          </Link>
+          <FichaTienda v={v} nombreBarrio={nombreBarrio} />
         </div>
       </Popup>
     </Marker>
+  )
+}
+
+function ZonaTiendas({ tiendas, barriosMap }) {
+  const { capaRef, eventHandlers } = usePopupAlPasar()
+  const nombreBarrio = (v) => (v.barrio_id ? barriosMap[v.barrio_id] : null)
+  const centro = [tiendas[0].latitud, tiendas[0].longitud]
+  return (
+    <CirculoZona centro={centro} capaRef={capaRef} eventHandlers={eventHandlers}>
+      <Popup className="mapa-popup" autoPan={false}>
+        <div style={{ fontFamily: "'Inter', sans-serif", minWidth: '180px' }}>
+          {tiendas.length === 1 ? (
+            <FichaTienda v={tiendas[0]} nombreBarrio={nombreBarrio(tiendas[0])} />
+          ) : (
+            <>
+              <div style={{ fontSize: '11px', fontWeight: 600, color: 'rgba(10,10,10,0.45)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                {tiendas.length} tiendas en esta zona
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', maxHeight: '260px', overflowY: 'auto' }}>
+                {tiendas.map((v) => (
+                  <FichaTienda key={v.id} v={v} nombreBarrio={nombreBarrio(v)} compacta />
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </Popup>
+    </CirculoZona>
   )
 }
 
@@ -137,6 +187,18 @@ export default function MapaVendedores({ vendedores = [] }) {
     cargarBarrios()
   }, [])
 
+  const conPunto = vendedores.filter((v) => v.latitud && v.longitud)
+  const exactas = conPunto.filter((v) => v.direccion_visible)
+
+  // Una entrada por celda: los puntos de la zona ya vienen redondeados, así
+  // que dos tiendas de la misma celda tienen exactamente el mismo punto.
+  const zonas = new Map()
+  for (const v of conPunto.filter((v) => !v.direccion_visible)) {
+    const celda = `${v.latitud},${v.longitud}`
+    if (!zonas.has(celda)) zonas.set(celda, [])
+    zonas.get(celda).push(v)
+  }
+
   // relative z-0: los controles de Leaflet (la atribución) tienen z-index
   // 1000 y sin este contexto quedarían por encima de la Navbar (z-900).
   return (
@@ -150,20 +212,13 @@ export default function MapaVendedores({ vendedores = [] }) {
       >
         <TileLayer {...TILES_VENDEDORES} />
 
-        {vendedores.map((v) => {
-          if (!v.latitud || !v.longitud) return null
+        {[...zonas].map(([celda, tiendas]) => (
+          <ZonaTiendas key={celda} tiendas={tiendas} barriosMap={barriosMap} />
+        ))}
 
-          const nombreBarrio = v.barrio_id ? barriosMap[v.barrio_id] : null
-
-          return (
-            <MarcadorVendedor
-              key={v.id}
-              v={v}
-              icono={v.recibe_publico ? ICONO_LOCAL : ICONO_CASA}
-              nombreBarrio={nombreBarrio}
-            />
-          )
-        })}
+        {exactas.map((v) => (
+          <PinTienda key={v.id} v={v} nombreBarrio={v.barrio_id ? barriosMap[v.barrio_id] : null} />
+        ))}
       </MapContainer>
 
       <style>{`

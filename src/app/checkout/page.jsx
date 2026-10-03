@@ -110,6 +110,8 @@ function CheckoutContenido() {
   const [avisoPrecios, setAvisoPrecios] = useState('')
 
   const [vendedorBarrioId, setVendedorBarrioId] = useState(null)
+  // Si la tienda no muestra su dirección, el retiro se coordina con ella.
+  const [retiroACoordinar, setRetiroACoordinar] = useState(false)
   const [metodosDisponibles, setMetodosDisponibles] = useState([])
   const [costosVendedor, setCostosVendedor] = useState({})
   const [zonaCadeteria, setZonaCadeteria] = useState(null)
@@ -282,9 +284,10 @@ function CheckoutContenido() {
   // Los costos de envío del vendedor. Se recargan si el servidor avisa que el
   // envío cambió mientras la persona estaba en esta pantalla.
   async function cargarVendedor() {
-    const { data: vendedor } = await supabase.from('vendedores').select('barrio_id, metodos_entrega_default, costos_envio_zona').eq('id', vendedorId).single()
+    const { data: vendedor } = await supabase.from('vendedores').select('barrio_id, direccion_visible, metodos_entrega_default, costos_envio_zona').eq('id', vendedorId).single()
     if (vendedor) {
       setVendedorBarrioId(vendedor.barrio_id)
+      setRetiroACoordinar(vendedor.direccion_visible === false)
       setMetodosDisponibles(vendedor.metodos_entrega_default || [])
       setCostosVendedor(vendedor.costos_envio_zona || {})
     }
@@ -518,7 +521,11 @@ function CheckoutContenido() {
 
   // Construir métodos
   const metodos = []
-  if (ofrecidos.includes('retiro')) metodos.push({ id: 'retiro', label: 'Retiro en el local', sub: 'Retirás en la dirección del vendedor', costoLabel: 'Gratis', pideDireccion: false, pideTurno: false })
+  if (ofrecidos.includes('retiro')) {
+    metodos.push(retiroACoordinar
+      ? { id: 'retiro', label: 'Retiro', sub: 'Coordinás con la tienda dónde y cuándo', costoLabel: 'Gratis', pideDireccion: false, pideTurno: false }
+      : { id: 'retiro', label: 'Retiro en el local', sub: 'Retirás en la dirección del vendedor', costoLabel: 'Gratis', pideDireccion: false, pideTurno: false })
+  }
   if (ofrecidos.includes('cadeteria')) {
     let costoLabel = 'Seleccioná una dirección'
     if (calculandoZona) costoLabel = 'Calculando...'

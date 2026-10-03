@@ -5,6 +5,7 @@ import Link from 'next/link'
 import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
 import { createClient } from '@/lib/supabase/client'
+import { textoZona } from '@/lib/zonaVendedor'
 
 // ═══════════════════════════════════════════════════════════
 // HELPERS
@@ -38,6 +39,11 @@ export default function TiendaContent({ vendedor, productos }) {
   const [categorias, setCategorias] = useState([])
 
   const instagramHandle = vendedor.instagram?.replace('@', '')
+  // La dirección, si eligió mostrarla; si no, la cuadra ("12 de Octubre
+  // entre Salta y Mitre"). Nunca la dirección de quien eligió "No".
+  const lugarVisible = vendedor.direccion_visible
+    ? vendedor.direccion
+    : textoZona(vendedor.zona_calle, vendedor.zona_entre, vendedor.zona_y)
 
   useEffect(() => {
     if (menuOpen) {
@@ -296,13 +302,13 @@ export default function TiendaContent({ vendedor, productos }) {
                     </svg>
                   </a>
                 )}
-                {vendedor.recibe_publico && vendedor.direccion && (
+                {lugarVisible && (
                   <div className="flex items-center gap-2.5 text-sm text-[#0a0a0a]/40 font-light">
                     <svg className="w-4 h-4 text-[#0a0a0a]/25 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
                       <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
                     </svg>
-                    <span>{vendedor.direccion}</span>
+                    <span>{lugarVisible}</span>
                   </div>
                 )}
                 {vendedor.horarios_texto_libre && (

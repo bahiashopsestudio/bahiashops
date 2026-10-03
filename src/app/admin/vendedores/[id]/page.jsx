@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import Navbar from '@/components/Navbar'
+import { textoZona } from '@/lib/zonaVendedor'
 
 const ESTADOS = {
   pendiente:        { etiqueta: 'Pendiente',        color: '#6b6d00', fondo: '#f1f29f' },
@@ -423,10 +424,12 @@ export default function AdminVendedorDetallePage() {
             </Seccion>
 
             <Seccion titulo="Ubicación">
-              <Dato etiqueta="Recibe público">{vendedor.recibe_publico ? 'Sí' : 'No'}</Dato>
+              <Dato etiqueta="Muestra su dirección">{vendedor.direccion_visible ? 'Sí' : 'No (zona aproximada)'}</Dato>
               <Dato etiqueta="Localidad">{vendedor.localidades?.nombre}</Dato>
               <Dato etiqueta="Barrio">{vendedor.barrios?.nombre}</Dato>
-              <Dato etiqueta="Dirección">{vendedor.direccion}</Dato>
+              {vendedor.direccion_visible
+                ? <Dato etiqueta="Dirección">{vendedor.direccion}</Dato>
+                : <Dato etiqueta="Cuadra">{textoZona(vendedor.zona_calle, vendedor.zona_entre, vendedor.zona_y)}</Dato>}
             </Seccion>
 
             <Seccion titulo="Disponibilidad y despacho">

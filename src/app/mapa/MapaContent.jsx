@@ -27,8 +27,8 @@ export default function MapaContent({ vendedores = [], categorias = [] }) {
     return () => { document.body.style.overflow = '' }
   }, [menuOpen])
 
-  const locales = vendedores.filter(v => v.recibe_publico)
-  const casas = vendedores.filter(v => !v.recibe_publico)
+  const exactas = vendedores.filter(v => v.direccion_visible)
+  const zonas = vendedores.filter(v => !v.direccion_visible)
 
   return (
     <>
@@ -113,11 +113,11 @@ export default function MapaContent({ vendedores = [], categorias = [] }) {
           <div className="w-full lg:w-1/2 px-4 md:px-8 lg:px-6 py-6 flex gap-5 justify-center lg:justify-end">
             <div className="flex items-center gap-2">
               <div className="w-[8px] h-[8px] rounded-full bg-[#ff1010] shrink-0" />
-              <span className="text-[11px] font-light text-[#0a0a0a]/35">Local con dirección ({locales.length})</span>
+              <span className="text-[11px] font-light text-[#0a0a0a]/35">Dirección exacta ({exactas.length})</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-[8px] h-[8px] rounded-full bg-[#9cc3ea] shrink-0" />
-              <span className="text-[11px] font-light text-[#0a0a0a]/35">Trabaja desde casa ({casas.length})</span>
+              <div className="w-[12px] h-[12px] rounded-full bg-[#9cc3ea]/60 border border-[#6fa3d6] shrink-0" />
+              <span className="text-[11px] font-light text-[#0a0a0a]/35">Zona aproximada ({zonas.length})</span>
             </div>
           </div>
         </div>

@@ -2,22 +2,15 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import dynamic from 'next/dynamic'
 import { createClient } from '@/lib/supabase/client'
 import { activarCategoria, AVISO_CATEGORIA } from '@/lib/categorias'
 import BloqueHorarios, { HORARIOS_INICIALES } from './BloqueHorarios'
 import ModalContacto from '@/components/ModalContacto'
+import BloqueUbicacion, { guardarUbicacion } from '@/components/BloqueUbicacion'
 import {
   inputClasses, selectClasses, fuenteTitulo, fuenteAyuda, ayudaClasses,
   btnNegro, btnNegroInactivo, btnLinea, btnAmarillo, pillActiva, pillInactiva, fuentePill,
 } from '@/lib/estilosVendedor'
-
-const MapaUbicacion = dynamic(() => import('./MapaUbicacion'), {
-  ssr: false,
-  loading: () => <p className="text-[#0a0a0a]/20 text-sm font-light">Cargando mapa...</p>,
-})
-
-const CENTRO_BB = { lat: -38.7183, lng: -62.2663 }
 
 const EJEMPLOS_RED = {
   facebook: 'https://facebook.com/bahiashops',
@@ -50,19 +43,9 @@ export default function FormularioVendedor({ userId }) {
   const [modalCategoria, setModalCategoria] = useState(false)
   const [emailContacto, setEmailContacto] = useState('')
 
-  const [recibePublico, setRecibePublico] = useState(null)
-  const [localidadId, setLocalidadId] = useState('')
-  const [direccion, setDireccion] = useState('')
-  const [barrioId, setBarrioId] = useState('')
-
-  const [latitud, setLatitud] = useState(null)
-  const [longitud, setLongitud] = useState(null)
-  const [barrioAuto, setBarrioAuto] = useState(false)
-  const [barrioDetectado, setBarrioDetectado] = useState(null)
-  const [mapaVisible, setMapaVisible] = useState(false)
-  const [posicionBuscada, setPosicionBuscada] = useState(null)
-  const [buscando, setBuscando] = useState(false)
-  const [avisoMapa, setAvisoMapa] = useState(null)
+  // Lo que armó el bloque de ubicación (paso 2). Se guarda después del alta,
+  // por /api/vendedor/ubicacion: el navegador no escribe esas columnas.
+  const [ubicacion, setUbicacion] = useState(null)
 
   const [localidades, setLocalidades] = useState([])
   const [barrios, setBarrios] = useState([])
@@ -138,9 +121,9 @@ export default function FormularioVendedor({ userId }) {
   const [paso, setPaso] = useState(1)
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState(null)
-  // La tienda se guardó pero su categoría no se pudo abrir. No es motivo para
-  // deshacer nada: se avisa y se sigue.
-  const [avisoCategoria, setAvisoCategoria] = useState(null)
+  // La tienda se guardó pero su categoría no se pudo abrir, o su ubicación no
+  // se pudo guardar. No es motivo para deshacer nada: se avisa y se sigue.
+  const [avisosAlta, setAvisosAlta] = useState([])
 
   useEffect(() => {
     async function cargarDatos() {
@@ -173,46 +156,9 @@ export default function FormularioVendedor({ userId }) {
     cargarDatos()
   }, [])
 
-  const barriosDeLaLocalidad = localidadId ? barrios.filter((b) => b.localidad_id === Number(localidadId)) : []
-  const localidadTieneBarrios = barriosDeLaLocalidad.length > 0
   const tienePlataforma = plataformaSitio !== '' && plataformaSitio !== 'no_tengo'
   const tieneRedSecundaria = redSecundariaTipo !== '' && redSecundariaTipo !== 'no_tengo'
   const placeholderRed = EJEMPLOS_RED[redSecundariaTipo] || 'https://...'
-
-  function resetearUbicacion() {
-    setBarrioId(''); setLatitud(null); setLongitud(null); setBarrioAuto(false)
-    setBarrioDetectado(null); setMapaVisible(false); setPosicionBuscada(null); setAvisoMapa(null)
-  }
-
-  async function buscarDireccion() {
-    if (!direccion) return
-    setBuscando(true); setAvisoMapa(null)
-    const nombreLocalidad = localidades.find((l) => l.id === Number(localidadId))?.nombre || 'Bahía Blanca'
-    const consulta = `${direccion}, ${nombreLocalidad}, Argentina`
-    try {
-      const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=' + encodeURIComponent(consulta)
-      const respuesta = await fetch(url)
-      const datos = await respuesta.json()
-      setMapaVisible(true)
-      if (datos && datos.length > 0) {
-        setPosicionBuscada({ lat: parseFloat(datos[0].lat), lng: parseFloat(datos[0].lon), zoom: 16, nonce: Date.now() })
-      } else {
-        setAvisoMapa('No pudimos ubicar esa dirección exacta. Arrastrá el pin hasta tu local.')
-        setPosicionBuscada({ ...CENTRO_BB, zoom: 13, nonce: Date.now() })
-      }
-    } catch (e) {
-      setMapaVisible(true)
-      setAvisoMapa('Hubo un problema al buscar la dirección. Arrastrá el pin hasta tu local.')
-      setPosicionBuscada({ ...CENTRO_BB, zoom: 13, nonce: Date.now() })
-    }
-    setBuscando(false)
-  }
-
-  function manejarUbicacion({ lat, lng, barrioDetectado: detectado }) {
-    setLatitud(lat); setLongitud(lng); setBarrioDetectado(detectado)
-    if (detectado) { setBarrioId(String(detectado.id)); setBarrioAuto(true) }
-    else { setBarrioAuto(false) }
-  }
 
   function generarSlug(texto) {
     return texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -231,7 +177,12 @@ export default function FormularioVendedor({ userId }) {
 
   async function handleSubmit(e) {
     e.preventDefault()
-    if (paso < 3) { setPaso((p) => p + 1); window.scrollTo({ top: 0, behavior: 'smooth' }); return }
+    // El mapa no tiene un campo "required": la ubicación se valida acá.
+    if (paso === 2 && !ubicacion?.completo) {
+      setError(ubicacion?.faltante || 'Completá tu ubicación.')
+      return
+    }
+    if (paso < 3) { setError(null); setPaso((p) => p + 1); window.scrollTo({ top: 0, behavior: 'smooth' }); return }
 
     setError(null); setGuardando(true)
     const slug = generarSlug(nombreNegocio)
@@ -248,10 +199,7 @@ export default function FormularioVendedor({ userId }) {
         red_social_secundaria_url: tieneRedSecundaria ? redSecundariaUrl : null,
         telefono_contacto: armarTelefonoCompleto(whatsapp),
         email_contacto: usarOtroEmail ? emailContacto : null,
-        recibe_publico: recibePublico, localidad_id: localidadId ? Number(localidadId) : null,
-        direccion: recibePublico ? direccion : null, barrio_id: barrioId ? Number(barrioId) : null,
-        latitud: recibePublico ? latitud : null, longitud: recibePublico ? longitud : null,
-        barrio_detectado_automaticamente: barrioAuto, horarios_estructurados: horarios,
+        horarios_estructurados: horarios,
         notas_horarios: notasHorarios || null, tiempo_despacho: tiempoDespacho || null,
         metodos_entrega_default: metodosEntrega,
       })
@@ -263,6 +211,12 @@ export default function FormularioVendedor({ userId }) {
       else setError(errorInsert.message)
       setGuardando(false); return
     }
+
+    // La ubicación va aparte, por el servidor: el punto exacto de quien no
+    // muestra su dirección no tiene que llegar nunca a la base. Si falla, la
+    // tienda queda creada sin ubicación y el panel le pide completarla.
+    const resultadoUbicacion = await guardarUbicacion(ubicacion)
+    const falloUbicacion = resultadoUbicacion.ok ? null : resultadoUbicacion.error
 
     // Abrir la categoría si estaba cerrada. Va por el servidor: el navegador
     // no tiene permiso de escritura sobre 'categorias'.
@@ -292,10 +246,16 @@ export default function FormularioVendedor({ userId }) {
       }
     }
 
-    // Si la categoría no se pudo abrir, la persona lo ve antes de irse. La
-    // tienda quedó creada igual, pero el problema no se pierde en la consola.
-    if (falloCategoria) {
-      setAvisoCategoria(AVISO_CATEGORIA)
+    // Si la categoría no se pudo abrir o la ubicación no se pudo guardar, la
+    // persona lo ve antes de irse. La tienda quedó creada igual, pero el
+    // problema no se pierde en la consola.
+    const avisos = []
+    if (falloUbicacion) {
+      avisos.push(`No pudimos guardar tu ubicación (${falloUbicacion}). Completala desde Mi negocio → Mi ubicación.`)
+    }
+    if (falloCategoria) avisos.push(AVISO_CATEGORIA)
+    if (avisos.length > 0) {
+      setAvisosAlta(avisos)
       setGuardando(false)
       return
     }
@@ -550,86 +510,21 @@ export default function FormularioVendedor({ userId }) {
       )}
 
       {/* ───── PASO 2 ───── */}
+      {/* Al volver desde el paso 3, el bloque arranca con lo que ya se había
+          cargado (inicial). Ese punto no está guardado: el servidor lo toma
+          como nuevo y detecta el barrio con él. */}
       {paso === 2 && (
-        <div className="rounded-2xl border border-[#0a0a0a]/5 p-5 flex flex-col gap-6">
-          <div className="flex flex-col gap-2.5">
-            <span className="text-sm text-[#0a0a0a]/60 font-light">¿Recibís gente en tu local, taller o showroom? *</span>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input type="radio" name="recibe_publico" checked={recibePublico === true}
-                onChange={() => { setRecibePublico(true); resetearUbicacion() }} required className="accent-[#0a0a0a]" />
-              <span className="text-sm">Sí, recibo gente</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input type="radio" name="recibe_publico" checked={recibePublico === false}
-                onChange={() => { setRecibePublico(false); resetearUbicacion() }} className="accent-[#0a0a0a]" />
-              <span className="text-sm">No, vendo desde casa o solo despacho</span>
-            </label>
-          </div>
-
-          {recibePublico !== null && (
-            <label className="flex flex-col gap-1.5">
-              <span className="text-sm text-[#0a0a0a]/60 font-light">Localidad *</span>
-              <select value={localidadId} onChange={(e) => { setLocalidadId(e.target.value); resetearUbicacion() }}
-                required className={selectClasses}>
-                <option value="">Elegí una localidad</option>
-                {localidades.map((l) => <option key={l.id} value={l.id}>{l.nombre}</option>)}
-              </select>
-            </label>
-          )}
-
-          {recibePublico !== null && localidadId && localidadTieneBarrios && (
-            <>
-              <div className="flex flex-col gap-1.5">
-                <span className="text-sm text-[#0a0a0a]/60 font-light">Dirección *</span>
-                <span className={ayudaClasses} style={fuenteAyuda}>
-                  {recibePublico
-                    ? 'Escribí la dirección de tu local y tocá "Ubicar".'
-                    : 'La usamos solo para detectar tu barrio. No se guarda ni se muestra.'}
-                </span>
-                <div className="flex gap-2 items-stretch">
-                  <input type="text" required placeholder="Ej: Donado 1234" value={direccion}
-                    onChange={(e) => setDireccion(e.target.value)} className={`${inputClasses} flex-1`} />
-                  <button type="button" onClick={buscarDireccion} disabled={buscando || !direccion}
-                    className={`px-4 py-2.5 whitespace-nowrap ${buscando || !direccion ? btnNegroInactivo : btnNegro}`}>
-                    {buscando ? 'Buscando...' : 'Ubicar 📍'}
-                  </button>
-                </div>
-              </div>
-
-              {mapaVisible && (
-                <>
-                  {avisoMapa && (
-                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
-                      {avisoMapa}
-                    </div>
-                  )}
-
-                  <MapaUbicacion posicionBuscada={posicionBuscada} onUbicacionChange={manejarUbicacion} />
-
-                  {barrioDetectado ? (
-                    <p className="text-sm m-0">
-                      📍 Tu local está en <strong>{barrioDetectado.nombre}</strong>. Si la ubicación no es exacta, arrastrá el pin.
-                    </p>
-                  ) : latitud ? (
-                    <label className="flex flex-col gap-1.5">
-                      <span className="text-sm text-[#0a0a0a]/60 font-light">No pudimos detectar el barrio. Elegilo vos:</span>
-                      <select value={barrioId} onChange={(e) => { setBarrioId(e.target.value); setBarrioAuto(false) }}
-                        required className={selectClasses}>
-                        <option value="">Elegí un barrio</option>
-                        {barriosDeLaLocalidad.map((b) => <option key={b.id} value={b.id}>{b.nombre}</option>)}
-                      </select>
-                    </label>
-                  ) : null}
-
-                  {recibePublico && latitud && longitud && (
-                    <span className="text-[11px] text-[#0a0a0a]/20 font-mono font-light">
-                      📍 {latitud.toFixed(6)}, {longitud.toFixed(6)}
-                    </span>
-                  )}
-                </>
-              )}
-            </>
-          )}
+        <div className="rounded-2xl border border-[#0a0a0a]/5 p-5">
+          <BloqueUbicacion
+            localidades={localidades}
+            barrios={barrios}
+            inicial={ubicacion && {
+              localidad_id: ubicacion.localidadId, direccion_visible: ubicacion.direccionVisible,
+              direccion: ubicacion.direccion, zona_calle: ubicacion.zonaCalle, zona_entre: ubicacion.zonaEntre,
+              zona_y: ubicacion.zonaY, latitud: ubicacion.lat, longitud: ubicacion.lng, barrio_id: ubicacion.barrioId,
+            }}
+            onChange={setUbicacion}
+          />
         </div>
       )}
 
@@ -680,9 +575,10 @@ export default function FormularioVendedor({ userId }) {
       )}
 
       {/* Error */}
-      {avisoCategoria && (
+      {avisosAlta.length > 0 && (
         <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 text-sm">
-          <p className="m-0">Tu tienda quedó creada. {avisoCategoria}</p>
+          <p className="m-0">Tu tienda quedó creada.</p>
+          {avisosAlta.map((aviso) => <p key={aviso} className="mt-2 mb-0">{aviso}</p>)}
           <button
             type="button"
             onClick={() => router.push('/vendedor/perfil')}

@@ -6,7 +6,7 @@ import TiendaContent from './TiendaContent'
 
 const CAMPOS = `
   id, nombre_negocio, slug, descripcion_corta, descripcion_larga,
-  logo_url, portada_url, instagram, recibe_publico, direccion,
+  logo_url, portada_url, instagram, direccion_visible, direccion, zona_calle, zona_entre, zona_y,
   horarios_texto_libre, estado_validacion, bloqueado,
   barrio:barrios(nombre),
   categoria:categorias(nombre, slug)

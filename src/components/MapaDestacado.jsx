@@ -117,11 +117,11 @@ export default function MapaDestacado({ vendedores = [] }) {
                   color: 'rgba(255,255,255,0.65)',
                 }}
               >
-                Local comercial
+                Dirección exacta
               </span>
             </div>
             <div className="flex items-center gap-2">
-              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#9cc3ea', flexShrink: 0 }} />
+              <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: 'rgba(156,195,234,0.6)', border: '1px solid #6fa3d6', flexShrink: 0 }} />
               <span
                 style={{
                   fontFamily: "'Inter', sans-serif",
@@ -130,7 +130,7 @@ export default function MapaDestacado({ vendedores = [] }) {
                   color: 'rgba(255,255,255,0.65)',
                 }}
               >
-                Showroom/Desde casa
+                Zona aproximada
               </span>
             </div>
           </div>

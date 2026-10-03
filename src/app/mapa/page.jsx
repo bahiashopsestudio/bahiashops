@@ -14,7 +14,7 @@ export default async function MapaPage() {
   const { data: vendedores } = await soloVendedoresPublicados(
     supabase
       .from('vendedores')
-      .select('id, nombre_negocio, slug, latitud, longitud, recibe_publico, barrio_id, logo_url, descripcion_corta')
+      .select('id, nombre_negocio, slug, latitud, longitud, direccion_visible, zona_calle, zona_entre, zona_y, barrio_id, logo_url, descripcion_corta')
       .not('latitud', 'is', null)
       .not('longitud', 'is', null)
   )

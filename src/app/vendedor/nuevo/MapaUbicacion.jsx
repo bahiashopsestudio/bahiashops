@@ -1,10 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { MapContainer, TileLayer, GeoJSON, Marker, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, GeoJSON, Marker, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import { createClient } from '@/lib/supabase/client'
 import { TILES_UBICACION } from '@/lib/mapaTiles'
+import { redondearPunto } from '@/lib/zonaVendedor'
+import CirculoZona from '@/components/CirculoZona'
 import 'leaflet/dist/leaflet.css'
 
 const CENTRO_BB = [-38.7183, -62.2663]
@@ -27,24 +29,37 @@ const iconoPin = L.icon({
 })
 
 // Componente interno: cuando el formulario manda una posición nueva
-// (resultado de buscar la dirección), mueve el mapa ahí y avisa al padre.
-// El "nonce" hace que reaccione aunque la coordenada se repita.
+// (resultado de buscar la dirección), mueve el mapa ahí y, si se le pasa
+// onLlegar, pone el pin y avisa al padre. El "nonce" hace que reaccione
+// aunque la coordenada se repita.
 function IrAPosicion({ posicion, onLlegar }) {
   const map = useMap()
   useEffect(() => {
     if (!posicion) return
     map.setView([posicion.lat, posicion.lng], posicion.zoom || 16)
-    onLlegar(posicion.lat, posicion.lng)
+    if (onLlegar) onLlegar(posicion.lat, posicion.lng)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [posicion?.nonce])
   return null
 }
 
-export default function MapaUbicacion({ posicionBuscada, onUbicacionChange }) {
+function MarcarAlTocar({ onMarcar }) {
+  useMapEvents({ click: (e) => onMarcar(e.latlng.lat, e.latlng.lng) })
+  return null
+}
+
+// Dos modos:
+//   'exacto' (el de siempre): la búsqueda pone el pin, que se arrastra.
+//   'zona': la búsqueda solo centra el mapa; el punto se marca tocando, y se
+//     dibuja el círculo en el punto redondeado, que es lo que se ve en
+//     público. El barrio se detecta con el punto tocado, sin redondear.
+// puntoInicial: una zona ya guardada, que se dibuja sin volver a detectar el
+// barrio (el punto guardado está redondeado).
+export default function MapaUbicacion({ posicionBuscada, onUbicacionChange, modo = 'exacto', puntoInicial = null, barrioInicial = null }) {
   const supabase = createClient()
   const [barrios, setBarrios] = useState([])
-  const [posicionPin, setPosicionPin] = useState(null)
-  const [barrioResaltado, setBarrioResaltado] = useState(null)
+  const [posicionPin, setPosicionPin] = useState(puntoInicial ? [puntoInicial.lat, puntoInicial.lng] : null)
+  const [barrioResaltado, setBarrioResaltado] = useState(barrioInicial)
 
   useEffect(() => {
     async function cargarBarrios() {
@@ -93,9 +108,16 @@ export default function MapaUbicacion({ posicionBuscada, onUbicacionChange }) {
         )
       })}
 
-      <IrAPosicion posicion={posicionBuscada} onLlegar={procesarPosicion} />
+      <IrAPosicion posicion={posicionBuscada} onLlegar={modo === 'exacto' ? procesarPosicion : null} />
 
-      {posicionPin && (
+      {modo === 'zona' && <MarcarAlTocar onMarcar={procesarPosicion} />}
+
+      {modo === 'zona' && posicionPin && (() => {
+        const centro = redondearPunto(posicionPin[0], posicionPin[1])
+        return <CirculoZona centro={[centro.lat, centro.lng]} />
+      })()}
+
+      {modo === 'exacto' && posicionPin && (
         <Marker
           draggable
           position={posicionPin}

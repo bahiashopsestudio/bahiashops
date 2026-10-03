@@ -79,6 +79,9 @@ export default function PerfilVendedorPage() {
   const [errorNotas, setErrorNotas] = useState(false);
   const [slugTienda, setSlugTienda] = useState(null);
   const [bloqueado, setBloqueado] = useState(false);
+  // Sin punto, la tienda no aparece en el mapa (por ejemplo, si en el alta
+  // no se pudo guardar la ubicación).
+  const [sinUbicacion, setSinUbicacion] = useState(false);
   const [cargando, setCargando] = useState(true);
 
   const [recorte, setRecorte] = useState(null);
@@ -126,7 +129,7 @@ export default function PerfilVendedorPage() {
       if (!user) { router.replace('/entrar?next=%2Fvendedor%2Fperfil'); return; }
       const { data, error } = await supabase
         .from('vendedores')
-        .select('id, nombre_negocio, slug, logo_url, portada_url, mercadopago_conectado, estado_validacion, bloqueado')
+        .select('id, nombre_negocio, slug, logo_url, portada_url, mercadopago_conectado, estado_validacion, bloqueado, latitud')
         .eq('usuario_id', user.id)
         .single();
       if (error) {
@@ -140,6 +143,7 @@ export default function PerfilVendedorPage() {
         setEstadoValidacion(data.estado_validacion || 'aprobado');
         setSlugTienda(data.slug || null);
         setBloqueado(data.bloqueado === true);
+        setSinUbicacion(data.latitud === null);
 
         // El mensaje del admin sólo se muestra cuando pide cambios, y no se
         // puede leer desde el navegador: va por la ruta de datos privados. Si
@@ -341,8 +345,19 @@ export default function PerfilVendedorPage() {
               Logo: cuadrado, mín. 400×400 px · Portada: panorámica 16:9 · JPG, PNG o WEBP · hasta 3 MB
             </p>
 
+            {/* ═══ AVISO: SIN UBICACIÓN ═══ */}
+            {sinUbicacion && (
+              <Link href="/vendedor/ubicacion" className="mt-10 flex items-center gap-3 p-4 rounded-2xl border border-amber-200 bg-amber-50 no-underline text-amber-900 hover:bg-amber-100/60 transition-colors">
+                <span className="text-lg">📍</span>
+                <span className="flex-1 text-[13px] font-light leading-relaxed">
+                  Tu tienda todavía no aparece en el mapa. Completá tu ubicación (tu dirección, o tu calle y entrecalles) para que te encuentren.
+                </span>
+                <Chevron />
+              </Link>
+            )}
+
             {/* ═══ MENÚ DEL NEGOCIO ═══ */}
-            <div className="mt-10 rounded-2xl border border-[#0a0a0a]/5 divide-y divide-[#0a0a0a]/5 overflow-hidden">
+            <div className={`${sinUbicacion ? 'mt-4' : 'mt-10'} rounded-2xl border border-[#0a0a0a]/5 divide-y divide-[#0a0a0a]/5 overflow-hidden`}>
               <Link href="/vendedor/productos" className="flex items-center gap-3 px-5 py-4 no-underline text-[#0a0a0a] hover:bg-[#0a0a0a]/[0.02] transition-colors">
                 <span className="text-lg">📦</span>
                 <span className="flex-1 text-sm font-light">Mis productos</span>
