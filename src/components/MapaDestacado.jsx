@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 
-const MapaHome = dynamic(() => import('@/components/MapaHome'), {
+const MapaVendedores = dynamic(() => import('@/components/MapaVendedores'), {
   ssr: false,
   loading: () => (
     <div className="bg-[#4f4c05] h-full w-full flex items-center justify-center">
@@ -103,7 +103,7 @@ export default function MapaDestacado({ vendedores = [] }) {
         {/* ── Mapa ── */}
         <div className="w-full lg:flex-1">
           <div style={{ aspectRatio: '1 / 0.85', borderRadius: '8px', overflow: 'hidden' }}>
-            <MapaHome vendedores={vendedores} />
+            <MapaVendedores vendedores={vendedores} />
           </div>
 
           <div className="flex gap-5 justify-center" style={{ marginTop: '16px' }}>

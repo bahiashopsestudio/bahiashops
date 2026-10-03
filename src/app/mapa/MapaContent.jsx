@@ -3,11 +3,10 @@
 import { useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
 import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
 
-const MapaVendedoresLeaflet = dynamic(() => import('./MapaVendedoresLeaflet'), {
+const MapaVendedores = dynamic(() => import('@/components/MapaVendedores'), {
   ssr: false,
   loading: () => (
     <div className="bg-[#F5F2EC] h-full w-full flex items-center justify-center">
@@ -19,8 +18,6 @@ const MapaVendedoresLeaflet = dynamic(() => import('./MapaVendedoresLeaflet'), {
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage']
 
 export default function MapaContent({ vendedores = [], categorias = [] }) {
-  const supabase = createClient()
-  const [barriosMap, setBarriosMap] = useState({})
   const [menuOpen, setMenuOpen] = useState(false)
 
   const menuCats = MENU_CATEGORIAS.map(s => categorias.find(c => c.slug === s)).filter(Boolean)
@@ -29,19 +26,6 @@ export default function MapaContent({ vendedores = [], categorias = [] }) {
     if (menuOpen) { document.body.style.overflow = 'hidden' } else { document.body.style.overflow = '' }
     return () => { document.body.style.overflow = '' }
   }, [menuOpen])
-
-  useEffect(() => {
-    async function cargarBarrios() {
-      const { data, error } = await supabase.from('barrios').select('id, nombre')
-      if (error) { console.error('Error cargando barrios:', error); return }
-      if (data) {
-        const mapa = {}
-        data.forEach((b) => { mapa[b.id] = b.nombre })
-        setBarriosMap(mapa)
-      }
-    }
-    cargarBarrios()
-  }, [])
 
   const locales = vendedores.filter(v => v.recibe_publico)
   const casas = vendedores.filter(v => !v.recibe_publico)
@@ -119,7 +103,7 @@ export default function MapaContent({ vendedores = [], categorias = [] }) {
 
           {/* ── Mapa ── */}
           <div className="w-full lg:w-1/2 h-[420px] lg:h-full">
-            <MapaVendedoresLeaflet vendedores={vendedores} barriosMap={barriosMap} />
+            <MapaVendedores vendedores={vendedores} />
           </div>
         </div>
 

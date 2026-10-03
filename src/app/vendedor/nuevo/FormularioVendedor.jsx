@@ -144,7 +144,9 @@ export default function FormularioVendedor({ userId }) {
 
   useEffect(() => {
     async function cargarDatos() {
-      const { data: locs } = await supabase.from('localidades').select('id, nombre').order('nombre')
+      // Solo las localidades activas (migración 017): las que no tienen
+      // barrios no se ofrecen, y la base rechaza un alta en ellas.
+      const { data: locs } = await supabase.from('localidades').select('id, nombre').eq('activa', true).order('nombre')
       const { data: brs } = await supabase.from('barrios').select('id, nombre, localidad_id').order('nombre')
 
       // TODAS las categorías, abiertas y cerradas — no filtrar por 'activa'

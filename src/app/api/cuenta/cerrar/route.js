@@ -10,10 +10,48 @@
 // base hace el trabajo en una sola transacción (migración 016).
 
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { getServiceRoleClient } from '@/lib/supabase/admin';
 import { evaluarCuenta, eliminarCuenta, resumenDeEvaluacion, confirmacionValida } from '@/lib/eliminarCuenta';
 import { enviarMailCuentaEliminada } from '@/lib/mailsCuenta';
+
+// Cuánto se le espera a Supabase para cerrar la sesión. Es solo limpieza: la
+// cuenta ya está eliminada, así que no puede frenar nada.
+const TIEMPO_MAXIMO_SIGNOUT_MS = 3000;
+
+// Cierra la sesión de esta persona sin poder trabar la respuesta. signOut es
+// una llamada de red (POST /logout), y con la cuenta recién eliminada o
+// bloqueada puede tardar o fallar: se le da un tiempo máximo corto, los errores
+// se capturan y, pase lo que pase, las cookies de sesión se borran igual.
+async function cerrarSesionSinTrabar(supabase, usuarioId) {
+  let reloj;
+  try {
+    await Promise.race([
+      supabase.auth.signOut({ scope: 'local' }),
+      new Promise((resolve) => {
+        reloj = setTimeout(() => {
+          console.warn(`Eliminar cuenta ${usuarioId}: signOut tardó más de ${TIEMPO_MAXIMO_SIGNOUT_MS} ms; se sigue sin esperarlo.`);
+          resolve();
+        }, TIEMPO_MAXIMO_SIGNOUT_MS);
+      }),
+    ]);
+  } catch (err) {
+    console.warn(`Eliminar cuenta ${usuarioId}: signOut falló —`, err?.message || err);
+  } finally {
+    clearTimeout(reloj);
+  }
+
+  // Las cookies de sesión de Supabase (y sus fragmentos), siempre.
+  try {
+    const almacen = await cookies();
+    for (const c of almacen.getAll()) {
+      if (/^sb-.+-(auth-token|code-verifier)/.test(c.name)) almacen.delete(c.name);
+    }
+  } catch (err) {
+    console.warn(`Eliminar cuenta ${usuarioId}: no se pudieron borrar las cookies —`, err?.message || err);
+  }
+}
 
 const SIN_SESION = () => NextResponse.json({ error: 'Iniciá sesión.' }, { status: 401 });
 const MP_NO_RESPONDE = () => NextResponse.json({ error: 'mp_no_responde' }, { status: 503 });
@@ -50,6 +88,19 @@ export async function POST(request) {
   }
 
   const admin = getServiceRoleClient();
+
+  // Una copia del mail y del nombre, leída ANTES de eliminar, con la identidad
+  // de la cookie. Es el respaldo para el mail final: después de eliminar ya no
+  // hay de dónde sacarlos.
+  const emailDeLaSesion = typeof user.email === 'string' ? user.email.trim() : '';
+  let nombreAntes = null;
+  try {
+    const { data: perfil } = await admin.from('usuarios').select('nombre').eq('id', user.id).maybeSingle();
+    nombreAntes = (perfil?.nombre || '').trim() || null;
+  } catch (err) {
+    console.warn(`Eliminar cuenta ${user.id}: no se pudo leer el nombre antes de eliminar —`, err?.message || err);
+  }
+
   const resultado = await eliminarCuenta(admin, user.id);
 
   if (!resultado.ok) {
@@ -61,20 +112,28 @@ export async function POST(request) {
     return ERROR_INESPERADO();
   }
 
-  // La cuenta ya no existe (o quedó anónima y bloqueada): se cierra la sesión
-  // de esta persona. 'local' no le pregunta nada a Supabase, que ya no la tiene.
-  try {
-    await supabase.auth.signOut({ scope: 'local' });
-  } catch (err) {
-    console.warn('Eliminar cuenta: no se pudo limpiar la sesión —', err?.message || err);
+  // La cuenta ya está eliminada: de acá en más nada la revierte. Lo que sigue
+  // (el mail y el cierre de sesión) es aviso y limpieza, y ninguno puede frenar
+  // la respuesta de "listo".
+
+  // El mail final, ANTES del cierre de sesión y esperado antes de responder (en
+  // Vercel lo que queda después de la respuesta puede no ejecutarse). Va a las
+  // direcciones que devolvió la base y a la de la sesión, sin repetir. Si falla,
+  // el error se registra con el id del usuario (nunca la dirección).
+  if (resultado.resultado !== 'ya_cerrada') {
+    try {
+      await enviarMailCuentaEliminada({
+        emails: [...(resultado.emails || []), emailDeLaSesion],
+        nombre: resultado.nombre || nombreAntes,
+        usuarioId: user.id,
+      });
+    } catch (err) {
+      console.error(`Eliminar cuenta ${user.id}: el mail final falló —`, err?.message || err);
+    }
   }
 
-  // El mail final, esperado antes de responder (en Vercel lo que queda después
-  // de la respuesta puede no ejecutarse). Si falla, no cambia nada: la cuenta
-  // ya está eliminada.
-  if (resultado.resultado !== 'ya_cerrada') {
-    await enviarMailCuentaEliminada({ emails: resultado.emails, nombre: resultado.nombre });
-  }
+  // Después, la limpieza de la sesión, con tiempo máximo.
+  await cerrarSesionSinTrabar(supabase, user.id);
 
   return NextResponse.json({ ok: true });
 }

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { MapContainer, TileLayer, GeoJSON, Marker, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import { createClient } from '@/lib/supabase/client'
+import { TILES_UBICACION } from '@/lib/mapaTiles'
 import 'leaflet/dist/leaflet.css'
 
 const CENTRO_BB = [-38.7183, -62.2663]
@@ -79,10 +80,7 @@ export default function MapaUbicacion({ posicionBuscada, onUbicacionChange }) {
 
   return (
     <MapContainer center={CENTRO_BB} zoom={12} style={{ height: '350px', width: '100%', borderRadius: 8 }}>
-      <TileLayer
-        attribution='&copy; OpenStreetMap &copy; CARTO'
-        url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-      />
+      <TileLayer {...TILES_UBICACION} />
 
       {barrios.map((barrio) => {
         const resaltar = barrioResaltado === barrio.id

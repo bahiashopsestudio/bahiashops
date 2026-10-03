@@ -85,6 +85,7 @@ ejecuta. **En orden numérico**, y cada una una sola vez.
 014                                      PENDIENTE DE SUBIR AL REPO (ya corrida en Supabase)
 015_avisos_pago.sql                      marca de "mail ya enviado" al vendedor y a quien compró
 016_eliminar_cuenta.sql                  eliminar mi cuenta: cerrada_en, disparadores y las funciones del proceso
+017_localidades_activa.sql               localidades.activa: Cerri y White fuera de los selectores, la base rechaza altas ahí
 ```
 
 Las pruebas de la 016 (contra una base local, sin tocar Supabase): `npm run probar:sql`.

@@ -9,6 +9,12 @@ import {
   escapar, plantilla, tituloImagen, parrafo, enviarPorResend,
 } from '@/lib/mailBase'
 
+// El texto de un error sin ninguna dirección de mail: lo que devuelve Resend
+// (o un fallo de red) puede traer la dirección, y el log no es lugar para ella.
+function sinMails(texto) {
+  return String(texto ?? '').replace(/[^\s"'<>(),;]+@[^\s"'<>(),;]+/g, '[mail]')
+}
+
 export function armarMailCuentaEliminada({ nombre } = {}) {
   const asunto = 'Eliminamos tu cuenta de Bahía Shops'
   const quien = String(nombre ?? '').trim()
@@ -32,33 +38,43 @@ export function armarMailCuentaEliminada({ nombre } = {}) {
   return { asunto, html: plantilla({ asunto, cuerpo }), texto }
 }
 
-// Manda el mail a cada dirección, sin repetir. Devuelve cuántos salieron y
-// cuántos no; en el log no queda ninguna dirección (la cuenta ya no existe y
-// el log no es lugar para guardarla).
-export async function enviarMailCuentaEliminada({ emails, nombre }) {
-  const direcciones = [...new Set((emails || []).map((e) => String(e ?? '').trim()).filter(Boolean))]
+// Manda el mail a cada dirección, sin repetir (ni distinguir mayúsculas).
+// Devuelve cuántos salieron y cuántos no. Cada falla se registra con el id del
+// usuario y NUNCA con la dirección: la cuenta ya no existe y el log no es lugar
+// para guardarla.
+export async function enviarMailCuentaEliminada({ emails, nombre, usuarioId = 'sin id' }) {
+  const direcciones = [...new Set((emails || []).map((e) => String(e ?? '').trim().toLowerCase()).filter(Boolean))]
   const resultado = { enviados: 0, fallidos: 0 }
+  const etiqueta = `Mail de cuenta eliminada (usuario ${usuarioId})`
 
   if (direcciones.length === 0) {
-    console.error('Mail de cuenta eliminada no enviado: no había ninguna dirección.')
+    console.error(`${etiqueta} no enviado: no había ninguna dirección.`)
     return resultado
   }
   if (!process.env.RESEND_API_KEY) {
-    console.error('Mail de cuenta eliminada no enviado: RESEND_API_KEY no configurada.')
+    console.error(`${etiqueta} no enviado: RESEND_API_KEY no configurada.`)
     return { enviados: 0, fallidos: direcciones.length }
   }
 
-  const mail = armarMailCuentaEliminada({ nombre })
+  let mail
+  try {
+    mail = armarMailCuentaEliminada({ nombre })
+  } catch (err) {
+    console.error(`${etiqueta} no enviado: no se pudo armar —`, sinMails(err?.message || err))
+    return { enviados: 0, fallidos: direcciones.length }
+  }
 
   for (const para of direcciones) {
     try {
       const r = await enviarPorResend({ para, mail })
       if (r.ok) resultado.enviados++
-      else { resultado.fallidos++; console.error(`Mail de cuenta eliminada: ${r.motivo}`) }
+      else { resultado.fallidos++; console.error(`${etiqueta} falló: ${sinMails(r.motivo)}`) }
     } catch (err) {
       resultado.fallidos++
-      console.error('Mail de cuenta eliminada falló —', err?.message || err)
+      console.error(`${etiqueta} falló —`, sinMails(err?.message || err))
     }
   }
+
+  if (resultado.fallidos === 0) console.log(`${etiqueta}: enviado a ${resultado.enviados} dirección(es).`)
   return resultado
 }

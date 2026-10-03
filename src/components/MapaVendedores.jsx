@@ -1,10 +1,17 @@
 'use client'
 
+// El mapa público de vendedores: el de la home (MapaDestacado) y el de /mapa.
+// Antes eran dos copias casi idénticas (MapaHome y MapaVendedoresLeaflet).
+//
+// Se importa siempre con dynamic(..., { ssr: false }): Leaflet necesita
+// window al cargarse.
+
 import { useEffect, useRef, useState } from 'react'
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
 import L from 'leaflet'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { TILES_VENDEDORES } from '@/lib/mapaTiles'
 import 'leaflet/dist/leaflet.css'
 
 const CENTRO_BB = [-38.7183, -62.2663]
@@ -36,6 +43,9 @@ function crearIconoPin(color) {
     `,
   })
 }
+
+const ICONO_LOCAL = crearIconoPin(COLOR_LOCAL)
+const ICONO_CASA = crearIconoPin(COLOR_CASA)
 
 function MarcadorVendedor({ v, icono, nombreBarrio }) {
   const markerRef = useRef(null)
@@ -105,18 +115,11 @@ function MarcadorVendedor({ v, icono, nombreBarrio }) {
   )
 }
 
-export default function MapaHome({ vendedores = [] }) {
+export default function MapaVendedores({ vendedores = [] }) {
   const supabase = createClient()
-  const [listo, setListo] = useState(false)
-  const [iconoLocal, setIconoLocal] = useState(null)
-  const [iconoCasa, setIconoCasa] = useState(null)
   const [barriosMap, setBarriosMap] = useState({})
 
   useEffect(() => {
-    setIconoLocal(crearIconoPin(COLOR_LOCAL))
-    setIconoCasa(crearIconoPin(COLOR_CASA))
-    setListo(true)
-
     async function cargarBarrios() {
       const { data, error } = await supabase
         .from('barrios')
@@ -134,14 +137,8 @@ export default function MapaHome({ vendedores = [] }) {
     cargarBarrios()
   }, [])
 
-  if (!listo || !iconoLocal || !iconoCasa) {
-    return (
-      <div className="bg-[#ECEAE3] h-full w-full flex items-center justify-center">
-        <span className="text-[#0a0a0a]/15 text-sm font-light">Cargando mapa...</span>
-      </div>
-    )
-  }
-
+  // relative z-0: los controles de Leaflet (la atribución) tienen z-index
+  // 1000 y sin este contexto quedarían por encima de la Navbar (z-900).
   return (
     <div className="relative z-0 h-full w-full">
       <MapContainer
@@ -150,11 +147,8 @@ export default function MapaHome({ vendedores = [] }) {
         scrollWheelZoom={true}
         style={{ height: '100%', width: '100%' }}
         zoomControl={false}
-        attributionControl={false}
       >
-        <TileLayer
-          url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png"
-        />
+        <TileLayer {...TILES_VENDEDORES} />
 
         {vendedores.map((v) => {
           if (!v.latitud || !v.longitud) return null
@@ -165,7 +159,7 @@ export default function MapaHome({ vendedores = [] }) {
             <MarcadorVendedor
               key={v.id}
               v={v}
-              icono={v.recibe_publico ? iconoLocal : iconoCasa}
+              icono={v.recibe_publico ? ICONO_LOCAL : ICONO_CASA}
               nombreBarrio={nombreBarrio}
             />
           )
@@ -174,18 +168,9 @@ export default function MapaHome({ vendedores = [] }) {
 
       <style>{`
         @keyframes pulso {
-          0% {
-            transform: scale(1);
-            opacity: 0.5;
-          }
-          70% {
-            transform: scale(3);
-            opacity: 0;
-          }
-          100% {
-            transform: scale(3);
-            opacity: 0;
-          }
+          0% { transform: scale(1); opacity: 0.5; }
+          70% { transform: scale(3); opacity: 0; }
+          100% { transform: scale(3); opacity: 0; }
         }
         .pin-pulso {
           position: absolute;

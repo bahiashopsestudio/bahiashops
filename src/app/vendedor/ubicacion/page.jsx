@@ -91,7 +91,14 @@ export default function UbicacionVendedorPage() {
       setBarrioAuto(vendedor.barrio_detectado_automaticamente || false)
 
       // Cargar listas
-      const { data: locs } = await supabase.from('localidades').select('id, nombre').order('nombre')
+      // Las activas (migración 017), más la que la tienda ya tenga aunque esté
+      // inactiva: si no, el selector la mostraría vacía. La base solo rechaza
+      // pasarse a una inactiva, no quedarse en la que ya estaba.
+      const { data: locs } = await supabase
+        .from('localidades')
+        .select('id, nombre')
+        .or(`activa.eq.true${vendedor.localidad_id ? `,id.eq.${Number(vendedor.localidad_id)}` : ''}`)
+        .order('nombre')
       const { data: brs } = await supabase.from('barrios').select('id, nombre, localidad_id').order('nombre')
       if (locs) setLocalidades(locs)
       if (brs) setBarrios(brs)
@@ -190,13 +197,16 @@ export default function UbicacionVendedorPage() {
 
     setGuardando(true)
 
+    // Quien no recibe gente no guarda su punto: sería su casa, y el mapa
+    // público lo mostraría. El pin sirve solo para detectar el barrio.
+    // Igual que en el alta (FormularioVendedor).
     const campos = {
       recibe_publico: recibePublico,
       localidad_id: localidadId ? Number(localidadId) : null,
       direccion: recibePublico ? direccion : null,
       barrio_id: Number(barrioId),
-      latitud: latitud,
-      longitud: longitud,
+      latitud: recibePublico ? latitud : null,
+      longitud: recibePublico ? longitud : null,
       barrio_detectado_automaticamente: barrioAuto,
     }
 
@@ -297,7 +307,7 @@ export default function UbicacionVendedorPage() {
             <p className={`${ayudaClasses} mb-2`} style={fuenteAyuda}>
               {recibePublico
                 ? 'La dirección de tu local. Escribila y tocá "Ubicar".'
-                : 'La usamos solo para detectar tu barrio. No se muestra públicamente.'}
+                : 'La usamos solo para detectar tu barrio: no guardamos ni la dirección ni el punto. Por ahora, si no recibís gente, tu tienda no aparece en el mapa.'}
             </p>
             <div className="flex gap-2 items-stretch mb-4">
               <input
@@ -350,7 +360,7 @@ export default function UbicacionVendedorPage() {
                   </div>
                 ) : null}
 
-                {latitud && longitud && (
+                {recibePublico && latitud && longitud && (
                   <span className="text-[11px] text-[#0a0a0a]/20 font-mono font-light mt-1 block">
                     📍 {latitud.toFixed(6)}, {longitud.toFixed(6)}
                   </span>
