@@ -1,6 +1,6 @@
 // La zona de una tienda que no muestra su dirección exacta: la grilla a la
-// que se redondea el punto, el círculo con que se dibuja y el texto con que
-// se presenta ("12 de Octubre entre Salta y Mitre").
+// que se redondea el punto y el radio del círculo con que se dibuja. De esa
+// tienda no se muestra ningún texto de calles: solo el barrio y el círculo.
 //
 // La grilla tiene que ser la misma que la del disparador
 // privado.vendedores_redondear_zona (migración 018): la ruta redondea antes
@@ -19,8 +19,6 @@ const PASO_LNG = 23000
 // así que el punto real siempre queda adentro del círculo.
 export const RADIO_ZONA_M = 200
 
-export const LARGO_MAX_CALLE = 80
-
 // Como round() de Postgres sobre numeric: la mitad se aleja del cero.
 function redondearMitad(x) {
   return Math.sign(x) * Math.round(Math.abs(x))
@@ -34,12 +32,7 @@ function alPaso(valor, paso) {
   return Number(((celda * paso) / ESCALA).toFixed(7))
 }
 
+// El centro de la celda de la grilla en la que cae el punto.
 export function redondearPunto(lat, lng) {
   return { lat: alPaso(lat, PASO_LAT), lng: alPaso(lng, PASO_LNG) }
-}
-
-export function textoZona(calle, entre, y) {
-  const partes = [calle, entre, y].map((p) => (p || '').trim())
-  if (partes.some((p) => !p)) return null
-  return `${partes[0]} entre ${partes[1]} y ${partes[2]}`
 }

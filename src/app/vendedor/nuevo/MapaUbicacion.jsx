@@ -1,12 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { MapContainer, TileLayer, GeoJSON, Marker, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import { createClient } from '@/lib/supabase/client'
 import { TILES_UBICACION } from '@/lib/mapaTiles'
 import { redondearPunto } from '@/lib/zonaVendedor'
-import CirculoZona from '@/components/CirculoZona'
+import CirculoZona, { radioEnPixeles } from '@/components/CirculoZona'
 import 'leaflet/dist/leaflet.css'
 
 const CENTRO_BB = [-38.7183, -62.2663]
@@ -29,37 +29,87 @@ const iconoPin = L.icon({
 })
 
 // Componente interno: cuando el formulario manda una posición nueva
-// (resultado de buscar la dirección), mueve el mapa ahí y, si se le pasa
-// onLlegar, pone el pin y avisa al padre. El "nonce" hace que reaccione
-// aunque la coordenada se repita.
+// (resultado de buscar la dirección), mueve el mapa ahí, pone el pin o el
+// círculo y avisa al padre. El "nonce" hace que reaccione aunque la
+// coordenada se repita.
 function IrAPosicion({ posicion, onLlegar }) {
   const map = useMap()
   useEffect(() => {
     if (!posicion) return
     map.setView([posicion.lat, posicion.lng], posicion.zoom || 16)
-    if (onLlegar) onLlegar(posicion.lat, posicion.lng)
+    onLlegar(posicion.lat, posicion.lng)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [posicion?.nonce])
   return null
 }
 
-function MarcarAlTocar({ onMarcar }) {
-  useMapEvents({ click: (e) => onMarcar(e.latlng.lat, e.latlng.lng) })
-  return null
+const igual = (a, b) => a.lat === b.lat && a.lng === b.lng
+
+// El círculo de la zona, que se mueve de celda en celda de la grilla.
+//
+// Leaflet no arrastra círculos: encima va una manija invisible (un Marker
+// arrastrable del tamaño del círculo), que sí se arrastra con el mouse y con
+// el dedo. Mientras se arrastra, el círculo salta a la celda que corresponde;
+// al soltar, la manija vuelve al centro de esa celda. Tocar el mapa también
+// lleva el círculo a la celda tocada.
+function ZonaArrastrable({ centro, onSoltar }) {
+  const map = useMapEvents({
+    zoomend: () => setZoom(map.getZoom()),
+    click: (e) => onSoltar(redondearPunto(e.latlng.lat, e.latlng.lng)),
+  })
+  const [zoom, setZoom] = useState(() => map.getZoom())
+  // La celda que se ve mientras se arrastra (null cuando no se arrastra).
+  const [enArrastre, setEnArrastre] = useState(null)
+  const visible = enArrastre || centro
+
+  const radio = Math.round(radioEnPixeles(centro.lat, zoom))
+  const manija = useMemo(() => L.divIcon({
+    className: '',
+    iconSize: [radio * 2, radio * 2],
+    iconAnchor: [radio, radio],
+    html: '<div style="width:100%;height:100%;border-radius:50%;cursor:grab"></div>',
+  }), [radio])
+
+  return (
+    <>
+      <CirculoZona centro={[visible.lat, visible.lng]} interactive={false} />
+      <Marker
+        position={[centro.lat, centro.lng]}
+        icon={manija}
+        draggable
+        eventHandlers={{
+          drag: (e) => {
+            const { lat, lng } = e.target.getLatLng()
+            const celda = redondearPunto(lat, lng)
+            if (!enArrastre || !igual(celda, enArrastre)) setEnArrastre(celda)
+          },
+          dragend: (e) => {
+            const { lat, lng } = e.target.getLatLng()
+            const celda = redondearPunto(lat, lng)
+            e.target.setLatLng([celda.lat, celda.lng])
+            setEnArrastre(null)
+            onSoltar(celda)
+          },
+        }}
+      />
+    </>
+  )
 }
 
 // Dos modos:
-//   'exacto' (el de siempre): la búsqueda pone el pin, que se arrastra.
-//   'zona': la búsqueda solo centra el mapa; el punto se marca tocando, y se
-//     dibuja el círculo en el punto redondeado, que es lo que se ve en
-//     público. El barrio se detecta con el punto tocado, sin redondear.
-// puntoInicial: una zona ya guardada, que se dibuja sin volver a detectar el
-// barrio (el punto guardado está redondeado).
-export default function MapaUbicacion({ posicionBuscada, onUbicacionChange, modo = 'exacto', puntoInicial = null, barrioInicial = null }) {
+//   'exacto' (el de siempre): la búsqueda pone el pin, que se arrastra. El
+//     barrio sale del punto del pin.
+//   'zona': la búsqueda pone el círculo en la celda de la grilla donde cae
+//     la dirección; se arrastra o se toca el mapa para cambiar de celda. Al
+//     formulario solo le llega el centro del círculo, y el barrio sale de
+//     ese centro: lo que se guarda es exactamente lo que se ve.
+export default function MapaUbicacion({ posicionBuscada, onUbicacionChange, modo = 'exacto' }) {
   const supabase = createClient()
   const [barrios, setBarrios] = useState([])
-  const [posicionPin, setPosicionPin] = useState(puntoInicial ? [puntoInicial.lat, puntoInicial.lng] : null)
-  const [barrioResaltado, setBarrioResaltado] = useState(barrioInicial)
+  const [posicion, setPosicion] = useState(null)
+  const [barrioResaltado, setBarrioResaltado] = useState(null)
+  // Si se mueve rápido, solo cuenta la respuesta del último movimiento.
+  const ultimaConsulta = useRef(0)
 
   useEffect(() => {
     async function cargarBarrios() {
@@ -82,12 +132,16 @@ export default function MapaUbicacion({ posicionBuscada, onUbicacionChange, modo
     return data && data.length > 0 ? data[0] : null
   }
 
-  // Pone el pin, detecta el barrio y le reporta todo al formulario
+  // Pone el pin o el círculo, detecta el barrio y le reporta todo al
+  // formulario. En modo zona, el punto pasa antes a ser el centro de la celda.
   async function procesarPosicion(lat, lng) {
-    setPosicionPin([lat, lng])
-    const detectado = await detectarBarrio(lat, lng)
+    const punto = modo === 'zona' ? redondearPunto(lat, lng) : { lat, lng }
+    setPosicion(punto)
+    const consulta = ++ultimaConsulta.current
+    const detectado = await detectarBarrio(punto.lat, punto.lng)
+    if (consulta !== ultimaConsulta.current) return
     setBarrioResaltado(detectado ? detectado.id : null)
-    onUbicacionChange({ lat, lng, barrioDetectado: detectado })
+    onUbicacionChange({ lat: punto.lat, lng: punto.lng, barrioDetectado: detectado })
   }
 
   const estiloNormal = { color: '#94a3b8', weight: 1, fillColor: '#cbd5e1', fillOpacity: 0.08 }
@@ -108,19 +162,16 @@ export default function MapaUbicacion({ posicionBuscada, onUbicacionChange, modo
         )
       })}
 
-      <IrAPosicion posicion={posicionBuscada} onLlegar={modo === 'exacto' ? procesarPosicion : null} />
+      <IrAPosicion posicion={posicionBuscada} onLlegar={procesarPosicion} />
 
-      {modo === 'zona' && <MarcarAlTocar onMarcar={procesarPosicion} />}
+      {modo === 'zona' && posicion && (
+        <ZonaArrastrable centro={posicion} onSoltar={(celda) => procesarPosicion(celda.lat, celda.lng)} />
+      )}
 
-      {modo === 'zona' && posicionPin && (() => {
-        const centro = redondearPunto(posicionPin[0], posicionPin[1])
-        return <CirculoZona centro={[centro.lat, centro.lng]} />
-      })()}
-
-      {modo === 'exacto' && posicionPin && (
+      {modo === 'exacto' && posicion && (
         <Marker
           draggable
-          position={posicionPin}
+          position={[posicion.lat, posicion.lng]}
           icon={iconoPin}
           eventHandlers={{
             dragend: async (e) => {

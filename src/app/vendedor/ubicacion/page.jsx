@@ -46,7 +46,7 @@ export default function UbicacionVendedorPage() {
 
       const { data: fila } = await supabase
         .from('vendedores')
-        .select('id, localidad_id, direccion_visible, direccion, zona_calle, zona_entre, zona_y, latitud, longitud, barrio_id')
+        .select('id, localidad_id, direccion_visible, direccion, latitud, longitud, barrio_id')
         .eq('usuario_id', user.id)
         .single()
 

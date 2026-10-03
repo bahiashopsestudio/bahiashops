@@ -520,8 +520,7 @@ export default function FormularioVendedor({ userId }) {
             barrios={barrios}
             inicial={ubicacion && {
               localidad_id: ubicacion.localidadId, direccion_visible: ubicacion.direccionVisible,
-              direccion: ubicacion.direccion, zona_calle: ubicacion.zonaCalle, zona_entre: ubicacion.zonaEntre,
-              zona_y: ubicacion.zonaY, latitud: ubicacion.lat, longitud: ubicacion.lng, barrio_id: ubicacion.barrioId,
+              direccion: ubicacion.direccion, latitud: ubicacion.lat, longitud: ubicacion.lng, barrio_id: ubicacion.barrioId,
             }}
             onChange={setUbicacion}
           />

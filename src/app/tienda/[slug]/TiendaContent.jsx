@@ -5,7 +5,6 @@ import Link from 'next/link'
 import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
 import { createClient } from '@/lib/supabase/client'
-import { textoZona } from '@/lib/zonaVendedor'
 
 // ═══════════════════════════════════════════════════════════
 // HELPERS
@@ -39,11 +38,9 @@ export default function TiendaContent({ vendedor, productos }) {
   const [categorias, setCategorias] = useState([])
 
   const instagramHandle = vendedor.instagram?.replace('@', '')
-  // La dirección, si eligió mostrarla; si no, la cuadra ("12 de Octubre
-  // entre Salta y Mitre"). Nunca la dirección de quien eligió "No".
-  const lugarVisible = vendedor.direccion_visible
-    ? vendedor.direccion
-    : textoZona(vendedor.zona_calle, vendedor.zona_entre, vendedor.zona_y)
+  // La dirección, solo si eligió mostrarla. De quien eligió "No" no se
+  // muestra ningún texto de calles: solo el barrio, que va arriba.
+  const lugarVisible = vendedor.direccion_visible ? vendedor.direccion : null
 
   useEffect(() => {
     if (menuOpen) {

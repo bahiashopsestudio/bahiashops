@@ -8,17 +8,20 @@
 // lo guarda con guardarUbicacion(), que va a /api/vendedor/ubicacion. Desde la
 // migración 018 el navegador no puede escribir estas columnas.
 //
-// Con "Sí": dirección con número, punto exacto y pin arrastrable, como antes.
-// Con "No": calle y dos entrecalles (nunca la altura); el mapa se centra en
-// esa calle, la persona toca su cuadra y se dibuja la zona tal como se va a
-// ver en público, en el punto redondeado.
+// En los dos casos se busca con calle y número.
+//   Con "Sí": la dirección se guarda ("calle número"), con el punto exacto y
+//     el pin arrastrable, como antes.
+//   Con "No": la calle y el número sirven solo para buscar en el mapa. No se
+//     guardan, no se mandan a la ruta y no se escriben en ningún log: al
+//     servidor le llega solo el centro del círculo. El círculo aparece en la
+//     celda de la grilla donde cae la dirección y se arrastra de celda en
+//     celda: lo que se ve es exactamente lo que se guarda.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import {
   inputClasses, selectClasses, fuenteAyuda, ayudaClasses, labelClasses, btnNegro, btnNegroInactivo,
 } from '@/lib/estilosVendedor'
-import { textoZona, LARGO_MAX_CALLE } from '@/lib/zonaVendedor'
 
 const MapaUbicacion = dynamic(() => import('@/app/vendedor/nuevo/MapaUbicacion'), {
   ssr: false,
@@ -31,11 +34,30 @@ const MapaUbicacion = dynamic(() => import('@/app/vendedor/nuevo/MapaUbicacion')
 
 const CENTRO_BB = { lat: -38.7183, lng: -62.2663 }
 
-async function buscarEnNominatim(consulta) {
-  const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=' + encodeURIComponent(consulta)
-  const respuesta = await fetch(url)
+const NO_ENCONTRADA = 'No encontramos esa dirección. Arrastrá el círculo (o el pin) hasta tu zona.'
+
+// Búsqueda estructurada: calle y número por un lado y la ciudad por otro.
+// Como texto libre, "12 de Octubre 833" puede centrar en el barrio 12 de
+// Octubre en vez de en la calle.
+async function buscarEnNominatim({ calle, numero, ciudad }) {
+  const params = new URLSearchParams({
+    format: 'jsonv2',
+    limit: '1',
+    street: `${numero} ${calle}`,
+    city: ciudad,
+    country: 'Argentina',
+  })
+  const respuesta = await fetch('https://nominatim.openstreetmap.org/search?' + params.toString())
   const datos = await respuesta.json()
   return datos && datos.length > 0 ? { lat: parseFloat(datos[0].lat), lng: parseFloat(datos[0].lon) } : null
+}
+
+// "Donado 1234" -> { calle: 'Donado', numero: '1234' }. Para editar una
+// dirección guardada en los dos cuadros.
+function separarDireccion(direccion) {
+  const texto = (direccion || '').trim()
+  const partes = texto.match(/^(.*\S)\s+(\d+[\w/-]*)$/)
+  return partes ? { calle: partes[1], numero: partes[2] } : { calle: texto, numero: '' }
 }
 
 // Guarda lo que armó el bloque. Devuelve { ok, error, barrio }.
@@ -47,13 +69,9 @@ export async function guardarUbicacion(datos) {
       body: JSON.stringify({
         localidadId: datos.localidadId,
         direccionVisible: datos.direccionVisible,
-        direccion: datos.direccion,
-        zonaCalle: datos.zonaCalle,
-        zonaEntre: datos.zonaEntre,
-        zonaY: datos.zonaY,
+        direccion: datos.direccionVisible ? datos.direccion : null,
         lat: datos.lat,
         lng: datos.lng,
-        mantenerPunto: datos.mantenerPunto,
         barrioId: datos.barrioId,
       }),
     })
@@ -66,28 +84,24 @@ export async function guardarUbicacion(datos) {
 }
 
 // inicial: la fila de vendedores (localidad_id, direccion_visible, direccion,
-// zona_calle, zona_entre, zona_y, latitud, longitud, barrio_id), o null en el
-// alta.
+// latitud, longitud, barrio_id), o null en el alta.
 export default function BloqueUbicacion({ localidades = [], barrios = [], inicial = null, onChange }) {
   const tienePunto = inicial?.latitud != null && inicial?.longitud != null
   const puntoInicial = tienePunto ? { lat: Number(inicial.latitud), lng: Number(inicial.longitud) } : null
+  // Para no perder un barrio elegido a mano cuando el mapa vuelve a cargar
+  // el punto guardado y no lo detecta.
+  const puntoGuardado = useRef(puntoInicial)
+  const direccionInicial = inicial?.direccion_visible ? separarDireccion(inicial.direccion) : { calle: '', numero: '' }
 
   const [localidadId, setLocalidadId] = useState(inicial?.localidad_id ? String(inicial.localidad_id) : '')
   // "No" marcado de entrada.
   const [direccionVisible, setDireccionVisible] = useState(inicial?.direccion_visible === true)
-  const [direccion, setDireccion] = useState(inicial?.direccion || '')
-  const [zonaCalle, setZonaCalle] = useState(inicial?.zona_calle || '')
-  const [zonaEntre, setZonaEntre] = useState(inicial?.zona_entre || '')
-  const [zonaY, setZonaY] = useState(inicial?.zona_y || '')
+  const [calle, setCalle] = useState(direccionInicial.calle)
+  const [numero, setNumero] = useState(direccionInicial.numero)
 
-  const [punto, setPunto] = useState(puntoInicial)
-  // Una zona ya guardada que no se volvió a marcar: el servidor la deja como
-  // está, sin volver a detectar el barrio desde el punto redondeado.
-  const [puntoGuardado, setPuntoGuardado] = useState(tienePunto && inicial?.direccion_visible === false)
+  const [punto, setPunto] = useState(null)
   const [barrioId, setBarrioId] = useState(inicial?.barrio_id ? String(inicial.barrio_id) : '')
-  const [barrioDetectado, setBarrioDetectado] = useState(
-    () => (inicial?.barrio_id ? barrios.find((b) => b.id === inicial.barrio_id) || null : null)
-  )
+  const [barrioDetectado, setBarrioDetectado] = useState(null)
 
   const [mapaVisible, setMapaVisible] = useState(tienePunto)
   const [posicionBuscada, setPosicionBuscada] = useState(
@@ -97,103 +111,110 @@ export default function BloqueUbicacion({ localidades = [], barrios = [], inicia
   const [claveMapa, setClaveMapa] = useState(0)
   const [buscando, setBuscando] = useState(false)
   const [avisoMapa, setAvisoMapa] = useState(null)
-  const [calleBuscada, setCalleBuscada] = useState(null)
+  const [ultimaBusqueda, setUltimaBusqueda] = useState(null)
+  const enCurso = useRef(false)
+  const ultimaHora = useRef(0)
 
   const barriosDeLaLocalidad = localidadId ? barrios.filter((b) => b.localidad_id === Number(localidadId)) : []
   const localidadTieneBarrios = barriosDeLaLocalidad.length > 0
   const nombreLocalidad = localidades.find((l) => l.id === Number(localidadId))?.nombre || 'Bahía Blanca'
-  const zona = textoZona(zonaCalle, zonaEntre, zonaY)
-  const callesCompletas = !!zona
+  const direccionCompleta = !!calle.trim() && !!numero.trim()
 
   let faltante = null
   if (!localidadId) faltante = 'Elegí tu localidad.'
   else if (!localidadTieneBarrios) faltante = 'Por ahora Bahía Shops no está disponible en esa localidad.'
-  else if (direccionVisible && !direccion.trim()) faltante = 'Escribí tu dirección.'
+  else if (direccionVisible && !direccionCompleta) faltante = 'Escribí la calle y el número.'
   else if (direccionVisible && !punto) faltante = 'Tocá "Ubicar" para marcar tu dirección en el mapa.'
-  else if (!direccionVisible && !callesCompletas) faltante = 'Completá la calle y las dos entrecalles.'
-  else if (!direccionVisible && !punto) faltante = 'Marcá tu cuadra en el mapa.'
+  else if (!direccionVisible && !punto) faltante = 'Escribí la calle y el número y tocá "Ubicar" para ubicar tu zona.'
   else if (!barrioId) faltante = 'Elegí tu barrio.'
+
+  // Con "No", la calle y el número no salen de acá.
+  const direccionParaGuardar = direccionVisible ? `${calle.trim()} ${numero.trim()}`.trim() : ''
 
   useEffect(() => {
     onChange({
       localidadId: localidadId ? Number(localidadId) : null,
       direccionVisible,
-      direccion: direccion.trim(),
-      zonaCalle: zonaCalle.trim(),
-      zonaEntre: zonaEntre.trim(),
-      zonaY: zonaY.trim(),
+      direccion: direccionParaGuardar,
       lat: punto?.lat ?? null,
       lng: punto?.lng ?? null,
-      mantenerPunto: puntoGuardado,
       barrioId: barrioId ? Number(barrioId) : null,
       completo: !faltante,
       faltante,
     })
-  }, [localidadId, direccionVisible, direccion, zonaCalle, zonaEntre, zonaY, punto, puntoGuardado, barrioId, faltante, onChange])
+  }, [localidadId, direccionVisible, direccionParaGuardar, punto, barrioId, faltante, onChange])
 
   function empezarDeNuevo() {
+    puntoGuardado.current = null
     setPunto(null)
-    setPuntoGuardado(false)
     setBarrioId('')
     setBarrioDetectado(null)
     setMapaVisible(false)
     setPosicionBuscada(null)
     setAvisoMapa(null)
-    setCalleBuscada(null)
+    setUltimaBusqueda(null)
     setClaveMapa((c) => c + 1)
   }
 
-  async function centrarEn(consulta, avisoSiNoEncuentra) {
+  // Al apretar "Ubicar" (siempre) o al salir del cuadro del número (solo si
+  // cambió algo desde la última búsqueda). Nunca mientras se escribe:
+  // Nominatim no se puede usar como autocompletado.
+  async function buscar({ forzar = false } = {}) {
+    // Salir del número tocando "Ubicar" dispara las dos cosas casi juntas:
+    // el ref (no el estado) frena la segunda búsqueda.
+    if (!direccionCompleta || enCurso.current) return
+    const clave = `${localidadId}|${calle.trim().toLowerCase()}|${numero.trim().toLowerCase()}`
+    if (!forzar && clave === ultimaBusqueda) return
+    if (forzar && clave === ultimaBusqueda && Date.now() - ultimaHora.current < 1500) return
+    enCurso.current = true
+    ultimaHora.current = Date.now()
+    setUltimaBusqueda(clave)
     setBuscando(true)
     setAvisoMapa(null)
     try {
-      const encontrado = await buscarEnNominatim(consulta)
+      const encontrado = await buscarEnNominatim({ calle: calle.trim(), numero: numero.trim(), ciudad: nombreLocalidad })
       setMapaVisible(true)
       if (encontrado) {
         setPosicionBuscada({ ...encontrado, zoom: 16, nonce: Date.now() })
       } else {
-        setAvisoMapa(avisoSiNoEncuentra)
-        setPosicionBuscada({ ...CENTRO_BB, zoom: 13, nonce: Date.now() })
+        setAvisoMapa(NO_ENCONTRADA)
+        setPosicionBuscada({ ...CENTRO_BB, zoom: 14, nonce: Date.now() })
       }
     } catch {
       setMapaVisible(true)
-      setAvisoMapa('Hubo un problema al buscar. ' + avisoSiNoEncuentra)
-      setPosicionBuscada({ ...CENTRO_BB, zoom: 13, nonce: Date.now() })
+      setAvisoMapa('Hubo un problema al buscar. Arrastrá el círculo (o el pin) hasta tu zona.')
+      setPosicionBuscada({ ...CENTRO_BB, zoom: 14, nonce: Date.now() })
     }
+    enCurso.current = false
     setBuscando(false)
   }
 
-  function buscarDireccion() {
-    if (!direccion.trim()) return
-    centrarEn(`${direccion.trim()}, ${nombreLocalidad}, Argentina`, 'Arrastrá el pin hasta tu dirección.')
-  }
-
-  // Con "No" se busca cuando las tres calles están completas y la persona sale
-  // de un campo, y solo si la calle cambió: Nominatim no se puede usar como
-  // autocompletado (un pedido por segundo como máximo). Se busca la calle
-  // sola: Nominatim no ubica bien esquinas ni entrecalles.
-  function buscarCalle() {
-    if (!callesCompletas) return
-    const clave = `${localidadId}|${zonaCalle.trim().toLowerCase()}`
-    if (clave === calleBuscada) return
-    setCalleBuscada(clave)
-    centrarEn(`${zonaCalle.trim()}, ${nombreLocalidad}, Argentina`, 'No encontramos esa calle. Buscá tu cuadra en el mapa.')
-  }
-
   function manejarUbicacion({ lat, lng, barrioDetectado: detectado }) {
+    const esElGuardado = puntoGuardado.current
+      && puntoGuardado.current.lat === lat && puntoGuardado.current.lng === lng
     setPunto({ lat, lng })
-    setPuntoGuardado(false)
     setBarrioDetectado(detectado)
-    setBarrioId(detectado ? String(detectado.id) : '')
+    if (detectado) setBarrioId(String(detectado.id))
+    else if (!esElGuardado) setBarrioId('')
   }
 
-  const selectorBarrio = (
+  const barrioElegido = barriosDeLaLocalidad.find((b) => b.id === Number(barrioId))
+
+  const lineaBarrio = barrioDetectado ? (
+    <p className={`${ayudaClasses} m-0`} style={fuenteAyuda}>
+      📍 Barrio: <strong>{barrioDetectado.nombre}</strong>
+      {direccionVisible ? '. Si la ubicación no es exacta, arrastrá el pin.' : ''}
+    </p>
+  ) : (
     <label className="flex flex-col gap-1.5">
       <span className={labelClasses}>No pudimos detectar el barrio. Elegilo vos:</span>
       <select value={barrioId} onChange={(e) => setBarrioId(e.target.value)} className={selectClasses}>
         <option value="">Elegí un barrio</option>
         {barriosDeLaLocalidad.map((b) => <option key={b.id} value={b.id}>{b.nombre}</option>)}
       </select>
+      {barrioElegido && !direccionVisible && (
+        <span className={ayudaClasses} style={fuenteAyuda}>Barrio: {barrioElegido.nombre}</span>
+      )}
     </label>
   )
 
@@ -225,7 +246,7 @@ export default function BloqueUbicacion({ localidades = [], barrios = [], inicia
               <span className="text-sm">
                 No, prefiero mostrar una zona
                 <span className={`block ${ayudaClasses} text-[#0a0a0a]/50`} style={fuenteAyuda}>
-                  En Bahía Shops se va a ver tu cuadra y una zona alrededor. Nunca te pedimos la altura.
+                  En Bahía Shops se ve una zona de unas cuadras alrededor, nunca tu dirección.
                 </span>
               </span>
             </label>
@@ -241,43 +262,29 @@ export default function BloqueUbicacion({ localidades = [], barrios = [], inicia
             </label>
           </div>
 
-          {direccionVisible ? (
-            <div className="flex flex-col gap-1.5">
-              <span className={labelClasses}>Dirección *</span>
-              <span className={ayudaClasses} style={fuenteAyuda}>Escribí tu dirección con número y tocá &quot;Ubicar&quot;.</span>
-              <div className="flex gap-2 items-stretch">
-                <input type="text" required placeholder="Ej: Donado 1234" value={direccion} maxLength={200}
-                  onChange={(e) => setDireccion(e.target.value)} className={`${inputClasses} flex-1`} />
-                <button type="button" onClick={buscarDireccion} disabled={buscando || !direccion.trim()}
-                  className={`px-4 py-2.5 whitespace-nowrap ${buscando || !direccion.trim() ? btnNegroInactivo : btnNegro}`}>
-                  {buscando ? 'Buscando...' : 'Ubicar 📍'}
-                </button>
-              </div>
+          <div className="flex flex-col gap-1.5">
+            <span className={ayudaClasses} style={fuenteAyuda}>
+              {direccionVisible
+                ? 'Escribí tu dirección y tocá "Ubicar".'
+                : 'La usamos solo para ubicar tu zona en el mapa. No se guarda ni se muestra.'}
+            </span>
+            <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
+              <label className="flex flex-col gap-1 flex-[2]">
+                <span className={labelClasses}>Calle *</span>
+                <input type="text" placeholder="Ej: 12 de Octubre" value={calle} maxLength={120}
+                  onChange={(e) => setCalle(e.target.value)} className={inputClasses} />
+              </label>
+              <label className="flex flex-col gap-1 flex-1">
+                <span className={labelClasses}>Número *</span>
+                <input type="text" inputMode="numeric" placeholder="Ej: 833" value={numero} maxLength={20}
+                  onChange={(e) => setNumero(e.target.value)} onBlur={() => buscar()} className={inputClasses} />
+              </label>
+              <button type="button" onClick={() => buscar({ forzar: true })} disabled={buscando || !direccionCompleta}
+                className={`px-4 py-2.5 whitespace-nowrap ${buscando || !direccionCompleta ? btnNegroInactivo : btnNegro}`}>
+                {buscando ? 'Buscando...' : 'Ubicar 📍'}
+              </button>
             </div>
-          ) : (
-            <div className="flex flex-col gap-1.5">
-              <span className={labelClasses}>Tu cuadra *</span>
-              <span className={ayudaClasses} style={fuenteAyuda}>La calle donde estás y las dos entre las que queda. Sin altura.</span>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs text-[#0a0a0a]/50">Calle</span>
-                  <input type="text" required placeholder="Ej: 12 de Octubre" value={zonaCalle} maxLength={LARGO_MAX_CALLE}
-                    onChange={(e) => setZonaCalle(e.target.value)} onBlur={buscarCalle} className={inputClasses} />
-                </label>
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs text-[#0a0a0a]/50">entre</span>
-                  <input type="text" required placeholder="Ej: Salta" value={zonaEntre} maxLength={LARGO_MAX_CALLE}
-                    onChange={(e) => setZonaEntre(e.target.value)} onBlur={buscarCalle} className={inputClasses} />
-                </label>
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs text-[#0a0a0a]/50">y</span>
-                  <input type="text" required placeholder="Ej: Mitre" value={zonaY} maxLength={LARGO_MAX_CALLE}
-                    onChange={(e) => setZonaY(e.target.value)} onBlur={buscarCalle} className={inputClasses} />
-                </label>
-              </div>
-              {buscando && <span className={ayudaClasses} style={fuenteAyuda}>Buscando la calle...</span>}
-            </div>
-          )}
+          </div>
 
           {mapaVisible && (
             <div className="flex flex-col gap-2">
@@ -285,31 +292,20 @@ export default function BloqueUbicacion({ localidades = [], barrios = [], inicia
                 <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">{avisoMapa}</div>
               )}
 
-              {!direccionVisible && (
-                <div className="p-3 bg-[#F5F2EC] rounded-lg text-sm text-[#0a0a0a]/80" style={fuenteAyuda}>
-                  Marcá tu cuadra en el mapa. No hace falta que sea tu casa exacta: en Bahía Shops se ve una zona alrededor, nunca el punto.
-                </div>
-              )}
-
               <MapaUbicacion
                 key={`${direccionVisible ? 'exacto' : 'zona'}-${claveMapa}`}
                 modo={direccionVisible ? 'exacto' : 'zona'}
-                puntoInicial={!direccionVisible && puntoGuardado ? punto : null}
-                barrioInicial={!direccionVisible && puntoGuardado && barrioId ? Number(barrioId) : null}
                 posicionBuscada={posicionBuscada}
                 onUbicacionChange={manejarUbicacion}
               />
 
-              {punto && (barrioDetectado ? (
-                <p className={`${ayudaClasses} m-0`} style={fuenteAyuda}>
-                  📍 Barrio: <strong>{barrioDetectado.nombre}</strong>.
-                  {direccionVisible ? ' Si la ubicación no es exacta, arrastrá el pin.' : ' Si no es tu cuadra, tocá de nuevo en el mapa.'}
+              {!direccionVisible && punto && (
+                <p className="text-sm m-0">
+                  Este círculo es lo que se va a ver en el mapa. Podés arrastrarlo para ajustar tu zona. Tu dirección no se guarda ni se muestra.
                 </p>
-              ) : selectorBarrio)}
-
-              {!direccionVisible && punto && zona && (
-                <p className="text-sm m-0">Así te van a ver: <strong>{zona}</strong></p>
               )}
+
+              {punto && lineaBarrio}
 
               {direccionVisible && punto && (
                 <span className="text-[11px] text-[#0a0a0a]/20 font-mono font-light">

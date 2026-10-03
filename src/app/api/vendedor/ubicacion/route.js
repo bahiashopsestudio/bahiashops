@@ -2,12 +2,15 @@
 // lugar que escribe esas columnas de 'vendedores': desde la migración 018 el
 // navegador no tiene permiso.
 //
-// Con "Sí" (direccionVisible) se guarda la dirección y el punto exacto. Con
-// "No", la calle y las dos entrecalles, y el punto redondeado a la grilla de
-// ~200 m: el exacto no se guarda nunca, ni se escribe en ningún log. El
-// barrio sale del punto exacto, antes de redondear, para que el redondeo no
-// cambie el barrio ni la zona de cadetería. La base vuelve a redondear como
-// segunda barrera (disparador redondear_zona).
+// Con "Sí" (direccionVisible) se guarda la dirección y el punto exacto, y el
+// barrio sale de ese punto.
+//
+// Con "No" solo llega el centro del círculo: la calle y el número con que se
+// buscó en el mapa se quedan en el navegador. Igual se vuelve a redondear
+// (por si llega un punto que no está en la grilla) y el barrio sale del
+// centro: lo que se guarda es exactamente lo que se ve. Las columnas
+// zona_calle, zona_entre y zona_y ya no se escriben. La base vuelve a
+// redondear como segunda barrera (disparador redondear_zona).
 //
 // La tienda sale de la sesión, nunca de un parámetro. Escribe con
 // service_role, que saltea el disparador de la 006: por eso acá se reabre a
@@ -16,7 +19,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getServiceRoleClient } from '@/lib/supabase/admin';
-import { redondearPunto, LARGO_MAX_CALLE } from '@/lib/zonaVendedor';
+import { redondearPunto } from '@/lib/zonaVendedor';
 
 // El partido de Bahía Blanca, con margen. Solo descarta puntos absurdos; el
 // control fino es que el barrio sea de la localidad elegida.
@@ -65,7 +68,7 @@ export async function POST(request) {
 
   const { data: vendedor, error: errorVendedor } = await admin
     .from('vendedores')
-    .select('id, localidad_id, estado_validacion, direccion_visible, latitud, longitud, barrio_id, barrio_detectado_automaticamente')
+    .select('id, localidad_id, estado_validacion')
     .eq('usuario_id', user.id)
     .maybeSingle();
   if (errorVendedor) {
@@ -90,74 +93,44 @@ export async function POST(request) {
   // ── Qué se muestra ──
   const direccionVisible = cuerpo.direccionVisible === true;
   let direccion = null;
-  let zona = { zona_calle: null, zona_entre: null, zona_y: null };
   if (direccionVisible) {
     direccion = texto(cuerpo.direccion, 200);
-    if (!direccion) return rechazo(400, 'Escribí tu dirección.');
-  } else {
-    const calle = texto(cuerpo.zonaCalle, LARGO_MAX_CALLE);
-    const entre = texto(cuerpo.zonaEntre, LARGO_MAX_CALLE);
-    const y = texto(cuerpo.zonaY, LARGO_MAX_CALLE);
-    if (!calle || !entre || !y) return rechazo(400, 'Completá la calle y las dos entrecalles.');
-    zona = { zona_calle: calle, zona_entre: entre, zona_y: y };
+    if (!direccion) return rechazo(400, 'Escribí la calle y el número.');
   }
 
   // ── El punto y el barrio ──
-  let latitud, longitud, barrioId, barrioAuto;
+  const lat = numero(cuerpo.lat);
+  const lng = numero(cuerpo.lng);
+  if (lat === null || lng === null) {
+    return rechazo(400, direccionVisible ? 'Marcá tu dirección en el mapa.' : 'Ubicá tu zona en el mapa.');
+  }
+  if (lat < AREA.latMin || lat > AREA.latMax || lng < AREA.lngMin || lng > AREA.lngMax) {
+    return rechazo(400, 'El punto que marcaste está fuera de la zona de Bahía Shops.');
+  }
 
-  // Quien ya tenía su zona guardada y no volvió a marcar: se queda con el
-  // punto y el barrio que tenía. Volver a detectar el barrio desde el punto
-  // redondeado podría cambiarlo.
-  const mantener = cuerpo.mantenerPunto === true
-    && !direccionVisible
-    && vendedor.direccion_visible === false
-    && vendedor.latitud !== null && vendedor.longitud !== null
-    && localidadId === vendedor.localidad_id;
+  // Con "Sí", el punto exacto. Con "No", el centro de la celda.
+  const { lat: latitud, lng: longitud } = direccionVisible ? { lat, lng } : redondearPunto(lat, lng);
 
-  if (mantener) {
-    latitud = Number(vendedor.latitud);
-    longitud = Number(vendedor.longitud);
-    barrioId = vendedor.barrio_id;
-    barrioAuto = vendedor.barrio_detectado_automaticamente;
-  } else {
-    const lat = numero(cuerpo.lat);
-    const lng = numero(cuerpo.lng);
-    if (lat === null || lng === null) {
-      return rechazo(400, direccionVisible ? 'Marcá tu dirección en el mapa.' : 'Marcá tu cuadra en el mapa.');
-    }
-    if (lat < AREA.latMin || lat > AREA.latMax || lng < AREA.lngMin || lng > AREA.lngMax) {
-      return rechazo(400, 'El punto que marcaste está fuera de la zona de Bahía Shops.');
-    }
+  // El barrio sale del punto que se guarda. Con el cliente de la sesión: es
+  // el mismo permiso que usa el mapa del navegador.
+  const { data: detectados, error: errorBarrio } = await supabase.rpc('barrio_en_punto', { lat: latitud, lng: longitud });
+  if (errorBarrio) {
+    console.error('Ubicación: no se pudo detectar el barrio', vendedor.id, errorBarrio.message);
+    return rechazo(500, 'No pudimos detectar tu barrio. Probá de nuevo.');
+  }
+  const detectado = detectados && detectados.length > 0 ? detectados[0] : null;
+  const barrioId = detectado ? detectado.id : Number(cuerpo.barrioId);
+  if (!Number.isInteger(barrioId)) return rechazo(400, 'Elegí tu barrio.');
 
-    // El barrio, con el punto exacto. Con el cliente de la sesión: es el
-    // mismo permiso que usa el mapa del navegador.
-    const { data: detectados, error: errorBarrio } = await supabase.rpc('barrio_en_punto', { lat, lng });
-    if (errorBarrio) {
-      console.error('Ubicación: no se pudo detectar el barrio', vendedor.id, errorBarrio.message);
-      return rechazo(500, 'No pudimos detectar tu barrio. Probá de nuevo.');
-    }
-    const detectado = detectados && detectados.length > 0 ? detectados[0] : null;
-    barrioId = detectado ? detectado.id : Number(cuerpo.barrioId);
-    barrioAuto = !!detectado;
-    if (!Number.isInteger(barrioId)) return rechazo(400, 'Elegí tu barrio.');
-
-    const { data: barrio } = await admin
-      .from('barrios')
-      .select('id, localidad_id')
-      .eq('id', barrioId)
-      .maybeSingle();
-    if (!barrio || barrio.localidad_id !== localidadId) {
-      return rechazo(400, detectado
-        ? 'El punto que marcaste no está en la localidad elegida.'
-        : 'Elegí un barrio de tu localidad.');
-    }
-
-    if (direccionVisible) {
-      latitud = lat;
-      longitud = lng;
-    } else {
-      ({ lat: latitud, lng: longitud } = redondearPunto(lat, lng));
-    }
+  const { data: barrio } = await admin
+    .from('barrios')
+    .select('id, localidad_id')
+    .eq('id', barrioId)
+    .maybeSingle();
+  if (!barrio || barrio.localidad_id !== localidadId) {
+    return rechazo(400, detectado
+      ? 'El punto que marcaste no está en la localidad elegida.'
+      : 'Elegí un barrio de tu localidad.');
   }
 
   const campos = {
@@ -166,9 +139,8 @@ export async function POST(request) {
     recibe_publico: direccionVisible,
     localidad_id: localidadId,
     direccion,
-    ...zona,
     barrio_id: barrioId,
-    barrio_detectado_automaticamente: barrioAuto,
+    barrio_detectado_automaticamente: !!detectado,
     latitud,
     longitud,
   };

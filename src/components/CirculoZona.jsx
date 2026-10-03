@@ -20,7 +20,14 @@ function metrosPorPixel(lat, zoom) {
   return (40075016.686 * Math.cos((lat * Math.PI) / 180)) / 2 ** (zoom + 8)
 }
 
-export default function CirculoZona({ centro, capaRef, eventHandlers, children }) {
+// Lo que mide en pantalla el radio del círculo, con el mínimo aplicado.
+export function radioEnPixeles(lat, zoom) {
+  return Math.max(RADIO_MINIMO_PX, RADIO_ZONA_M / metrosPorPixel(lat, zoom))
+}
+
+// interactive={false}: el círculo no recibe el mouse (en el formulario lo
+// agarra una manija invisible encima, y los toques pasan al mapa).
+export default function CirculoZona({ centro, capaRef, eventHandlers, interactive = true, children }) {
   const map = useMapEvents({ zoomend: () => setZoom(map.getZoom()) })
   const [zoom, setZoom] = useState(() => map.getZoom())
 
@@ -28,14 +35,16 @@ export default function CirculoZona({ centro, capaRef, eventHandlers, children }
 
   if (radioPx < RADIO_MINIMO_PX) {
     return (
-      <CircleMarker ref={capaRef} center={centro} radius={RADIO_MINIMO_PX} pathOptions={ESTILO_ZONA} eventHandlers={eventHandlers}>
+      <CircleMarker ref={capaRef} center={centro} radius={RADIO_MINIMO_PX} pathOptions={ESTILO_ZONA}
+        interactive={interactive} eventHandlers={eventHandlers}>
         {children}
       </CircleMarker>
     )
   }
 
   return (
-    <Circle ref={capaRef} center={centro} radius={RADIO_ZONA_M} pathOptions={ESTILO_ZONA} eventHandlers={eventHandlers}>
+    <Circle ref={capaRef} center={centro} radius={RADIO_ZONA_M} pathOptions={ESTILO_ZONA}
+      interactive={interactive} eventHandlers={eventHandlers}>
       {children}
     </Circle>
   )

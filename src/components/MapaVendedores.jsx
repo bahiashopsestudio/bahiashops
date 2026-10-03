@@ -17,7 +17,6 @@ import L from 'leaflet'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { TILES_VENDEDORES } from '@/lib/mapaTiles'
-import { textoZona } from '@/lib/zonaVendedor'
 import CirculoZona from '@/components/CirculoZona'
 import 'leaflet/dist/leaflet.css'
 
@@ -84,7 +83,6 @@ function usePopupAlPasar() {
 }
 
 function FichaTienda({ v, nombreBarrio, compacta = false }) {
-  const zona = v.direccion_visible ? null : textoZona(v.zona_calle, v.zona_entre, v.zona_y)
   const lado = compacta ? '32px' : '40px'
   return (
     <div>
@@ -100,9 +98,6 @@ function FichaTienda({ v, nombreBarrio, compacta = false }) {
           <div style={{ fontWeight: 700, fontSize: '14px', color: '#0a0a0a' }}>{v.nombre_negocio}</div>
           {nombreBarrio && (
             <div style={{ fontSize: '11px', fontWeight: 500, color: '#4164fe', marginTop: '1px' }}>{nombreBarrio}</div>
-          )}
-          {zona && (
-            <div style={{ fontSize: '11px', color: 'rgba(10,10,10,0.5)', marginTop: '1px' }}>{zona}</div>
           )}
         </div>
       </div>
