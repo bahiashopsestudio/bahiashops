@@ -37,7 +37,7 @@ const CENTRO_BB = { lat: -38.7183, lng: -62.2663 }
 const NO_ENCONTRADA = 'No encontramos esa dirección. Arrastrá el círculo (o el pin) hasta tu zona.'
 
 // Búsqueda estructurada: calle y número por un lado y la ciudad por otro.
-// Como texto libre, "12 de Octubre 833" puede centrar en el barrio 12 de
+// Como texto libre, "12 de Octubre 801" puede centrar en el barrio 12 de
 // Octubre en vez de en la calle.
 async function buscarEnNominatim({ calle, numero, ciudad }) {
   const params = new URLSearchParams({
@@ -276,7 +276,7 @@ export default function BloqueUbicacion({ localidades = [], barrios = [], inicia
               </label>
               <label className="flex flex-col gap-1 flex-1">
                 <span className={labelClasses}>Número *</span>
-                <input type="text" inputMode="numeric" placeholder="Ej: 833" value={numero} maxLength={20}
+                <input type="text" inputMode="numeric" placeholder="Ej: 801" value={numero} maxLength={20}
                   onChange={(e) => setNumero(e.target.value)} onBlur={() => buscar()} className={inputClasses} />
               </label>
               <button type="button" onClick={() => buscar({ forzar: true })} disabled={buscando || !direccionCompleta}
