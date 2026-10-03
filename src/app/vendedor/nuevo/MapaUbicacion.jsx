@@ -43,24 +43,62 @@ function IrAPosicion({ posicion, onLlegar }) {
   return null
 }
 
-const igual = (a, b) => a.lat === b.lat && a.lng === b.lng
+const DURACION_DESLIZ_MS = 200
 
-// El círculo de la zona, que se mueve de celda en celda de la grilla.
+// El círculo de la zona.
 //
 // Leaflet no arrastra círculos: encima va una manija invisible (un Marker
 // arrastrable del tamaño del círculo), que sí se arrastra con el mouse y con
-// el dedo. Mientras se arrastra, el círculo salta a la celda que corresponde;
-// al soltar, la manija vuelve al centro de esa celda. Tocar el mapa también
-// lleva el círculo a la celda tocada.
+// el dedo. Mientras se arrastra, el círculo sigue a la manija sin saltos; al
+// soltar, se desliza (200 ms, ease-out) hasta el centro de la celda de la
+// grilla más cercana, que es lo que se guarda. Tocar el mapa fuera del
+// círculo lo desliza igual hasta la celda tocada. Con "reducir movimiento"
+// activado en el sistema, se ubica directo, sin animación.
+//
+// Durante el arrastre y la animación el círculo se mueve directo en Leaflet,
+// sin pasar por React en cada cuadro. Recién al terminar se avisa al
+// formulario (onSoltar), que detecta el barrio con el centro de la celda: si
+// se avisara antes, React reubicaría el círculo de golpe y cortaría el
+// deslizamiento.
 function ZonaArrastrable({ centro, onSoltar }) {
+  // El zoom se lee del mapa en cada render (ver CirculoZona).
+  const [, redibujar] = useState(0)
   const map = useMapEvents({
-    zoomend: () => setZoom(map.getZoom()),
-    click: (e) => onSoltar(redondearPunto(e.latlng.lat, e.latlng.lng)),
+    zoomend: () => redibujar((n) => n + 1),
+    moveend: () => redibujar((n) => n + 1),
+    click: (e) => deslizarA(redondearPunto(e.latlng.lat, e.latlng.lng)),
   })
-  const [zoom, setZoom] = useState(() => map.getZoom())
-  // La celda que se ve mientras se arrastra (null cuando no se arrastra).
-  const [enArrastre, setEnArrastre] = useState(null)
-  const visible = enArrastre || centro
+  const zoom = map.getZoom()
+  const circuloRef = useRef(null)
+  const manijaRef = useRef(null)
+  const cuadro = useRef(null)
+
+  useEffect(() => () => cancelAnimationFrame(cuadro.current), [])
+
+  function ubicar(latlng) {
+    circuloRef.current?.setLatLng(latlng)
+    manijaRef.current?.setLatLng(latlng)
+  }
+
+  function deslizarA(celda) {
+    cancelAnimationFrame(cuadro.current)
+    const hasta = L.latLng(celda.lat, celda.lng)
+    const desde = circuloRef.current?.getLatLng() || hasta
+    const terminar = () => { ubicar(hasta); onSoltar(celda) }
+
+    const reducir = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    if (reducir || desde.equals(hasta)) { terminar(); return }
+
+    const inicio = performance.now()
+    const paso = (ahora) => {
+      const t = Math.min(1, (ahora - inicio) / DURACION_DESLIZ_MS)
+      const k = 1 - (1 - t) ** 3 // ease-out
+      ubicar(L.latLng(desde.lat + (hasta.lat - desde.lat) * k, desde.lng + (hasta.lng - desde.lng) * k))
+      if (t < 1) cuadro.current = requestAnimationFrame(paso)
+      else terminar()
+    }
+    cuadro.current = requestAnimationFrame(paso)
+  }
 
   const radio = Math.round(radioEnPixeles(centro.lat, zoom))
   const manija = useMemo(() => L.divIcon({
@@ -72,23 +110,18 @@ function ZonaArrastrable({ centro, onSoltar }) {
 
   return (
     <>
-      <CirculoZona centro={[visible.lat, visible.lng]} interactive={false} />
+      <CirculoZona centro={[centro.lat, centro.lng]} capaRef={circuloRef} interactive={false} />
       <Marker
+        ref={manijaRef}
         position={[centro.lat, centro.lng]}
         icon={manija}
         draggable
         eventHandlers={{
-          drag: (e) => {
-            const { lat, lng } = e.target.getLatLng()
-            const celda = redondearPunto(lat, lng)
-            if (!enArrastre || !igual(celda, enArrastre)) setEnArrastre(celda)
-          },
+          dragstart: () => cancelAnimationFrame(cuadro.current),
+          drag: (e) => circuloRef.current?.setLatLng(e.target.getLatLng()),
           dragend: (e) => {
             const { lat, lng } = e.target.getLatLng()
-            const celda = redondearPunto(lat, lng)
-            e.target.setLatLng([celda.lat, celda.lng])
-            setEnArrastre(null)
-            onSoltar(celda)
+            deslizarA(redondearPunto(lat, lng))
           },
         }}
       />

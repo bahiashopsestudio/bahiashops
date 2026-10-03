@@ -28,8 +28,16 @@ export function radioEnPixeles(lat, zoom) {
 // interactive={false}: el círculo no recibe el mouse (en el formulario lo
 // agarra una manija invisible encima, y los toques pasan al mapa).
 export default function CirculoZona({ centro, capaRef, eventHandlers, interactive = true, children }) {
-  const map = useMapEvents({ zoomend: () => setZoom(map.getZoom()) })
-  const [zoom, setZoom] = useState(() => map.getZoom())
+  // El zoom se lee del mapa en cada render; zoomend solo fuerza a volver a
+  // dibujar. Si se guardara en un estado al montar, un círculo que aparece
+  // mientras el mapa termina de hacer zoom (al buscar una dirección) se
+  // quedaría con el tamaño del zoom anterior.
+  const [, redibujar] = useState(0)
+  const map = useMapEvents({
+    zoomend: () => redibujar((n) => n + 1),
+    moveend: () => redibujar((n) => n + 1),
+  })
+  const zoom = map.getZoom()
 
   const radioPx = RADIO_ZONA_M / metrosPorPixel(centro[0], zoom)
 

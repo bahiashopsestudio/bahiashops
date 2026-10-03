@@ -292,18 +292,18 @@ export default function BloqueUbicacion({ localidades = [], barrios = [], inicia
                 <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">{avisoMapa}</div>
               )}
 
+              {!direccionVisible && (
+                <p className="text-sm m-0">
+                  Este círculo es lo que se va a ver en el mapa. Podés arrastrarlo para ajustar tu zona. Tu dirección no se guarda ni se muestra.
+                </p>
+              )}
+
               <MapaUbicacion
                 key={`${direccionVisible ? 'exacto' : 'zona'}-${claveMapa}`}
                 modo={direccionVisible ? 'exacto' : 'zona'}
                 posicionBuscada={posicionBuscada}
                 onUbicacionChange={manejarUbicacion}
               />
-
-              {!direccionVisible && punto && (
-                <p className="text-sm m-0">
-                  Este círculo es lo que se va a ver en el mapa. Podés arrastrarlo para ajustar tu zona. Tu dirección no se guarda ni se muestra.
-                </p>
-              )}
 
               {punto && lineaBarrio}
 
