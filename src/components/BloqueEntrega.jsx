@@ -165,7 +165,7 @@ export default function BloqueEntrega({ valor, onChange, tienda = {}, enlaceUbic
       ? `Quien compra lo busca en ${direccion}.`
       : 'Quien compra lo busca en tu local o domicilio.'
 
-  // "Zona 2 · Hasta 30 cuadras": a la tienda se le habla en cuadras.
+  // "Zona 2 · Hasta 3 km".
   const zonaTienda = (zona) => ({ titulo: zona.nombre, detalle: '' })
   // "Zona 1 · Hasta 50 km" con ejemplos de ciudades debajo.
   const zonaCorreo = (zona) => ({ titulo: zona.nombre, detalle: `Por ejemplo: ${zona.ejemplos}` })
@@ -199,7 +199,7 @@ export default function BloqueEntrega({ valor, onChange, tienda = {}, enlaceUbic
         deshabilitado={!tienePunto && !valor.metodos.includes('envio_tienda')}
         onToggle={() => alternar('envio_tienda')}
         titulo="Envío de la tienda"
-        detalle="Lo llevás vos o lo mandás con quien quieras: un cadete, Uber Flash, PedidosYa… Cobrás según la distancia, hasta 200 cuadras (20 km) de tu tienda, sea la ciudad que sea."
+        detalle="Lo llevás vos o lo mandás con quien quieras: un cadete, Uber Flash, PedidosYa… Cobrás según la distancia, hasta 20 km de tu tienda, sea la ciudad que sea."
       >
         {!tienePunto && (
           <p className="mx-4 mb-4 ml-[46px] mt-0 p-2.5 rounded-lg bg-amber-50 text-[12px] text-amber-800 font-light">
@@ -214,7 +214,7 @@ export default function BloqueEntrega({ valor, onChange, tienda = {}, enlaceUbic
             <p className={`px-4 ml-[30px] mt-0 mb-3 text-[12px] text-[#0a0a0a]/55 font-light leading-relaxed`}>
               Medimos aproximando el recorrido por calles; poné los precios que te parezcan justos.
               Dejá vacía una zona si no llegás: a quien vive ahí no le aparece esta opción. Si ponés $0, es envío gratis.
-              Más de 200 cuadras no se ofrece.
+              Más de 20 km no se ofrece.
             </p>
             <Zonas metodo={METODOS.envio_tienda} valor={valor} onPrecio={cambiarPrecio} nombreZona={zonaTienda} />
           </>

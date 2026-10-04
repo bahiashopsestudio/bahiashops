@@ -60,9 +60,8 @@ function zonaEn(zonas, metros) {
 // La distancia en línea recta, multiplicada por FACTOR_CALLES para aproximar
 // el recorrido por calles. Llega hasta 20 km (ya multiplicado), sea la ciudad
 // que sea: más lejos, no llega (no es una falla, no se registra). A la tienda
-// las zonas se le muestran en cuadras.
+// las zonas se le muestran en kilómetros, como las del correo.
 export const FACTOR_CALLES = 1.3
-export const METROS_POR_CUADRA = 100
 
 export const ZONAS_TIENDA = [
   { zona: 1, clave: 'zona_1', hastaMetros: 1000 },
@@ -72,8 +71,8 @@ export const ZONAS_TIENDA = [
 ].map((z, i, todas) => ({
   ...z,
   nombre: i === todas.length - 1
-    ? `De ${todas[i - 1].hastaMetros / METROS_POR_CUADRA} a ${z.hastaMetros / METROS_POR_CUADRA} cuadras`
-    : `Hasta ${z.hastaMetros / METROS_POR_CUADRA} cuadras`,
+    ? `De ${todas[i - 1].hastaMetros / 1000} a ${z.hastaMetros / 1000} km`
+    : `Hasta ${z.hastaMetros / 1000} km`,
   detalle: '',
 }))
 

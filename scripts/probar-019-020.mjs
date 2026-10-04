@@ -377,10 +377,10 @@ console.log("\n4. Distancia y zonas del envío de la tienda")
   ok(L.distanciaRectaMetros(CENTRO, alNorte(2000)) === L.distanciaRectaMetros(alNorte(2000), CENTRO), "da lo mismo en los dos sentidos")
 
   ok(L.FACTOR_CALLES === 1.3, "factor de calles: 1,3")
-  // Desde la 021 la zona 4 tiene tope: 20 km por calles (200 cuadras).
+  // Desde la 021 la zona 4 tiene tope: 20 km por calles.
   ok(igual(L.ZONAS_TIENDA.map((z) => z.hastaMetros), [1000, 3000, 7000, 20000]), "cortes: 1, 3, 7 y 20 km")
-  ok(igual(L.ZONAS_TIENDA.map((z) => z.nombre), ["Hasta 10 cuadras", "Hasta 30 cuadras", "Hasta 70 cuadras", "De 70 a 200 cuadras"]),
-    "a la tienda se le muestran en cuadras")
+  ok(igual(L.ZONAS_TIENDA.map((z) => z.nombre), ["Hasta 1 km", "Hasta 3 km", "Hasta 7 km", "De 7 a 20 km"]),
+    "a la tienda se le muestran en kilómetros")
 
   // Los cortes se aplican después del × 1,3: 1000 m por calles son 769 m rectos.
   const casos = [

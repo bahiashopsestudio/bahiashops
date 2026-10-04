@@ -367,6 +367,30 @@ console.log("\n12. Direcciones: reglas del formulario")
   ok(D.ciudadProvinciaCodigo({ calle: "X" }) === "", "dirección vieja sin ciudad: nada")
 }
 
+console.log("\n12b. La búsqueda cayó en otra ciudad (respuestas reales de Nominatim, 4/10/2026)")
+{
+  const MENDOZA = { city: "Ciudad de Mendoza", county: "Sección 5ª Residencial Sur", state_district: "Departamento Capital", state: "Mendoza", postcode: "5500" }
+  const SAN_MARTIN_MZA = { town: "Distrito Ciudad de San Martín", state_district: "Departamento San Martín", state: "Mendoza", postcode: "5570" }
+  const GODOY_CRUZ = { city: "Distrito Ciudad de Godoy Cruz", state: "Mendoza", postcode: "5501" }
+  const SAN_MARTIN_BA = { town: "Ciudad del Libertador General San Martín", state_district: "Partido de General San Martín", state: "Buenos Aires", postcode: "B1650LQP" }
+  const PUNTA_ALTA = { town: "Punta Alta", county: "Cuartel VI", state_district: "Partido de Coronel de Marina Leonardo Rosales", state: "Buenos Aires", postcode: "8109" }
+
+  ok(D.avisoLugar({ ciudad: "Mendoza", provincia: "Mendoza" }, MENDOZA) === null, "Mendoza → Ciudad de Mendoza: coincide")
+  ok(D.avisoLugar({ ciudad: "Mendoza", provincia: "Mendoza" }, SAN_MARTIN_MZA) ===
+    "Encontramos esta dirección en San Martín, no en Mendoza. Revisá los datos o mové el pin hasta tu casa.",
+    "Mendoza → San Martín (lo que pasaba sin código postal): avisa")
+  ok(/en Godoy Cruz, no en Mendoza/.test(D.avisoLugar({ ciudad: "Mendoza", provincia: "Mendoza" }, GODOY_CRUZ)), "Mendoza → Godoy Cruz: avisa")
+  ok(D.avisoLugar({ ciudad: "Punta Alta", provincia: "Buenos Aires" }, PUNTA_ALTA) === null, "Punta Alta: coincide")
+  ok(D.avisoLugar({ ciudad: "San Martín", provincia: "Mendoza" }, SAN_MARTIN_MZA) === null, "San Martín (Mendoza): coincide")
+  ok(D.avisoLugar({ ciudad: "san martin", provincia: "Buenos Aires" }, SAN_MARTIN_BA) === null, "San Martín (Buenos Aires), sin acentos: coincide")
+  ok(D.avisoLugar({ ciudad: "San Martín", provincia: "Buenos Aires" }, SAN_MARTIN_MZA) ===
+    "Encontramos esta dirección en San Martín, Mendoza, no en San Martín, Buenos Aires. Revisá los datos o mové el pin hasta tu casa.",
+    "mismo nombre, otra provincia: avisa con las provincias")
+  ok(/no en Mar/.test(D.avisoLugar({ ciudad: "Mar", provincia: "Buenos Aires" }, PUNTA_ALTA) || ""), "una palabra suelta no alcanza para coincidir")
+  ok(D.avisoLugar({ ciudad: "Alta", provincia: "Buenos Aires" }, PUNTA_ALTA) === null, "…pero una frase entera dentro del nombre sí (Alta ⊂ Punta Alta)")
+  ok(D.avisoLugar({ ciudad: "Mendoza", provincia: "Mendoza" }, null) === null, "sin datos del lugar: no avisa")
+}
+
 console.log("\n13. Seguimiento y textos")
 {
   ok(L.validarSeguimiento({ empresa: "andreani", numero: "  360 000 " }).campos?.envio_seguimiento === "360 000", "limpia el número")

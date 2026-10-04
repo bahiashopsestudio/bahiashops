@@ -10,6 +10,7 @@ import dynamic from 'next/dynamic';
 import { createClient } from '@/lib/supabase/client';
 import {
   PROVINCIAS, CIUDAD_BAHIA, PROVINCIA_BAHIA, errorDireccion, esDeBahia, normalizarCodigoPostal,
+  codigoPostalValido, avisoLugar,
 } from '@/lib/direcciones';
 
 const MapaUbicacion = dynamic(
@@ -31,9 +32,12 @@ const CENTRO_BAHIA = { lat: -38.7183, lng: -62.2663 };
 const CENTRO_ARGENTINA = { lat: -38.4, lng: -63.6 };
 
 // Búsqueda estructurada, como la de la ubicación de las tiendas: calle y
-// número por un lado, ciudad y provincia por otro. Devuelve { lat, lng,
-// codigoPostal } o null. addressdetails trae el código postal cuando lo sabe.
-async function buscarEnNominatim({ calle, numero, ciudad, provincia }) {
+// número por un lado, ciudad, código postal y provincia por otro. Sin el
+// código postal, "Mendoza" con una calle común puede caer en otra ciudad de
+// la provincia (San Martín, San Rafael). Devuelve { lat, lng, codigoPostal,
+// address } o null; address es lo que dice Nominatim del lugar, para
+// compararlo con lo que se escribió.
+async function buscarEnNominatim({ calle, numero, ciudad, provincia, codigoPostal }) {
   const params = new URLSearchParams({
     format: 'jsonv2',
     limit: '1',
@@ -43,6 +47,7 @@ async function buscarEnNominatim({ calle, numero, ciudad, provincia }) {
     state: provincia,
   });
   if (calle) params.set('street', `${numero} ${calle}`.trim());
+  if (codigoPostal) params.set('postalcode', codigoPostal);
   const respuesta = await fetch('https://nominatim.openstreetmap.org/search?' + params.toString());
   const datos = await respuesta.json();
   if (!datos || datos.length === 0) return null;
@@ -50,6 +55,7 @@ async function buscarEnNominatim({ calle, numero, ciudad, provincia }) {
     lat: parseFloat(datos[0].lat),
     lng: parseFloat(datos[0].lon),
     codigoPostal: datos[0].address?.postcode || null,
+    address: datos[0].address || null,
   };
 }
 
@@ -85,6 +91,9 @@ export default function FormularioDireccion({ onGuardada, onCancelar, esPrimera 
 
   const [barrios, setBarrios] = useState([]);
   const [mostrarFallback, setMostrarFallback] = useState(false);
+  // Arriba del mapa: la búsqueda cayó en otra ciudad, o no encontró la calle.
+  // No bloquea: la persona mueve el pin y guarda.
+  const [avisoMapa, setAvisoMapa] = useState('');
 
   // El nombre del barrio guardado, para mostrarlo.
   useEffect(() => {
@@ -109,36 +118,50 @@ export default function FormularioDireccion({ onGuardada, onCancelar, esPrimera 
     setMostrarFallback(false);
     setMostrarMapa(false);
     setPosicionBuscada(null);
+    setAvisoMapa('');
   }
 
   async function buscarDireccion() {
-    if (!calle.trim() || !numero.trim()) {
-      alert('Completá calle y número para buscar en el mapa.');
+    if (!enBahia && (!ciudad.trim() || !provincia)) {
+      alert('Completá la provincia y la ciudad para buscar en el mapa.');
       return;
     }
-    if (!enBahia && (!ciudad.trim() || !provincia)) {
-      alert('Completá la ciudad y la provincia para buscar en el mapa.');
+    // Fuera de Bahía, el código postal es lo que distingue una ciudad de otra
+    // del mismo nombre: se pide antes de buscar.
+    if (!enBahia && !codigoPostalValido(codigoPostal)) {
+      alert('Completá el código postal para buscar en el mapa: 4 números (5500) o el de 8 caracteres (M5500ABC).');
+      return;
+    }
+    if (!calle.trim() || !numero.trim()) {
+      alert('Completá calle y número para buscar en el mapa.');
       return;
     }
 
     setBuscandoDireccion(true);
     setMostrarMapa(true);
+    setAvisoMapa('');
 
+    // En Bahía, la búsqueda de siempre. Afuera, con el código postal.
     const donde = enBahia
       ? { ciudad: CIUDAD_BAHIA, provincia: PROVINCIA_BAHIA }
-      : { ciudad: ciudad.trim(), provincia };
+      : { ciudad: ciudad.trim(), provincia, codigoPostal: normalizarCodigoPostal(codigoPostal) };
     try {
       const encontrada = await buscarEnNominatim({ calle: calle.trim(), numero: numero.trim(), ...donde });
       if (encontrada) {
         setPosicionBuscada({ lat: encontrada.lat, lng: encontrada.lng, zoom: 16, nonce: Date.now() });
         if (!codigoPostal.trim() && encontrada.codigoPostal) setCodigoPostal(normalizarCodigoPostal(encontrada.codigoPostal));
+        if (!enBahia) setAvisoMapa(avisoLugar(donde, encontrada.address) || '');
         return;
       }
-      // Sin la calle, al menos la ciudad, para arrastrar el pin desde ahí.
+      // Sin la calle, al menos la ciudad (con su código postal y su
+      // provincia), para arrastrar el pin desde ahí.
       const soloCiudad = enBahia ? null : await buscarEnNominatim({ ...donde });
       const centro = soloCiudad || (enBahia ? CENTRO_BAHIA : CENTRO_ARGENTINA);
       setPosicionBuscada({ lat: centro.lat, lng: centro.lng, zoom: soloCiudad || enBahia ? 13 : 5, nonce: Date.now() });
-      alert('No encontramos esa dirección exacta. Ubicá tu casa arrastrando el pin en el mapa.');
+      const otraCiudad = soloCiudad ? avisoLugar(donde, soloCiudad.address) : null;
+      setAvisoMapa(otraCiudad || (soloCiudad || enBahia
+        ? 'No encontramos esa calle. Te mostramos la ciudad: arrastrá el pin hasta tu casa.'
+        : 'No encontramos esa ciudad. Arrastrá el pin hasta tu casa.'));
     } catch (err) {
       console.error('Error buscando dirección:', err);
       alert('No se pudo buscar la dirección. Probá de nuevo.');
@@ -291,6 +314,14 @@ export default function FormularioDireccion({ onGuardada, onCancelar, esPrimera 
         </div>
       )}
 
+      {/* Código postal: antes de la calle, para que la búsqueda no confunda
+          ciudades con el mismo nombre */}
+      <div className="mb-3.5">
+        <label className="block text-sm text-gray-500 mb-1">Código postal *</label>
+        <input className={inputClasses} value={codigoPostal} maxLength={10}
+          onChange={(e) => setCodigoPostal(e.target.value)} placeholder={enBahia ? '8000' : '8109 o B8109ABC'} />
+      </div>
+
       {/* Calle + Número */}
       <div className="flex gap-3 mb-2">
         <div className="flex-[2]">
@@ -322,6 +353,11 @@ export default function FormularioDireccion({ onGuardada, onCancelar, esPrimera 
       {/* Mapa */}
       {mostrarMapa && (
         <div className="mb-3.5">
+          {avisoMapa && (
+            <div className="mb-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-900">
+              {avisoMapa}
+            </div>
+          )}
           <MapaUbicacion
             key={enBahia ? 'bahia' : 'otra'}
             posicionBuscada={posicionBuscada}
@@ -363,13 +399,6 @@ export default function FormularioDireccion({ onGuardada, onCancelar, esPrimera 
           </p>
         </div>
       )}
-
-      {/* Código postal */}
-      <div className="mb-3.5">
-        <label className="block text-sm text-gray-500 mb-1">Código postal *</label>
-        <input className={inputClasses} value={codigoPostal} maxLength={10}
-          onChange={(e) => setCodigoPostal(e.target.value)} placeholder={enBahia ? '8000' : '8109 o B8109ABC'} />
-      </div>
 
       {/* Piso / depto */}
       <div className="mb-3.5">

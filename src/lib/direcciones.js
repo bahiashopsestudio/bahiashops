@@ -45,6 +45,63 @@ export function mismaCiudad(a, b) {
   return plano(a) !== '' && plano(a) === plano(b)
 }
 
+// ── Comparar lo que devuelve el buscador con lo que escribió la persona ──
+//
+// Nominatim nombra las ciudades a su manera: "Ciudad de Mendoza", "Distrito
+// Ciudad de San Martín", "Ciudad del Libertador General San Martín". La ciudad
+// escrita coincide si aparece entera, como frase, en alguno de los nombres de
+// localidad que devuelve (sin mayúsculas, acentos ni espacios de más). Así
+// "Mendoza" coincide con "Ciudad de Mendoza" pero no con "Distrito Ciudad de
+// San Martín", aunque los dos estén en la provincia de Mendoza.
+
+const plano = (t) => String(t ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+  .toLowerCase().replace(/[^a-z0-9ñ]+/g, ' ').trim()
+
+const contieneFrase = (texto, frase) => {
+  const t = plano(texto)
+  const f = plano(frase)
+  return f !== '' && ` ${t} `.includes(` ${f} `)
+}
+
+// Los campos de address de Nominatim que nombran la localidad.
+const CAMPOS_LOCALIDAD = ['city', 'town', 'village', 'hamlet', 'municipality', 'suburb', 'city_district']
+
+// "Distrito Ciudad de San Martín" -> "San Martín", para mostrar.
+function nombreParaMostrar(nombre) {
+  return String(nombre ?? '').replace(/^Distrito\s+/i, '').replace(/^Ciudad de\s+/i, '').trim()
+}
+
+// address: el objeto address de un resultado de Nominatim.
+// Devuelve { ok, ciudadEncontrada, provinciaEncontrada }: ok es false si la
+// ciudad o la provincia que devolvió no son las que se escribieron. Sin
+// address no hay con qué comparar: ok.
+export function coincideLugar({ ciudad, provincia }, address) {
+  if (!address) return { ok: true, ciudadEncontrada: null, provinciaEncontrada: null }
+  const localidades = CAMPOS_LOCALIDAD.map((c) => address[c]).filter(Boolean)
+  const principal = address.city || address.town || address.village || address.hamlet || address.municipality || null
+  const ciudadOk = localidades.some((n) => contieneFrase(n, ciudad))
+  const provinciaOk = !address.state || !provincia ||
+    contieneFrase(address.state, provincia) || contieneFrase(provincia, address.state)
+  return {
+    ok: ciudadOk && provinciaOk,
+    ciudadEncontrada: principal ? nombreParaMostrar(principal) : null,
+    provinciaEncontrada: address.state || null,
+  }
+}
+
+// El aviso de arriba del mapa cuando no coinciden, o null.
+export function avisoLugar({ ciudad, provincia }, address) {
+  const r = coincideLugar({ ciudad, provincia }, address)
+  if (r.ok) return null
+  const escrita = String(ciudad ?? '').trim()
+  const provinciaDistinta = r.provinciaEncontrada && provincia &&
+    !contieneFrase(r.provinciaEncontrada, provincia) && !contieneFrase(provincia, r.provinciaEncontrada)
+  const encontrada = [r.ciudadEncontrada, provinciaDistinta ? r.provinciaEncontrada : null].filter(Boolean).join(', ') ||
+    r.provinciaEncontrada || 'otro lugar'
+  const pedida = provinciaDistinta ? `${escrita}, ${provincia}` : escrita
+  return `Encontramos esta dirección en ${encontrada}, no en ${pedida}. Revisá los datos o mové el pin hasta tu casa.`
+}
+
 // Lo que el formulario guarda. Devuelve el error para mostrar, o null.
 //   d: { enBahia, calle, numero, telefono, ciudad, provincia, codigoPostal,
 //        barrioId, lat, lng }
