@@ -13,12 +13,16 @@
 //
 // El aviso de despacho al comprador sale desde acá, no de una ruta suelta:
 // para cuando se manda, ya está verificado quién lo pidió.
+//
+// Un pedido por correo no se puede marcar como despachado sin la empresa y el
+// número de seguimiento: van en el mail de despacho y en Mis pedidos.
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getServiceRoleClient } from '@/lib/supabase/admin';
 import { validarAvance, ESTADO_PIDE_FRANJA, FRANJAS_VALIDAS } from '@/lib/pedidos';
 import { avisarDespacho } from '@/lib/mailsPedidos';
+import { tipoEntregaDe, validarSeguimiento } from '@/lib/metodosEntrega';
 
 export async function POST(request) {
   const supabase = await createClient();
@@ -55,7 +59,7 @@ export async function POST(request) {
 
   const { data: pedido, error: errorPedido } = await admin
     .from('pedidos')
-    .select('id, estado, vendedor_id')
+    .select('id, estado, vendedor_id, metodo_envio')
     .eq('id', pedidoId)
     .maybeSingle();
 
@@ -92,6 +96,15 @@ export async function POST(request) {
     campos.franja_horaria = franja;
   }
 
+  // El correo se despacha con seguimiento.
+  if (veredicto.siguiente === 'despachado' && tipoEntregaDe(pedido.metodo_envio) === 'correo') {
+    const seguimiento = validarSeguimiento(body.seguimiento || {});
+    if (!seguimiento.ok) {
+      return NextResponse.json({ error: seguimiento.error, motivo: 'sin_seguimiento' }, { status: 400 });
+    }
+    Object.assign(campos, seguimiento.campos);
+  }
+
   const { data: actualizado, error: errorUpdate } = await admin
     .from('pedidos')
     .update(campos)
@@ -101,7 +114,7 @@ export async function POST(request) {
     // entre la lectura y la escritura, no escribe nada.
     .eq('vendedor_id', vendedor.id)
     .eq('estado', pedido.estado)
-    .select('id, estado, franja_horaria, actualizado_en')
+    .select('id, estado, franja_horaria, actualizado_en, envio_empresa, envio_empresa_otra, envio_seguimiento')
     .maybeSingle();
 
   if (errorUpdate) {

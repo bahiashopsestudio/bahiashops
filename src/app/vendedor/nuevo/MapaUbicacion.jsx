@@ -136,7 +136,10 @@ function ZonaArrastrable({ centro, onSoltar }) {
 //     la dirección; se arrastra o se toca el mapa para cambiar de celda. Al
 //     formulario solo le llega el centro del círculo, y el barrio sale de
 //     ese centro: lo que se guarda es exactamente lo que se ve.
-export default function MapaUbicacion({ posicionBuscada, onUbicacionChange, modo = 'exacto' }) {
+//
+// conBarrios = false (direcciones de otra ciudad): no dibuja los barrios de
+// Bahía ni pregunta el barrio del punto; barrioDetectado llega siempre null.
+export default function MapaUbicacion({ posicionBuscada, onUbicacionChange, modo = 'exacto', conBarrios = true }) {
   const supabase = createClient()
   const [barrios, setBarrios] = useState([])
   const [posicion, setPosicion] = useState(null)
@@ -145,6 +148,7 @@ export default function MapaUbicacion({ posicionBuscada, onUbicacionChange, modo
   const ultimaConsulta = useRef(0)
 
   useEffect(() => {
+    if (!conBarrios) return
     async function cargarBarrios() {
       const { data, error } = await supabase.rpc('barrios_con_poligono')
       if (error) {
@@ -154,7 +158,7 @@ export default function MapaUbicacion({ posicionBuscada, onUbicacionChange, modo
       if (data) setBarrios(data)
     }
     cargarBarrios()
-  }, [])
+  }, [conBarrios])
 
   async function detectarBarrio(lat, lng) {
     const { data, error } = await supabase.rpc('barrio_en_punto', { lat, lng })
@@ -171,7 +175,7 @@ export default function MapaUbicacion({ posicionBuscada, onUbicacionChange, modo
     const punto = modo === 'zona' ? redondearPunto(lat, lng) : { lat, lng }
     setPosicion(punto)
     const consulta = ++ultimaConsulta.current
-    const detectado = await detectarBarrio(punto.lat, punto.lng)
+    const detectado = conBarrios ? await detectarBarrio(punto.lat, punto.lng) : null
     if (consulta !== ultimaConsulta.current) return
     setBarrioResaltado(detectado ? detectado.id : null)
     onUbicacionChange({ lat: punto.lat, lng: punto.lng, barrioDetectado: detectado })
@@ -184,7 +188,7 @@ export default function MapaUbicacion({ posicionBuscada, onUbicacionChange, modo
     <MapContainer center={CENTRO_BB} zoom={12} style={{ height: '350px', width: '100%', borderRadius: 8 }}>
       <TileLayer {...TILES_UBICACION} />
 
-      {barrios.map((barrio) => {
+      {conBarrios && barrios.map((barrio) => {
         const resaltar = barrioResaltado === barrio.id
         return (
           <GeoJSON

@@ -5,7 +5,8 @@ import { getValidAccessToken } from '@/lib/mercadopago/tokens';
 import { SITIO_URL } from '@/lib/sitio';
 import { calcularPedido } from '@/lib/precioPedido';
 import { metodoPideDireccion, normalizarMetodo, metodosConfigurados } from '@/lib/metodosEntrega';
-import { zonaTiendaPara } from '@/lib/zonaEnvio';
+import { zonasPara } from '@/lib/zonaEnvio';
+import { codigoPostalValido, normalizarCodigoPostal } from '@/lib/direcciones';
 import { normalizarTelefonoAR } from '@/lib/telefono';
 import { datosContactoComprador } from '@/lib/contactoComprador';
 
@@ -31,9 +32,11 @@ export async function POST(request) {
   const body = await request.json();
   const {
     vendedorId, items, metodoEnvio,
-    direccionId, turnoPreferido, zonaCorreo,
+    direccionId, turnoPreferido,
     costoEnvio: costoEnvioVisto,
   } = body;
+  // La zona del correo ya no la elige quien compra: si una pestaña vieja la
+  // manda, se ignora. La calcula el servidor (paso 3d).
 
   if (!vendedorId || !Array.isArray(items) || items.length === 0 || !metodoEnvio) {
     return NextResponse.json(
@@ -132,9 +135,9 @@ export async function POST(request) {
   // Si el método no usa dirección (retiro, coordinar), el pedido queda con
   // direccion_id null: el vendedor no tiene por qué ver la dirección de alguien
   // que retira o coordina aparte. Hay un solo caso en que se lee igual: el
-  // respaldo "coordinar" de una tienda con envío propio, que se ofrece porque
-  // la tienda no llega a esa dirección. Ahí la dirección sirve para comprobar
-  // eso, y después no se guarda.
+  // respaldo "coordinar" de una tienda con envío propio o correo, que se
+  // ofrece porque ninguno llega a esa dirección. Ahí la dirección sirve para
+  // comprobar eso, y después no se guarda.
   let direccionIdVerificada = null;
   // La fila entera sale de la misma lectura: el punto hace falta para la zona
   // del envío, y el resto para la copia de la dirección y el payer.
@@ -142,10 +145,12 @@ export async function POST(request) {
 
   const metodoPedido = normalizarMetodo(metodoEnvio);
   const pideDireccion = metodoPideDireccion(metodoPedido);
-  const tiendaHaceEnvio = metodosConfigurados(vendedor).includes('envio_tienda');
+  // Los métodos por zona que ofrece la tienda: los que necesitan la zona de
+  // la dirección.
+  const metodosPorZona = metodosConfigurados(vendedor).filter((m) => m === 'envio_tienda' || m === 'correo');
   const hayDireccionId = direccionId !== null && direccionId !== undefined && direccionId !== '';
   const leerDireccion = hayDireccionId &&
-    (pideDireccion || (metodoPedido === 'coordinar' && tiendaHaceEnvio));
+    (pideDireccion || (metodoPedido === 'coordinar' && metodosPorZona.length > 0));
 
   if (leerDireccion) {
     const idNumerico = Number(direccionId);
@@ -210,15 +215,23 @@ export async function POST(request) {
     return NextResponse.json({ error: 'No se pudo verificar el pedido.' }, { status: 500 });
   }
 
-  // 3d. La zona del envío de la tienda la resuelve la base, con la misma
-  // función que usa /api/envio/cotizar: lo que se cobra es lo que se mostró.
-  // undefined = no se calculó (no hace falta, o no hay dirección).
+  // 3d. Las zonas (envío de la tienda y correo) las calcula el servidor, con
+  // la misma función que usa /api/envio/cotizar: lo que se cobra es lo que se
+  // mostró. undefined = no se calculó (no hace falta, o no hay dirección).
   let zonaTienda;
+  let zonaCorreo;
 
-  if (tiendaHaceEnvio && direccionVerificada &&
-      (metodoPedido === 'envio_tienda' || metodoPedido === 'coordinar')) {
+  const metodosACalcular = metodoPedido === 'coordinar'
+    ? metodosPorZona
+    : metodosPorZona.filter((m) => m === metodoPedido);
+
+  if (direccionVerificada && metodosACalcular.length > 0) {
     try {
-      zonaTienda = await zonaTiendaPara({ admin, vendedor, direccion: direccionVerificada, origen: 'crear' });
+      const zonas = await zonasPara({
+        admin, vendedor, direccion: direccionVerificada, origen: 'crear', metodos: metodosACalcular,
+      });
+      zonaTienda = zonas.envio_tienda?.zona;
+      zonaCorreo = zonas.correo?.zona;
     } catch (err) {
       console.error('No se pudo calcular la zona de envío', err.message);
       return NextResponse.json({ error: 'No se pudo calcular el costo de envío.' }, { status: 500 });
@@ -236,6 +249,7 @@ export async function POST(request) {
     hayDireccion: pideDireccion && direccionIdVerificada !== null,
     zonaTienda,
     zonaCorreo,
+    codigoPostalOk: codigoPostalValido(direccionVerificada?.codigo_postal),
     costoEnvioVisto,
   });
 
@@ -466,13 +480,17 @@ export async function POST(request) {
   }
 
   // La dirección sólo existe si el método de entrega la pidió: es la fila que
-  // se verificó en el paso 3b. Sin código postal: no existe en la base y no se
-  // inventa.
+  // se verificó en el paso 3b. El código postal va sólo si es válido (las
+  // direcciones viejas pueden no tenerlo): no se inventa.
   const direccionDelPago = pideDireccion ? direccionVerificada : null;
   const calle = direccionDelPago?.calle?.trim();
   const numero = direccionDelPago?.numero?.trim();
+  const codigoPostal = codigoPostalValido(direccionDelPago?.codigo_postal)
+    ? normalizarCodigoPostal(direccionDelPago.codigo_postal)
+    : null;
   if (calle && numero) {
     payer.address = { street_name: calle, street_number: numero };
+    if (codigoPostal) payer.address.zip_code = codigoPostal;
   }
 
   const mpResponse = await fetch('https://api.mercadopago.com/checkout/preferences', {

@@ -139,7 +139,7 @@ export default function TerminosPage() {
             {/* 9 */}
             <Seccion titulo="9. Envíos y Entregas">
               <p>
-                Las formas de entrega disponibles dependen de cada vendedor y pueden incluir: retiro en el local del vendedor (o en el lugar que acuerden, si el vendedor no muestra su dirección); envío de la tienda, dentro de Bahía Blanca, que el vendedor realiza por sus propios medios o con el servicio de mensajería que elija, con un costo según la zona de entrega; envío por correo a otras localidades, con un costo según la zona; o coordinación directa entre comprador y vendedor por WhatsApp.
+                Las formas de entrega disponibles dependen de cada vendedor y pueden incluir: retiro en el local del vendedor (o en el lugar que acuerden, si el vendedor no muestra su dirección); envío de la tienda, hasta unos 20 km del vendedor, que el vendedor realiza por sus propios medios o con el servicio de mensajería que elija, con un costo según la zona de entrega; envío por correo a cualquier ciudad de Argentina, con un costo según la distancia y un número de seguimiento que el vendedor informa al despachar; o coordinación directa entre comprador y vendedor por WhatsApp.
               </p>
               <p>
                 Los costos y tiempos de envío se informan durante el proceso de compra. La responsabilidad por la entrega recae en el vendedor, excepto en los casos en que se utilice Correo Argentino u otro servicio de logística de terceros.

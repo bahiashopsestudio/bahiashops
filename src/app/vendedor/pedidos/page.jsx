@@ -8,7 +8,10 @@ import MenuTakeover from '@/components/MenuTakeover';
 import VolverAtras from '@/components/VolverAtras';
 import AvatarApodo from '@/components/AvatarApodo';
 import { linkWhatsApp } from '@/lib/telefono';
-import { grupoEntrega, etiquetaMetodo, zonaDe } from '@/lib/metodosEntrega';
+import {
+  grupoEntrega, etiquetaMetodo, zonaDe, EMPRESAS_ENVIO, validarSeguimiento, seguimientoDe,
+} from '@/lib/metodosEntrega';
+import { calleNumeroDepto, ciudadProvinciaCodigo } from '@/lib/direcciones';
 
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage'];
 
@@ -27,7 +30,9 @@ const ESTADOS = {
 };
 
 // Cómo le llega el pedido a quien compra, para elegir el texto del WhatsApp:
-// 'retiro', 'coordinar' o 'envio'. La regla está en metodosEntrega.js.
+// 'retiro', 'coordinar', 'envio' o 'correo'. La regla está en
+// metodosEntrega.js. Con el correo no hay franja de entrega ni "ya llega":
+// los pasos son los mismos, pero los textos dicen cuándo va al correo.
 function tipoEntrega(p) {
   return grupoEntrega(p.metodo_envio);
 }
@@ -63,14 +68,20 @@ const ACCIONES = {
       `¡Hola! Te escribimos de ${nombre}. Ya estamos preparando tu pedido con el código número #${p.id}. ` +
       (tipoEntrega(p) === 'retiro'
         ? '¡Te avisamos cuando esté listo para retirar!'
-        : '¡Te avisamos cuando esté por salir!'),
+        : tipoEntrega(p) === 'correo'
+          ? '¡Te avisamos cuando lo despachemos por correo!'
+          : '¡Te avisamos cuando esté por salir!'),
   },
   preparando: {
     label: 'Avisar franja horaria', siguiente: 'franja',
+    labelCorreo: 'Avisar cuándo lo llevás al correo',
     btnClass: 'bg-violet-600 hover:bg-violet-700', whatsapp: true, pideFranja: true,
     mensajeWA: (p, franja, nombre) => {
       const f = franja.toLowerCase();
       const tipo = tipoEntrega(p);
+      if (tipo === 'correo') {
+        return `¡Hola! Te escribimos de ${nombre}. Tu pedido #${p.id} ya está listo: lo llevamos al correo por la ${f}.`;
+      }
       if (tipo === 'retiro') {
         return `¡Hola! Te escribimos de ${nombre}. Tu pedido #${p.id} va a estar listo para retirar por la ${f}.`;
       }
@@ -85,9 +96,13 @@ const ACCIONES = {
   },
   franja: {
     label: 'Avisar que sale', siguiente: 'por_salir',
+    labelCorreo: 'Avisar que sale para el correo',
     btnClass: 'bg-amber-600 hover:bg-amber-700', whatsapp: true,
     mensajeWA: (p, franja, nombre) => {
       const tipo = tipoEntrega(p);
+      if (tipo === 'correo') {
+        return `¡Hola! Te escribimos de ${nombre}. Tu pedido #${p.id} sale hoy para el correo. Apenas lo despachemos te pasamos el número de seguimiento.`;
+      }
       if (tipo === 'retiro') {
         return `¡Hola! Tu pedido #${p.id} ya está listo para retirar en ${nombre}. ¡Te esperamos!`;
       }
@@ -101,10 +116,21 @@ const ACCIONES = {
     },
   },
   por_salir: {
+    // Con el correo, despachar pide la empresa y el número de seguimiento.
     label: 'Marcar como despachado', siguiente: 'despachado',
     btnClass: 'bg-emerald-700 hover:bg-emerald-800', whatsapp: false,
   },
 };
+
+function etiquetaAccion(accion, p) {
+  return tipoEntrega(p) === 'correo' && accion.labelCorreo ? accion.labelCorreo : accion.label;
+}
+
+// La dirección para mostrar: la copia congelada en el pedido y, en los
+// pedidos viejos, la embebida.
+function direccionDe(p) {
+  return p.direccion_copia || p.direccion || null;
+}
 
 function tiempoRelativo(iso) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -149,6 +175,14 @@ export default function VendedorPedidosPage() {
   const [nombreNegocio, setNombreNegocio] = useState('');
   const [franjaModal, setFranjaModal] = useState(null);
   const [franjaElegida, setFranjaElegida] = useState('Mañana');
+  // El seguimiento del correo: al despachar (modo 'despachar') o para
+  // corregirlo después (modo 'corregir', no reenvía el mail).
+  const [seguimientoModal, setSeguimientoModal] = useState(null);
+  const [segEmpresa, setSegEmpresa] = useState('correo_argentino');
+  const [segOtra, setSegOtra] = useState('');
+  const [segNumero, setSegNumero] = useState('');
+  const [segError, setSegError] = useState('');
+  const [segGuardando, setSegGuardando] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [categorias, setCategorias] = useState([]);
 
@@ -220,10 +254,53 @@ export default function VendedorPedidosPage() {
     const accion = ACCIONES[pedido.estado];
     if (!accion) return;
     if (accion.pideFranja) { setFranjaModal(pedido); setFranjaElegida('Mañana'); return; }
+    if (accion.siguiente === 'despachado' && tipoEntrega(pedido) === 'correo') {
+      abrirSeguimiento(pedido, 'despachar');
+      return;
+    }
     ejecutarAvance(pedido);
   }
 
-  async function ejecutarAvance(pedido, franja) {
+  function abrirSeguimiento(pedido, modo) {
+    setSeguimientoModal({ pedido, modo });
+    setSegEmpresa(pedido.envio_empresa || 'correo_argentino');
+    setSegOtra(pedido.envio_empresa_otra || '');
+    setSegNumero(pedido.envio_seguimiento || '');
+    setSegError('');
+  }
+
+  // Revisa con la misma regla que el servidor; si está bien, despacha o
+  // corrige.
+  async function confirmarSeguimiento() {
+    const datos = { empresa: segEmpresa, otra: segOtra, numero: segNumero };
+    const validado = validarSeguimiento(datos);
+    if (!validado.ok) { setSegError(validado.error); return; }
+    const { pedido, modo } = seguimientoModal;
+
+    if (modo === 'despachar') {
+      setSeguimientoModal(null);
+      ejecutarAvance(pedido, undefined, datos);
+      return;
+    }
+
+    setSegGuardando(true);
+    try {
+      const res = await fetch('/api/vendedor/pedidos/seguimiento', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pedido_id: pedido.id, ...datos }),
+      });
+      const respuesta = await res.json().catch(() => ({}));
+      if (!res.ok) { setSegError(respuesta.error || 'No se pudo guardar el seguimiento.'); setSegGuardando(false); return; }
+      setPedidos(prev => prev.map(p => (p.id === pedido.id ? { ...p, ...respuesta.pedido } : p)));
+      setSeguimientoModal(null);
+    } catch {
+      setSegError('No pudimos conectarnos. Revisá tu conexión y probá de nuevo.');
+    }
+    setSegGuardando(false);
+  }
+
+  async function ejecutarAvance(pedido, franja, seguimiento) {
     const accion = ACCIONES[pedido.estado];
     if (!accion) return;
     setAvanzando(pedido.id);
@@ -239,6 +316,7 @@ export default function VendedorPedidosPage() {
           pedido_id: pedido.id,
           destino: accion.siguiente,
           ...(accion.pideFranja ? { franja } : {}),
+          ...(seguimiento ? { seguimiento } : {}),
         }),
       });
       const datos = await res.json().catch(() => ({}));
@@ -252,7 +330,7 @@ export default function VendedorPedidosPage() {
 
       setPedidos(prev => prev.map(p => (
         p.id === pedido.id
-          ? { ...p, estado: datos.pedido.estado, franja_horaria: datos.pedido.franja_horaria, actualizado_en: datos.pedido.actualizado_en }
+          ? { ...p, ...datos.pedido }
           : p
       )));
 
@@ -342,7 +420,8 @@ export default function VendedorPedidosPage() {
                 {activos.map(p => (
                   <PedidoCard key={p.id} pedido={p} abierto={abierto === p.id}
                     items={p.items || []} avanzando={avanzando === p.id}
-                    onToggle={() => toggleDetalle(p.id)} onAvanzar={() => iniciarAvance(p)} />
+                    onToggle={() => toggleDetalle(p.id)} onAvanzar={() => iniciarAvance(p)}
+                    onCorregirSeguimiento={() => abrirSeguimiento(p, 'corregir')} />
                 ))}
               </>
             )}
@@ -355,7 +434,8 @@ export default function VendedorPedidosPage() {
                 {completados.map(p => (
                   <PedidoCard key={p.id} pedido={p} abierto={abierto === p.id}
                     items={p.items || []} avanzando={avanzando === p.id}
-                    onToggle={() => toggleDetalle(p.id)} onAvanzar={() => iniciarAvance(p)} />
+                    onToggle={() => toggleDetalle(p.id)} onAvanzar={() => iniciarAvance(p)}
+                    onCorregirSeguimiento={() => abrirSeguimiento(p, 'corregir')} />
                 ))}
               </>
             )}
@@ -365,9 +445,13 @@ export default function VendedorPedidosPage() {
                 onClick={() => setFranjaModal(null)}>
                 <div onClick={(e) => e.stopPropagation()}
                   className="bg-white rounded-2xl p-6 max-w-[380px] w-full">
-                  <h3 className="text-lg font-black text-[#0a0a0a] tracking-tight m-0 mb-2">¿En qué franja horaria sale?</h3>
+                  <h3 className="text-lg font-black text-[#0a0a0a] tracking-tight m-0 mb-2">
+                    {tipoEntrega(franjaModal) === 'correo' ? '¿En qué franja lo llevás al correo?' : '¿En qué franja horaria sale?'}
+                  </h3>
                   <p className="text-sm text-[#0a0a0a]/30 font-light m-0 mb-4">
-                    Le avisamos al comprador en qué horario esperar el envío.
+                    {tipoEntrega(franjaModal) === 'correo'
+                      ? 'Le avisamos al comprador cuándo lo llevás al correo.'
+                      : 'Le avisamos al comprador en qué horario esperar el envío.'}
                   </p>
                   <div className="flex gap-2 mb-5">
                     {['Mañana', 'Tarde'].map(f => (
@@ -394,6 +478,49 @@ export default function VendedorPedidosPage() {
                 </div>
               </div>
             )}
+
+            {seguimientoModal && (
+              <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[1000] p-4"
+                onClick={() => !segGuardando && setSeguimientoModal(null)}>
+                <div onClick={(e) => e.stopPropagation()}
+                  className="bg-white rounded-2xl p-6 max-w-[400px] w-full">
+                  <h3 className="text-lg font-black text-[#0a0a0a] tracking-tight m-0 mb-2">
+                    {seguimientoModal.modo === 'despachar' ? '¿Con qué lo despachaste?' : 'Corregir el seguimiento'}
+                  </h3>
+                  <p className="text-sm text-[#0a0a0a]/30 font-light m-0 mb-4">
+                    {seguimientoModal.modo === 'despachar'
+                      ? 'Quien compra recibe el número por mail y lo ve en Mis pedidos.'
+                      : 'Se actualiza en Mis pedidos. No se vuelve a mandar el mail.'}
+                  </p>
+                  <label className="block text-sm text-[#0a0a0a]/50 font-light mb-1">Empresa</label>
+                  <select value={segEmpresa} onChange={(e) => { setSegError(''); setSegEmpresa(e.target.value); }}
+                    className="w-full mb-3 px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white outline-none focus:border-[#0a0a0a]">
+                    {Object.entries(EMPRESAS_ENVIO).map(([clave, e]) => <option key={clave} value={clave}>{e.nombre}</option>)}
+                  </select>
+                  {segEmpresa === 'otra' && (
+                    <>
+                      <label className="block text-sm text-[#0a0a0a]/50 font-light mb-1">Nombre de la empresa</label>
+                      <input value={segOtra} maxLength={60} onChange={(e) => { setSegError(''); setSegOtra(e.target.value); }}
+                        className="w-full mb-3 px-3 py-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:border-[#0a0a0a]" />
+                    </>
+                  )}
+                  <label className="block text-sm text-[#0a0a0a]/50 font-light mb-1">Número de seguimiento</label>
+                  <input value={segNumero} maxLength={60} onChange={(e) => { setSegError(''); setSegNumero(e.target.value); }}
+                    className="w-full mb-3 px-3 py-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:border-[#0a0a0a]" />
+                  {segError && <p className="m-0 mb-3 text-sm text-red-700">{segError}</p>}
+                  <div className="flex gap-3">
+                    <button type="button" onClick={() => setSeguimientoModal(null)} disabled={segGuardando}
+                      className="flex-1 py-3 border border-[#0a0a0a]/10 rounded-full bg-white cursor-pointer text-sm text-[#0a0a0a]/60 font-light hover:border-[#0a0a0a]/30 transition-all">
+                      Cancelar
+                    </button>
+                    <button type="button" onClick={confirmarSeguimiento} disabled={segGuardando}
+                      className="flex-1 py-3 border-none rounded-full bg-emerald-700 text-white cursor-pointer text-sm font-medium hover:bg-emerald-800 transition-colors disabled:opacity-50">
+                      {segGuardando ? 'Guardando...' : (seguimientoModal.modo === 'despachar' ? 'Marcar como despachado' : 'Guardar')}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -401,11 +528,13 @@ export default function VendedorPedidosPage() {
   );
 }
 
-function PedidoCard({ pedido, abierto, items, avanzando, onToggle, onAvanzar }) {
+function PedidoCard({ pedido, abierto, items, avanzando, onToggle, onAvanzar, onCorregirSeguimiento }) {
   const p = pedido;
   const estado = ESTADOS[p.estado] || { label: p.estado, color: 'text-[#0a0a0a]/40', bg: 'bg-[#0a0a0a]/5' };
   const accion = ACCIONES[p.estado];
   const primerItem = items[0];
+  const direccion = direccionDe(p);
+  const seguimiento = seguimientoDe(p);
 
   return (
     // scroll-mt: que la barra fija de arriba no tape el pedido al bajar.
@@ -468,7 +597,20 @@ function PedidoCard({ pedido, abierto, items, avanzando, onToggle, onAvanzar }) 
               <p className="m-0 text-[11px] text-[#0a0a0a]/25 font-light">Preferencia: {p.turno_preferido.toLowerCase()}</p>
             )}
             {p.franja_horaria && (
-              <p className="m-0 text-[11px] text-[#0a0a0a]/40 font-light">Franja horaria avisada: {p.franja_horaria.toLowerCase()}</p>
+              <p className="m-0 text-[11px] text-[#0a0a0a]/40 font-light">
+                {tipoEntrega(p) === 'correo' ? 'Lo llevás al correo a la' : 'Franja horaria avisada:'} {p.franja_horaria.toLowerCase()}
+              </p>
+            )}
+            {seguimiento && (
+              <p className="mt-1 mb-0 text-sm text-[#0a0a0a]/60 font-light">
+                {seguimiento.empresa} · N° {seguimiento.numero}
+                {tipoEntrega(p) === 'correo' && (
+                  <button type="button" onClick={(e) => { e.stopPropagation(); onCorregirSeguimiento(); }}
+                    className="ml-2 text-[11px] text-[#0a0a0a]/40 underline underline-offset-2 cursor-pointer bg-transparent border-none p-0">
+                    Corregir
+                  </button>
+                )}
+              </p>
             )}
             {p.comprador_eliminado ? (
               // Cuenta eliminada: el método de entrega queda a la vista; el nombre,
@@ -483,10 +625,11 @@ function PedidoCard({ pedido, abierto, items, avanzando, onToggle, onAvanzar }) 
                     {p.comprador_telefono && <>Tel. {p.comprador_telefono}</>}
                   </p>
                 )}
-                {p.direccion && (
+                {direccion && (
                   <p className="mt-1 mb-0 text-sm text-[#0a0a0a]/60 font-light">
-                    {p.direccion.calle} {p.direccion.numero}{p.direccion.piso_depto ? `, ${p.direccion.piso_depto}` : ''}<br />
-                    Tel. {p.direccion.telefono}
+                    {calleNumeroDepto(direccion)}
+                    {ciudadProvinciaCodigo(direccion) && <><br />{ciudadProvinciaCodigo(direccion)}</>}
+                    {direccion.telefono && <><br />Tel. {direccion.telefono}</>}
                   </p>
                 )}
               </>
@@ -523,7 +666,7 @@ function PedidoCard({ pedido, abierto, items, avanzando, onToggle, onAvanzar }) 
                   <path d="M12 0C5.373 0 0 5.373 0 12c0 2.625.846 5.059 2.284 7.034L.789 23.564l4.72-1.236A11.942 11.942 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.6c-2.07 0-4.046-.54-5.795-1.56l-.42-.25-2.8.735.747-2.73-.27-.43A9.554 9.554 0 0 1 2.4 12c0-5.302 4.298-9.6 9.6-9.6 5.302 0 9.6 4.298 9.6 9.6 0 5.302-4.298 9.6-9.6 9.6z"/>
                 </svg>
               )}
-              {avanzando ? 'Actualizando...' : accion.label}
+              {avanzando ? 'Actualizando...' : etiquetaAccion(accion, p)}
             </button>
           )}
 

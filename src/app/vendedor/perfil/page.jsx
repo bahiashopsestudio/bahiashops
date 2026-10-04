@@ -9,7 +9,7 @@ import Navbar from '@/components/Navbar';
 import MenuTakeover from '@/components/MenuTakeover';
 import VolverAtras from '@/components/VolverAtras';
 import EstadoValidacion from '@/components/EstadoValidacion';
-import { entregaConfigurada } from '@/lib/metodosEntrega';
+import { entregaConfigurada, correoSinPrecios } from '@/lib/metodosEntrega';
 
 
 // --- Utilidades de recorte ---
@@ -85,6 +85,9 @@ export default function PerfilVendedorPage() {
   const [sinUbicacion, setSinUbicacion] = useState(false);
   // Sin formas de entrega listas, quien compra sólo ve "Coordinar".
   const [sinEntrega, setSinEntrega] = useState(false);
+  // Correo tildado sin ningún precio: no se ofrece (por ejemplo, después de
+  // que la 021 borró los precios por provincia).
+  const [correoSinPrecio, setCorreoSinPrecio] = useState(false);
   const [cargando, setCargando] = useState(true);
 
   const [recorte, setRecorte] = useState(null);
@@ -148,6 +151,7 @@ export default function PerfilVendedorPage() {
         setBloqueado(data.bloqueado === true);
         setSinUbicacion(data.latitud === null);
         setSinEntrega(!entregaConfigurada(data));
+        setCorreoSinPrecio(correoSinPrecios(data));
 
         // El mensaje del admin sólo se muestra cuando pide cambios, y no se
         // puede leer desde el navegador: va por la ruta de datos privados. Si
@@ -371,8 +375,19 @@ export default function PerfilVendedorPage() {
               </Link>
             )}
 
+            {/* ═══ AVISO: CORREO SIN PRECIOS ═══ */}
+            {correoSinPrecio && (
+              <Link href="/vendedor/envios" className={`${sinUbicacion || sinEntrega ? 'mt-4' : 'mt-10'} flex items-center gap-3 p-4 rounded-2xl border border-amber-200 bg-amber-50 no-underline text-amber-900 hover:bg-amber-100/60 transition-colors`}>
+                <span className="text-lg">📦</span>
+                <span className="flex-1 text-[13px] font-light leading-relaxed">
+                  <span className="font-medium">Cargá los precios del correo.</span> Las zonas ahora van por distancia desde tu tienda. Hasta que pongas al menos un precio, el correo no se ofrece.
+                </span>
+                <Chevron />
+              </Link>
+            )}
+
             {/* ═══ MENÚ DEL NEGOCIO ═══ */}
-            <div className={`${sinUbicacion || sinEntrega ? 'mt-4' : 'mt-10'} rounded-2xl border border-[#0a0a0a]/5 divide-y divide-[#0a0a0a]/5 overflow-hidden`}>
+            <div className={`${sinUbicacion || sinEntrega || correoSinPrecio ? 'mt-4' : 'mt-10'} rounded-2xl border border-[#0a0a0a]/5 divide-y divide-[#0a0a0a]/5 overflow-hidden`}>
               <Link href="/vendedor/productos" className="flex items-center gap-3 px-5 py-4 no-underline text-[#0a0a0a] hover:bg-[#0a0a0a]/[0.02] transition-colors">
                 <span className="text-lg">📦</span>
                 <span className="flex-1 text-sm font-light">Mis productos</span>

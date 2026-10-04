@@ -7,10 +7,11 @@ import Link from 'next/link'
 import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
 import VolverAtras from '@/components/VolverAtras'
-import { etiquetaMetodo, tipoEntregaDe, zonaDe, textoCostoEnvio } from '@/lib/metodosEntrega'
+import { etiquetaMetodo, tipoEntregaDe, textoCostoEnvio, seguimientoDe } from '@/lib/metodosEntrega'
 
 // Lo que costó la entrega, al lado del método: "Envío a tu zona: $2.500",
-// "Gratis", "A coordinar".
+// "Gratis", "A coordinar". A quien compra no se le muestran zonas ni
+// distancias.
 function textoEnvioPedido(pedido) {
   const tipo = tipoEntregaDe(pedido.metodo_envio)
   const costo = Number(pedido.costo_envio) || 0
@@ -19,11 +20,51 @@ function textoEnvioPedido(pedido) {
   if (tipo === 'domicilio') {
     return costo === 0 ? 'Envío gratis' : `Envío a tu zona: ${textoCostoEnvio(pedido.metodo_envio, costo)}`
   }
-  if (tipo === 'correo') {
-    const zona = pedido.zona_envio ? zonaDe(pedido.metodo_envio, pedido.zona_envio) : null
-    return `${zona ? `${zona.nombre}: ` : ''}${textoCostoEnvio(pedido.metodo_envio, costo)}`
-  }
+  if (tipo === 'correo') return textoCostoEnvio(pedido.metodo_envio, costo)
   return costo > 0 ? `$${costo.toLocaleString('es-AR')}` : ''
+}
+
+// El estado, dicho para quien espera el pedido. Con la franja guardada dice
+// cuál es; con el correo, la franja es cuándo lo lleva al correo.
+function etiquetaEstado(pedido, estado) {
+  const correo = tipoEntregaDe(pedido.metodo_envio) === 'correo'
+  if (pedido.estado === 'franja' && pedido.franja_horaria) {
+    const f = pedido.franja_horaria.toLowerCase()
+    return correo ? `Lo lleva al correo a la ${f}` : `Sale a la ${f}`
+  }
+  if (pedido.estado === 'despachado' && correo) return 'Despachado por correo'
+  return estado.label
+}
+
+// Empresa, número para copiar y link a la página de seguimiento.
+function Seguimiento({ pedido }) {
+  const [copiado, setCopiado] = useState(false)
+  const seguimiento = seguimientoDe(pedido)
+  if (!seguimiento) return null
+  async function copiar() {
+    try {
+      await navigator.clipboard.writeText(seguimiento.numero)
+      setCopiado(true)
+      setTimeout(() => setCopiado(false), 2000)
+    } catch {
+      setCopiado(false)
+    }
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-2 mt-1 text-xs text-[#0a0a0a]/50 font-light">
+      <span>Enviado por {seguimiento.empresa} · N° <span className="text-[#0a0a0a] font-normal">{seguimiento.numero}</span></span>
+      <button type="button" onClick={copiar}
+        className="text-[#0a0a0a]/50 underline underline-offset-2 cursor-pointer bg-transparent border-none p-0">
+        {copiado ? 'Copiado' : 'Copiar'}
+      </button>
+      {seguimiento.url && (
+        <a href={seguimiento.url} target="_blank" rel="noopener noreferrer"
+          className="text-[#0a0a0a] underline underline-offset-2">
+          Seguí tu envío ↗
+        </a>
+      )}
+    </div>
+  )
 }
 
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage']
@@ -74,7 +115,7 @@ export default function MisPedidosPage() {
         .from('pedidos')
         .select(`
           id, estado, total, costo_envio, metodo_envio, zona_envio, creado_en,
-          vendedor_nombre, franja_horaria,
+          vendedor_nombre, franja_horaria, envio_empresa, envio_empresa_otra, envio_seguimiento,
           vendedor:vendedores(slug, direccion_visible),
           items:pedido_items(id, nombre, foto_url, cantidad, precio, variante)
         `)
@@ -159,14 +200,9 @@ export default function MisPedidosPage() {
               <div className="mt-6">
                 {pedidos.map((pedido) => {
                   const estado = ESTADOS[pedido.estado] || { label: pedido.estado, color: 'bg-gray-50 text-gray-600' }
-                  // Con la franja guardada, la etiqueta dice cuál es en vez de
-                  // "Franja asignada": es el dato que le sirve a quien espera
-                  // el pedido. Sin franja (pedidos anteriores a la migración
-                  // 009) queda la etiqueta genérica.
-                  const etiquetaEstado =
-                    pedido.estado === 'franja' && pedido.franja_horaria
-                      ? `Sale a la ${pedido.franja_horaria.toLowerCase()}`
-                      : estado.label
+                  // Sin franja (pedidos anteriores a la migración 009) queda
+                  // la etiqueta genérica.
+                  const textoEstado = etiquetaEstado(pedido, estado)
                   return (
                     <div key={pedido.id} className="rounded-2xl border border-[#0a0a0a]/5 p-5 mb-4">
                       {/* Header */}
@@ -189,7 +225,7 @@ export default function MisPedidosPage() {
                               </span>
                             )}
                             <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${estado.color}`}>
-                              {etiquetaEstado}
+                              {textoEstado}
                             </span>
                           </div>
                           <p className="text-xs text-[#0a0a0a]/20 font-light mt-1">
@@ -224,6 +260,7 @@ export default function MisPedidosPage() {
                         </span>
                         <span className="text-xs text-[#0a0a0a]/40 text-right">{textoEnvioPedido(pedido)}</span>
                       </div>
+                      <Seguimiento pedido={pedido} />
                     </div>
                   )
                 })}

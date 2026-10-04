@@ -78,7 +78,14 @@ const casos = {
   'sin-apodo': { ...base, metodoEnvio: 'retiro', apodo: null },
   correo: {
     ...base, metodoEnvio: 'correo', zonaEnvio: 1, costoEnvio: 4200, total: 27000,
-    direccion: { ...direccion, piso_depto: null }, turno: null,
+    direccion: { ...direccion, piso_depto: null, ciudad: 'Bahía Blanca', provincia: 'Buenos Aires', codigo_postal: '8000' }, turno: null,
+  },
+  // Correo a otra ciudad: la dirección va con ciudad, provincia y código postal.
+  'correo-otra-ciudad': {
+    ...base, metodoEnvio: 'correo', zonaEnvio: 4, costoEnvio: 9000, total: 31800,
+    direccion: { calle: 'Av. San Martín', numero: '1200', piso_depto: null, barrio: null,
+      ciudad: 'Mendoza', provincia: 'Mendoza', codigo_postal: 'M5500ABC' },
+    turno: null,
   },
 }
 
@@ -92,6 +99,25 @@ mails.despacho = armarMailDespacho({
   nombreVendedor: 'Cerámica del Puerto',
   direccion: 'Alsina 235, 2B',
   franja: 'Tarde',
+})
+// Por correo: sin "Franja de entrega" y con la tarjeta de seguimiento.
+mails['despacho-correo'] = armarMailDespacho({
+  pedido: {
+    id: 1043, metodo_envio: 'correo', subtotal_productos: 22800, costo_envio: 9000, total: 31800,
+    envio_empresa: 'andreani', envio_empresa_otra: null, envio_seguimiento: '360002157889',
+  },
+  nombreVendedor: 'Cerámica del Puerto',
+  direccion: 'Av. San Martín 1200, Mendoza, Mendoza (M5500ABC)',
+  franja: 'Tarde',
+})
+mails['despacho-correo-otra'] = armarMailDespacho({
+  pedido: {
+    id: 1044, metodo_envio: 'correo', subtotal_productos: 22800, costo_envio: 4200, total: 27000,
+    envio_empresa: 'otra', envio_empresa_otra: 'Vía <Cargo> & Co', envio_seguimiento: 'VC-"1"',
+  },
+  nombreVendedor: 'Cerámica del Puerto',
+  direccion: 'Colón 10, Punta Alta, Buenos Aires (B8109ABC)',
+  franja: 'Mañana',
 })
 
 // Eliminar mi cuenta: con nombre y sin nombre ("Hola:").

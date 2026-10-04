@@ -64,62 +64,53 @@ function rechazo(status, codigo, error, extra = {}) {
 // pestaña abierta desde antes llega traducido); 'zona' es el número de zona
 // cobrado (envío de la tienda o correo), o null.
 //
-// zonaTienda la calcula quien llama, con zonaTiendaPara (src/lib/zonaEnvio.js),
-// para la dirección verificada de quien compra:
-//   undefined  no hay dirección (o la tienda no hace envíos): no se sabe.
-//   null       falta el punto de la tienda o el de la dirección.
+// zonaTienda y zonaCorreo las calcula quien llama, con zonasPara
+// (src/lib/zonaEnvio.js), para la dirección verificada de quien compra.
+// Nunca vienen del navegador:
+//   undefined  no hay dirección (o la tienda no ofrece ese método): no se sabe.
+//   null       no llega (el envío de la tienda, a más de 20 km) o falta el
+//              punto de la tienda o el de la dirección.
 //   1..4       la zona.
-// Con el envío de la tienda, una zona que no se pudo calcular o sin precio es
-// un rechazo. Con el respaldo, sirve para comprobar que de verdad no quedó
-// otra opción para esa dirección.
-export function calcularEnvio({ vendedor, metodoEnvio, hayDireccion, zonaTienda, zonaCorreo }) {
+// Con un método por zona, una zona null o sin precio es un rechazo. Con el
+// respaldo, sirven para comprobar que de verdad no quedó otra opción para
+// esa dirección.
+//
+// codigoPostalOk: el correo necesita el código postal de la dirección.
+export function calcularEnvio({ vendedor, metodoEnvio, hayDireccion, zonaTienda, zonaCorreo, codigoPostalOk }) {
   const metodo = normalizarMetodo(metodoEnvio)
-  const { disponibles } = metodosParaComprador(vendedor, { zonaTienda })
+  const { disponibles } = metodosParaComprador(vendedor, { zonaTienda, zonaCorreo })
+  const definicion = metodo ? METODOS[metodo] : null
+  const zonaSabida = metodo === 'correo' ? zonaCorreo : zonaTienda
 
-  if (metodo === 'envio_tienda') {
+  if (definicion?.costo === 'por_zona') {
     if (!hayDireccion) {
       return rechazo(400, 'FALTA_DIRECCION', 'Para ese método de entrega hace falta una dirección.')
     }
-    if (zonaTienda === null || zonaTienda === undefined) {
+    if (zonaSabida === undefined) {
       return rechazo(400, 'SIN_ZONA', 'No pudimos calcular el envío a esa dirección. Elegí otra dirección u otra forma de entrega.')
     }
   }
 
   if (!metodo || !disponibles.includes(metodo)) {
-    if (metodo === 'envio_tienda') {
-      return rechazo(400, 'ZONA_SIN_COSTO', 'Esta tienda no llega a esa dirección.')
+    if (definicion?.costo === 'por_zona') {
+      return rechazo(400, 'ZONA_SIN_COSTO', metodo === 'correo'
+        ? 'Esta tienda no envía por correo a esa dirección.'
+        : 'Esta tienda no llega a esa dirección.')
     }
     return rechazo(400, 'METODO_INVALIDO', 'Ese método de entrega no está disponible para esta tienda.')
   }
 
-  const definicion = METODOS[metodo]
   if (definicion.costo !== 'por_zona') {
     return { metodo, costo: 0, zona: null }
   }
 
-  if (!hayDireccion) {
-    return rechazo(400, 'FALTA_DIRECCION', 'Para ese método de entrega hace falta una dirección.')
+  if (metodo === 'correo' && codigoPostalOk !== true) {
+    return rechazo(400, 'FALTA_CODIGO_POSTAL', 'Para enviar por correo hace falta el código postal de la dirección.')
   }
 
-  const costos = vendedor?.costos_envio_zona || {}
-
-  // Qué zona: la de la base para el envío de la tienda; la que eligió la
-  // persona para el correo (todavía no hay dato del que deducirla). El precio
-  // lo pone siempre el servidor.
-  let zona
-  if (metodo === 'envio_tienda') {
-    zona = zonaDe(metodo, zonaTienda)
-  } else {
-    zona = definicion.zonas.find((z) => z.clave === zonaCorreo || z.zona === Number(zonaCorreo)) || null
-    if (!zona) return rechazo(400, 'ZONA_CORREO_INVALIDA', 'Elegí una zona de envío válida.')
-  }
-
-  const precio = zona ? precioDeZona(costos, zona.clave) : null
-  if (precio === null) {
-    return rechazo(400, 'ZONA_SIN_COSTO', metodo === 'correo'
-      ? 'Esta tienda no hace envíos por correo a esa zona.'
-      : 'Esta tienda no llega a esa dirección.')
-  }
+  // La zona es la que calculó el servidor; ya se comprobó que tiene precio.
+  const zona = zonaDe(metodo, zonaSabida)
+  const precio = precioDeZona(vendedor?.costos_envio_zona || {}, zona.clave)
   return { metodo, costo: dePesos(aCentavos(precio)), zona: zona.zona }
 }
 
@@ -133,6 +124,7 @@ export function calcularPedido({
   hayDireccion,
   zonaTienda,
   zonaCorreo,
+  codigoPostalOk,
   costoEnvioVisto,
 }) {
   if (!Array.isArray(items) || items.length === 0) {
@@ -209,7 +201,7 @@ export function calcularPedido({
   }
 
   // ── 2. El envío. También puede cortar. ──
-  const envio = calcularEnvio({ vendedor, metodoEnvio, hayDireccion, zonaTienda, zonaCorreo })
+  const envio = calcularEnvio({ vendedor, metodoEnvio, hayDireccion, zonaTienda, zonaCorreo, codigoPostalOk })
   if (envio.ok === false) return envio
 
   // ── 3. ¿Cambió algo desde que lo vio? ──

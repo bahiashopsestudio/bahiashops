@@ -11,32 +11,15 @@
 // CHECK desde la migración 020. Antes de esa migración pueden quedar nombres
 // viejos: ALIAS los traduce al leer, nunca se escriben.
 
-// ── Distancia del envío de la tienda ──
+// ── Distancias ──
 //
-// La línea recta (haversine) entre el punto de la tienda y el de la dirección
-// de quien compra, multiplicada por FACTOR_CALLES para aproximar el recorrido
-// por calles. Sin servicios externos. El punto de la tienda es
+// Todo es línea recta (haversine) entre el punto de la tienda y el de la
+// dirección de quien compra. Sin servicios externos. El punto de la tienda es
 // vendedores.latitud/longitud: el exacto si muestra su dirección, el centro
-// del círculo si no. Lo calcula el servidor (src/lib/zonaEnvio.js), con esta
-// misma función al cotizar y al crear el pedido.
-export const FACTOR_CALLES = 1.3
-export const METROS_POR_CUADRA = 100
+// del círculo si no. Lo calcula el servidor (src/lib/zonaEnvio.js), con estas
+// mismas funciones al cotizar y al crear el pedido. A quien compra nunca se le
+// muestra la distancia.
 const RADIO_TIERRA_M = 6371000
-
-// Zonas, con la distancia ya multiplicada: hasta 1 km, hasta 3 km, hasta
-// 7 km, y más. A la tienda se le muestran en cuadras.
-export const ZONAS_TIENDA = [
-  { zona: 1, clave: 'zona_1', hastaMetros: 1000 },
-  { zona: 2, clave: 'zona_2', hastaMetros: 3000 },
-  { zona: 3, clave: 'zona_3', hastaMetros: 7000 },
-  { zona: 4, clave: 'zona_4', hastaMetros: null },
-].map((z, i, todas) => ({
-  ...z,
-  nombre: z.hastaMetros
-    ? `Hasta ${z.hastaMetros / METROS_POR_CUADRA} cuadras`
-    : `Más de ${todas[i - 1].hastaMetros / METROS_POR_CUADRA} cuadras`,
-  detalle: '',
-}))
 
 // { lat, lng } como números, o null si falta alguno. Ojo: Number(null) es 0,
 // así que lo vacío se descarta antes de convertir.
@@ -47,6 +30,10 @@ function puntoValido(punto) {
   const lng = Number(punto.lng)
   if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null
   return { lat, lng }
+}
+
+export function puntoCompleto(punto) {
+  return puntoValido(punto) !== null
 }
 
 // Metros en línea recta entre dos puntos { lat, lng }, o null si falta uno.
@@ -61,26 +48,115 @@ export function distanciaRectaMetros(a, b) {
   return 2 * RADIO_TIERRA_M * Math.asin(Math.min(1, Math.sqrt(h)))
 }
 
-// La zona (1..4) para una distancia ya aproximada por calles.
-export function zonaPorDistancia(metros) {
+// La zona para una distancia, con una lista de zonas ordenada. La última
+// puede no tener tope (hastaMetros null). Pasado el tope de la última, null.
+function zonaEn(zonas, metros) {
   if (metros === null || metros === undefined || !Number.isFinite(metros) || metros < 0) return null
-  return ZONAS_TIENDA.find((z) => z.hastaMetros === null || metros <= z.hastaMetros).zona
+  return zonas.find((z) => z.hastaMetros === null || metros <= z.hastaMetros)?.zona ?? null
 }
 
-// La zona del envío de la tienda entre dos puntos, o null si falta alguno.
+// ── Envío de la tienda ──
+//
+// La distancia en línea recta, multiplicada por FACTOR_CALLES para aproximar
+// el recorrido por calles. Llega hasta 20 km (ya multiplicado), sea la ciudad
+// que sea: más lejos, no llega (no es una falla, no se registra). A la tienda
+// las zonas se le muestran en cuadras.
+export const FACTOR_CALLES = 1.3
+export const METROS_POR_CUADRA = 100
+
+export const ZONAS_TIENDA = [
+  { zona: 1, clave: 'zona_1', hastaMetros: 1000 },
+  { zona: 2, clave: 'zona_2', hastaMetros: 3000 },
+  { zona: 3, clave: 'zona_3', hastaMetros: 7000 },
+  { zona: 4, clave: 'zona_4', hastaMetros: 20000 },
+].map((z, i, todas) => ({
+  ...z,
+  nombre: i === todas.length - 1
+    ? `De ${todas[i - 1].hastaMetros / METROS_POR_CUADRA} a ${z.hastaMetros / METROS_POR_CUADRA} cuadras`
+    : `Hasta ${z.hastaMetros / METROS_POR_CUADRA} cuadras`,
+  detalle: '',
+}))
+
+// La zona (1..4) para una distancia ya aproximada por calles, o null si pasa
+// de la última (20 km).
+export function zonaPorDistancia(metros) {
+  return zonaEn(ZONAS_TIENDA, metros)
+}
+
+// La zona del envío de la tienda entre dos puntos: null si falta alguno o si
+// queda a más de 20 km por calles. Para saber cuál de las dos, puntoCompleto().
 export function zonaEntrePuntos(puntoTienda, puntoComprador) {
   const recta = distanciaRectaMetros(puntoTienda, puntoComprador)
   if (recta === null) return null
   return zonaPorDistancia(recta * FACTOR_CALLES)
 }
 
-// Zonas del correo. Por ahora la elige quien compra.
+// ── Correo ──
+//
+// La zona la calcula el servidor con la distancia en línea recta, SIN el
+// factor de calles (en distancias largas no aplica). Quien compra no la
+// elige. Los ejemplos son distancias en línea recta desde el centro de Bahía
+// Blanca: sirven para que la tienda ponga sus precios.
 export const ZONAS_CORREO = [
-  { zona: 1, clave: 'correo_1', nombre: 'Zona 1', detalle: 'Buenos Aires, Córdoba, Entre Ríos, La Pampa, Santa Fe' },
-  { zona: 2, clave: 'correo_2', nombre: 'Zona 2', detalle: 'Mendoza, San Luis, San Juan, Neuquén, Río Negro, La Rioja' },
-  { zona: 3, clave: 'correo_3', nombre: 'Zona 3', detalle: 'Tucumán, Salta, Jujuy, Catamarca, Chaco, Corrientes, Formosa, Misiones, Sgo. del Estero' },
-  { zona: 4, clave: 'correo_4', nombre: 'Zona 4', detalle: 'Chubut, Santa Cruz, Tierra del Fuego' },
-]
+  { zona: 1, clave: 'correo_1', hastaMetros: 50000, ejemplos: 'Punta Alta, Ingeniero White, General Daniel Cerri, Médanos' },
+  { zona: 2, clave: 'correo_2', hastaMetros: 150000, ejemplos: 'Monte Hermoso, Tornquist, Coronel Pringles, Coronel Dorrego' },
+  { zona: 3, clave: 'correo_3', hastaMetros: 500000, ejemplos: 'Tres Arroyos, Viedma, Santa Rosa, Tandil, Mar del Plata' },
+  { zona: 4, clave: 'correo_4', hastaMetros: null, ejemplos: 'Ciudad de Buenos Aires, Rosario, Córdoba, Mendoza' },
+].map((z, i, todas) => ({
+  ...z,
+  nombre: z.hastaMetros
+    ? `Hasta ${z.hastaMetros / 1000} km`
+    : `Más de ${todas[i - 1].hastaMetros / 1000} km`,
+  detalle: z.ejemplos,
+}))
+
+// La zona del correo entre dos puntos, o null si falta alguno.
+export function zonaCorreoEntrePuntos(puntoTienda, puntoComprador) {
+  return zonaEn(ZONAS_CORREO, distanciaRectaMetros(puntoTienda, puntoComprador))
+}
+
+// ── Seguimiento del correo ──
+//
+// Las empresas que la tienda puede elegir al despachar. Los links llevan a la
+// página de seguimiento de cada una; ninguna confirmó que acepte el número en
+// el link, así que quien compra copia el número y lo pega ahí.
+export const EMPRESAS_ENVIO = {
+  correo_argentino: { nombre: 'Correo Argentino', url: 'https://www.correoargentino.com.ar/formularios/e-commerce' },
+  andreani: { nombre: 'Andreani', url: 'https://www.andreani.com/' },
+  oca: { nombre: 'OCA', url: 'https://www.oca.com.ar/Busquedas/Seguimientos' },
+  otra: { nombre: 'Otra', url: null },
+}
+export const LARGO_SEGUIMIENTO = 60
+
+// { empresa, otra, numero } -> { ok: true, campos } o { ok: false, error }.
+// campos son las columnas de pedidos: envio_empresa, envio_empresa_otra,
+// envio_seguimiento. Lo usan el panel (para avisar) y el servidor (decide).
+export function validarSeguimiento({ empresa, otra, numero }) {
+  if (!EMPRESAS_ENVIO[empresa]) return { ok: false, error: 'Elegí la empresa con la que lo despachaste.' }
+  const limpio = (v) => (typeof v === 'string' ? v.trim().replace(/s+/g, ' ') : '')
+  const n = limpio(numero)
+  if (!n) return { ok: false, error: 'Escribí el número de seguimiento.' }
+  if (n.length > LARGO_SEGUIMIENTO) return { ok: false, error: 'El número de seguimiento es demasiado largo.' }
+  let nombreOtra = null
+  if (empresa === 'otra') {
+    nombreOtra = limpio(otra)
+    if (!nombreOtra) return { ok: false, error: 'Escribí el nombre de la empresa.' }
+    if (nombreOtra.length > LARGO_SEGUIMIENTO) return { ok: false, error: 'El nombre de la empresa es demasiado largo.' }
+  }
+  return { ok: true, campos: { envio_empresa: empresa, envio_empresa_otra: nombreOtra, envio_seguimiento: n } }
+}
+
+// El seguimiento guardado en un pedido, para mostrar: { empresa, numero, url }
+// o null si no hay.
+export function seguimientoDe(pedido) {
+  const empresa = EMPRESAS_ENVIO[pedido?.envio_empresa]
+  if (!empresa || !pedido?.envio_seguimiento) return null
+  return {
+    empresa: pedido.envio_empresa === 'otra' ? (pedido.envio_empresa_otra || 'Otra empresa') : empresa.nombre,
+    numero: pedido.envio_seguimiento,
+    url: empresa.url,
+  }
+}
 
 // costo:
 //   'gratis'       $0, sin vueltas.
@@ -107,7 +183,7 @@ export const METODOS = {
   envio_tienda: {
     id: 'envio_tienda',
     comprador: 'Envío de la tienda',
-    detalleComprador: 'Dentro de Bahía Blanca',
+    detalleComprador: 'La tienda te lo lleva',
     vendedor: 'Envío de la tienda',
     admin: 'Envío de la tienda (por zona)',
     pideDireccion: true,
@@ -119,7 +195,7 @@ export const METODOS = {
   correo: {
     id: 'correo',
     comprador: 'Envío por correo',
-    detalleComprador: 'Otras localidades',
+    detalleComprador: 'A cualquier ciudad',
     vendedor: 'Correo',
     admin: 'Correo (por zona)',
     pideDireccion: true,
@@ -178,13 +254,14 @@ export function tipoEntregaDe(valor) {
 }
 
 // Hasta que los pasos del pedido usen tipoEntrega (t4), sus textos y los de
-// los mails distinguen tres casos: 'retiro', 'envio' (llega a una dirección:
-// envío de la tienda o correo) y 'coordinar' (el resto, incluido un valor
-// desconocido).
+// los mails distinguen cuatro casos: 'retiro', 'envio' (la tienda lo lleva a
+// la dirección), 'correo' (lo despacha por correo: no hay franja de entrega
+// ni "ya llega") y 'coordinar' (el resto, incluido un valor desconocido).
 export function grupoEntrega(valor) {
   const tipo = tipoEntregaDe(valor)
   if (tipo === 'retiro') return 'retiro'
-  if (tipo === 'domicilio' || tipo === 'correo') return 'envio'
+  if (tipo === 'domicilio') return 'envio'
+  if (tipo === 'correo') return 'correo'
   return 'coordinar'
 }
 
@@ -240,13 +317,20 @@ export function entregaConfigurada(vendedor) {
   return metodosConfigurados(vendedor).length > 0
 }
 
+// ¿Tiene el correo tildado y ningún precio de correo? Entonces no se ofrece,
+// y el panel se lo avisa.
+export function correoSinPrecios(vendedor) {
+  return metodosGuardados(vendedor?.metodos_entrega_default).includes('correo') &&
+    zonasConPrecio('correo', vendedor?.costos_envio_zona || {}).length === 0
+}
+
 // Qué métodos ve quien compra. Es la regla de las dos puntas: el checkout la
 // usa para armar la lista y el servidor para validar lo que llega.
 //
-// zonaTienda es lo que se sabe de la dirección de quien compra para el envío
-// de la tienda:
+// zonaTienda y zonaCorreo son lo que se sabe de la dirección de quien compra
+// para el envío de la tienda y para el correo (las calcula el servidor):
 //   undefined  todavía no se sabe (sin dirección): el método se muestra.
-//   null       no se pudo calcular: el método no está disponible.
+//   null       no llega o no se pudo calcular: el método no está disponible.
 //   1..4       la zona: disponible si esa zona tiene precio.
 //
 // Devuelve { disponibles, noDisponibles, respaldo }:
@@ -255,15 +339,16 @@ export function entregaConfigurada(vendedor) {
 //   noDisponibles  los configurados que para esta dirección no van (se
 //                  muestran deshabilitados).
 //   respaldo       true si METODO_RESPALDO está porque no quedó nada.
-export function metodosParaComprador(vendedor, { zonaTienda } = {}) {
+export function metodosParaComprador(vendedor, { zonaTienda, zonaCorreo } = {}) {
   const costos = vendedor?.costos_envio_zona || {}
   const configurados = metodosConfigurados(vendedor)
+  const zonaSabida = { envio_tienda: zonaTienda, correo: zonaCorreo }
 
   const disponibles = []
   const noDisponibles = []
   for (const id of configurados) {
-    if (id === 'envio_tienda' && zonaTienda !== undefined) {
-      const zona = zonaDe('envio_tienda', zonaTienda)
+    if (METODOS[id].costo === 'por_zona' && zonaSabida[id] !== undefined) {
+      const zona = zonaDe(id, zonaSabida[id])
       if (!zona || precioDeZona(costos, zona.clave) === null) {
         noDisponibles.push(id)
         continue
@@ -293,7 +378,8 @@ export function textoCostoEnvio(metodo, costo) {
 // Recibe { metodos, costos, tienePunto } y devuelve
 // { ok: true, metodos, costos } o { ok: false, error }.
 //   - Al menos un método, elegido a propósito.
-//   - Envío de la tienda necesita el punto de la tienda en el mapa.
+//   - Envío de la tienda y correo necesitan el punto de la tienda en el
+//     mapa: las zonas se miden desde ahí.
 //   - Cada método por zona elegido necesita al menos un precio.
 //   - Los precios son enteros de 0 a 10.000.000; vacío = no llega a esa zona.
 //   - Se guardan sólo las zonas con precio. Las de un método destildado se
@@ -309,8 +395,10 @@ export function validarEntrega({ metodos, costos, tienePunto }) {
   if (elegidos.length === 0) {
     return { ok: false, error: 'Elegí al menos una forma de entrega.' }
   }
-  if (elegidos.includes('envio_tienda') && !tienePunto) {
-    return { ok: false, error: 'Para el envío de la tienda necesitamos tu ubicación. Completala en Mi ubicación.' }
+  for (const id of ['envio_tienda', 'correo']) {
+    if (elegidos.includes(id) && !tienePunto) {
+      return { ok: false, error: `Para "${METODOS[id].vendedor}" necesitamos tu ubicación: las distancias se miden desde ahí. Completala en Mi ubicación.` }
+    }
   }
 
   const limpios = {}

@@ -6,6 +6,7 @@ import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
 import VolverAtras from '@/components/VolverAtras'
 import FormularioDireccion from '@/components/FormularioDireccion'
+import { calleNumeroDepto, ciudadProvinciaCodigo } from '@/lib/direcciones'
 
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage']
 
@@ -134,7 +135,8 @@ export default function MisDireccionesPage() {
                           )}
                         </div>
                         <p className="text-sm text-[#0a0a0a]/40 font-light leading-relaxed ml-6">
-                          {dir.calle} {dir.numero}{dir.piso_depto ? `, ${dir.piso_depto}` : ''}
+                          {calleNumeroDepto(dir)}
+                          {ciudadProvinciaCodigo(dir) && <><br />{ciudadProvinciaCodigo(dir)}</>}
                           {dir.referencia && <><br /><span className="text-[#0a0a0a]/25">{dir.referencia}</span></>}
                           <br />Tel. {dir.telefono}
                         </p>

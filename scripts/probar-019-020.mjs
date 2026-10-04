@@ -377,15 +377,17 @@ console.log("\n4. Distancia y zonas del envío de la tienda")
   ok(L.distanciaRectaMetros(CENTRO, alNorte(2000)) === L.distanciaRectaMetros(alNorte(2000), CENTRO), "da lo mismo en los dos sentidos")
 
   ok(L.FACTOR_CALLES === 1.3, "factor de calles: 1,3")
-  ok(igual(L.ZONAS_TIENDA.map((z) => z.hastaMetros), [1000, 3000, 7000, null]), "cortes: 1, 3 y 7 km, y más")
-  ok(igual(L.ZONAS_TIENDA.map((z) => z.nombre), ["Hasta 10 cuadras", "Hasta 30 cuadras", "Hasta 70 cuadras", "Más de 70 cuadras"]),
+  // Desde la 021 la zona 4 tiene tope: 20 km por calles (200 cuadras).
+  ok(igual(L.ZONAS_TIENDA.map((z) => z.hastaMetros), [1000, 3000, 7000, 20000]), "cortes: 1, 3, 7 y 20 km")
+  ok(igual(L.ZONAS_TIENDA.map((z) => z.nombre), ["Hasta 10 cuadras", "Hasta 30 cuadras", "Hasta 70 cuadras", "De 70 a 200 cuadras"]),
     "a la tienda se le muestran en cuadras")
 
   // Los cortes se aplican después del × 1,3: 1000 m por calles son 769 m rectos.
   const casos = [
     [0, 1, "el mismo punto"], [760, 1, "760 m rectos (988 por calles)"], [780, 2, "780 m rectos (1014 por calles)"],
     [2300, 2, "2300 m rectos (2990 por calles)"], [2320, 3, "2320 m rectos (3016 por calles)"],
-    [5380, 3, "5380 m rectos (6994 por calles)"], [5390, 4, "5390 m rectos (7007 por calles)"], [20000, 4, "20 km"],
+    [5380, 3, "5380 m rectos (6994 por calles)"], [5390, 4, "5390 m rectos (7007 por calles)"],
+    [15380, 4, "15380 m rectos (19994 por calles)"], [15390, null, "15390 m rectos (20007 por calles): no llega"],
   ]
   for (const [metros, esperada, texto] of casos) {
     ok(L.zonaEntrePuntos(CENTRO, alNorte(metros)) === esperada, `${texto}: zona ${esperada}`)
@@ -395,24 +397,26 @@ console.log("\n4. Distancia y zonas del envío de la tienda")
   ok(L.zonaEntrePuntos(CENTRO, { lat: null, lng: null }) === null, "dirección sin punto: null")
   ok(L.zonaEntrePuntos({ lat: null, lng: -62.2 }, CENTRO) === null, "tienda con medio punto: null")
   ok(L.zonaEntrePuntos(CENTRO, { lat: "", lng: "" }) === null, "vacío no es 0,0")
-  ok(L.zonaEntrePuntos(CENTRO, { lat: 0, lng: 0 }) === 4, "0,0 sí es un punto (lejísimos): zona 4")
+  ok(L.zonaEntrePuntos(CENTRO, { lat: 0, lng: 0 }) === null && L.puntoCompleto({ lat: 0, lng: 0 }), "0,0 sí es un punto, pero lejísimos: no llega (desde la 021)")
   ok(L.zonaEntrePuntos({ lat: "-38.7183000", lng: "-62.2663000" }, alNorte(500)) === 1, "acepta los numeric de la base como texto")
   ok(L.zonaEntrePuntos(CENTRO, { lat: 95, lng: 0 }) === null, "una latitud imposible: null")
 
-  // zonaTiendaPara: la misma cuenta, y registra cuando falta un punto.
-  const { zonaTiendaPara } = await import("../src/lib/zonaEnvio.js")
+  // zonasPara: la misma cuenta, y registra cuando falta un punto.
+  const { zonasPara } = await import("../src/lib/zonaEnvio.js")
   const registro = []
   const admin = { from: (tabla) => ({ insert: async (fila) => { registro.push({ tabla, ...fila }); return { error: null } } }) }
   const avisos = console.warn
   console.warn = () => {}
   const tienda = { id: 7, latitud: CENTRO.lat, longitud: CENTRO.lng }
-  const z = await zonaTiendaPara({ admin, vendedor: tienda, direccion: { id: 3, lat: alNorte(2000).lat, lng: CENTRO.lng }, origen: "cotizar" })
-  ok(z === 2 && registro.length === 0, "zonaTiendaPara: 2 km rectos (2,6 km por calles) = zona 2, sin registro")
-  const z2 = await zonaTiendaPara({ admin, vendedor: tienda, direccion: { id: 3, lat: null, lng: null }, origen: "crear" })
-  const z3 = await zonaTiendaPara({ admin, vendedor: { id: 8, latitud: null, longitud: null }, direccion: { id: 4, lat: CENTRO.lat, lng: CENTRO.lng }, origen: "cotizar" })
-  const z4 = await zonaTiendaPara({ admin, vendedor: { id: 9, latitud: null, longitud: null }, direccion: { id: 5, lat: null, lng: null }, origen: "crear" })
+  const zonaTienda = async (vendedor, direccion, origen) =>
+    (await zonasPara({ admin, vendedor, direccion, origen, metodos: ["envio_tienda"] })).envio_tienda.zona
+  const z = await zonaTienda(tienda, { id: 3, lat: alNorte(2000).lat, lng: CENTRO.lng }, "cotizar")
+  ok(z === 2 && registro.length === 0, "zonasPara: 2 km rectos (2,6 km por calles) = zona 2, sin registro")
+  const z2 = await zonaTienda(tienda, { id: 3, lat: null, lng: null }, "crear")
+  const z3 = await zonaTienda({ id: 8, latitud: null, longitud: null }, { id: 4, lat: CENTRO.lat, lng: CENTRO.lng }, "cotizar")
+  const z4 = await zonaTienda({ id: 9, latitud: null, longitud: null }, { id: 5, lat: null, lng: null }, "crear")
   console.warn = avisos
-  ok(z2 === null && z3 === null && z4 === null, "zonaTiendaPara: sin alguno de los dos puntos, null")
+  ok(z2 === null && z3 === null && z4 === null, "zonasPara: sin alguno de los dos puntos, null")
   ok(igual(registro.map((r) => [r.tabla, r.vendedor_id, r.direccion_id, r.motivo, r.origen]), [
     ["envio_zona_fallas", 7, 3, "direccion_sin_punto", "crear"],
     ["envio_zona_fallas", 8, 4, "tienda_sin_punto", "cotizar"],
@@ -434,7 +438,7 @@ console.log("\n5. La lista: nombres, dirección y etiquetas")
      L.etiquetaMetodo("retiro", "comprador", { direccionVisible: true }) === "Retiro en el local", "retiro sin dirección visible se llama 'Retiro'")
   ok(L.etiquetaMetodo("flash_pedidos", "admin") === "Envío de la tienda (por zona)", "el admin ve el nombre nuevo de un valor viejo")
   ok(L.etiquetaMetodo("xyz", "vendedor") === "Otro (xyz)", "un valor desconocido se nota")
-  ok(L.grupoEntrega("retiro") === "retiro" && L.grupoEntrega("envio_tienda") === "envio" && L.grupoEntrega("correo") === "envio" &&
+  ok(L.grupoEntrega("retiro") === "retiro" && L.grupoEntrega("envio_tienda") === "envio" && L.grupoEntrega("correo") === "correo" &&
      L.grupoEntrega("coordinar") === "coordinar" && L.grupoEntrega("xyz") === "coordinar", "grupos de los textos de los pasos")
   ok(L.ORDEN_METODOS.every((id) => ["retiro", "domicilio", "correo", "coordinar"].includes(L.METODOS[id].tipoEntrega)), "cada método tiene tipo de entrega")
   ok(L.textoCostoEnvio("envio_tienda", 0) === "Envío gratis" && L.textoCostoEnvio("coordinar", 0) === "A coordinar", "$0 es 'Envío gratis'")
@@ -477,13 +481,15 @@ console.log("\n7. Lo que cobra el servidor")
   r = env({ metodoEnvio: "envio_tienda", zonaTienda: 1 })
   ok(r.costo === 0 && r.zona === 1, "zona 1 a $0: envío gratis")
   ok(env({ metodoEnvio: "envio_tienda", zonaTienda: 3 }).codigo === "ZONA_SIN_COSTO", "zona 3 sin precio: rechazo")
-  ok(env({ metodoEnvio: "envio_tienda", zonaTienda: null }).codigo === "SIN_ZONA", "zona sin calcular: rechazo (no se cobra la 4)")
+  ok(env({ metodoEnvio: "envio_tienda", zonaTienda: null }).codigo === "ZONA_SIN_COSTO", "zona sin calcular o lejos: no llega (no se cobra la 4)")
   ok(env({ metodoEnvio: "envio_tienda", zonaTienda: undefined }).codigo === "SIN_ZONA", "sin zona calculada: rechazo")
   ok(calcularEnvio({ vendedor: v, metodoEnvio: "envio_tienda", hayDireccion: false, zonaTienda: 2 }).codigo === "FALTA_DIRECCION", "sin dirección: rechazo")
-  r = env({ metodoEnvio: "correo", zonaCorreo: "correo_1" })
+  // Desde la 021 la zona del correo la calcula el servidor (un número) y hace
+  // falta el código postal.
+  r = env({ metodoEnvio: "correo", zonaCorreo: 1, codigoPostalOk: true })
   ok(r.costo === 4200 && r.zona === 1, "correo zona 1: $4200")
-  ok(env({ metodoEnvio: "correo", zonaCorreo: "correo_2" }).codigo === "ZONA_SIN_COSTO", "correo zona sin precio: rechazo")
-  ok(env({ metodoEnvio: "correo", zonaCorreo: "zona_1" }).codigo === "ZONA_CORREO_INVALIDA", "correo con una zona que no es de correo: rechazo")
+  ok(env({ metodoEnvio: "correo", zonaCorreo: 2, codigoPostalOk: true }).codigo === "ZONA_SIN_COSTO", "correo zona sin precio: rechazo")
+  ok(env({ metodoEnvio: "correo", zonaCorreo: 1 }).codigo === "FALTA_CODIGO_POSTAL", "correo sin código postal: rechazo")
   ok(env({ metodoEnvio: "retiro" }).costo === 0, "retiro: $0")
   ok(env({ metodoEnvio: "coordinar" }).codigo === "METODO_INVALIDO", "coordinar no elegido y con otras opciones: rechazo")
   ok(env({ metodoEnvio: "xyz" }).codigo === "METODO_INVALIDO", "un método desconocido: rechazo")

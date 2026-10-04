@@ -5,9 +5,12 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { idsDisponibles, itemsNoDisponibles } from '@/lib/disponibilidad'
 import {
-  METODOS, ORDEN_METODOS, ZONAS_CORREO, metodosParaComprador, metodosConfigurados,
-  metodoPideDireccion, etiquetaMetodo, precioDeZona, textoCostoEnvio,
+  METODOS, ORDEN_METODOS, metodosParaComprador, metodosConfigurados,
+  metodoPideDireccion, etiquetaMetodo, textoCostoEnvio,
 } from '@/lib/metodosEntrega'
+import {
+  esDeBahia, codigoPostalValido, normalizarCodigoPostal, calleNumeroDepto, ciudadProvinciaCodigo,
+} from '@/lib/direcciones'
 import { useCarrito } from '@/context/CarritoContext'
 import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
@@ -109,15 +112,22 @@ function CheckoutContenido() {
   // (si no, el retiro se coordina con ella).
   const [entregaTienda, setEntregaTienda] = useState({ metodos_entrega_default: [], costos_envio_zona: {} })
   const [direccionVisibleTienda, setDireccionVisibleTienda] = useState(null)
-  // La cotización del envío de la tienda para la dirección elegida, de
-  // /api/envio/cotizar. { direccionId, estado, zona, costo }; estado es
-  // 'ok', 'sin_precio', 'sin_zona', 'no_ofrece' o 'error'. Si es de otra
-  // dirección, todavía no llegó la de la elegida.
+  // La cotización de los envíos por zona para la dirección elegida, de
+  // /api/envio/cotizar: { direccionId, envio_tienda, correo,
+  // falta_codigo_postal }, cada método { estado, zona, costo } o null; con
+  // error, { direccionId, error: true }. Si es de otra dirección, todavía no
+  // llegó la de la elegida.
   const [cotizacion, setCotizacion] = useState(null)
-  // Para cambiar de dirección cuando el envío de la tienda no llega a la
-  // elegida (la opción está deshabilitada y no abre las direcciones).
+  // Sube para volver a cotizar la misma dirección (después de guardarle el
+  // código postal).
+  const [vueltaCotizar, setVueltaCotizar] = useState(0)
+  // Para cambiar de dirección cuando un envío no llega a la elegida (la
+  // opción está deshabilitada y no abre las direcciones).
   const [mostrarDirecciones, setMostrarDirecciones] = useState(false)
-  const [zonaCorreoElegida, setZonaCorreoElegida] = useState(null)
+  // El código postal que se le agrega a una dirección vieja para el correo.
+  const [cpTexto, setCpTexto] = useState('')
+  const [guardandoCp, setGuardandoCp] = useState(false)
+  const [errorCp, setErrorCp] = useState('')
 
   useEffect(() => {
     if (menuOpen) { document.body.style.overflow = 'hidden' } else { document.body.style.overflow = '' }
@@ -127,24 +137,30 @@ function CheckoutContenido() {
   // ── Qué métodos ve quien compra ──
   // La regla es metodosParaComprador(), de src/lib/metodosEntrega.js: la
   // misma con la que el servidor valida. Acá sólo se decide cómo se ven.
-  const tiendaHaceEnvio = metodosConfigurados(entregaTienda).includes('envio_tienda')
+  const metodosPorZona = metodosConfigurados(entregaTienda).filter((m) => m === 'envio_tienda' || m === 'correo')
   const cotizacionVigente = cotizacion && cotizacion.direccionId === direccionElegida ? cotizacion : null
+  const cotizacionDe = (metodo) => (cotizacionVigente && !cotizacionVigente.error ? cotizacionVigente[metodo] : null)
 
-  // Lo que se sabe de la dirección elegida para el envío de la tienda:
-  // undefined todavía no se sabe; null no se pudo calcular; 1..4 la zona.
-  let zonaTienda
-  if (direccionElegida && cotizacionVigente) {
-    if (cotizacionVigente.estado === 'ok' || cotizacionVigente.estado === 'sin_precio') zonaTienda = cotizacionVigente.zona
-    else if (cotizacionVigente.estado === 'sin_zona') zonaTienda = null
+  // Lo que se sabe de la dirección elegida para cada envío por zona:
+  // undefined todavía no se sabe; null no llega o no se pudo calcular; 1..4 la
+  // zona (con o sin precio: eso lo mira metodosParaComprador).
+  function zonaSabida(metodo) {
+    const c = cotizacionDe(metodo)
+    if (!direccionElegida || !c) return undefined
+    if (c.estado === 'ok' || c.estado === 'sin_precio') return c.zona
+    if (c.estado === 'lejos' || c.estado === 'sin_zona') return null
+    return undefined
   }
-  const { disponibles, noDisponibles, respaldo } = metodosParaComprador(entregaTienda, { zonaTienda })
+  const { disponibles, noDisponibles, respaldo } = metodosParaComprador(entregaTienda, {
+    zonaTienda: zonaSabida('envio_tienda'),
+    zonaCorreo: zonaSabida('correo'),
+  })
   const visibles = ORDEN_METODOS.filter((id) => disponibles.includes(id) || noDisponibles.includes(id))
   const elegido = visibles.includes(metodoElegido) ? metodoElegido : null
 
   function costoEnvioActual() {
-    if (elegido === 'envio_tienda') return cotizacionVigente?.estado === 'ok' ? cotizacionVigente.costo : 0
-    if (elegido === 'correo' && zonaCorreoElegida) return precioDeZona(entregaTienda.costos_envio_zona, zonaCorreoElegida) ?? 0
-    return 0
+    const c = elegido ? cotizacionDe(elegido) : null
+    return c?.estado === 'ok' ? c.costo : 0
   }
 
   const costoEnvio = costoEnvioActual()
@@ -152,14 +168,16 @@ function CheckoutContenido() {
   const total = subtotal + costoEnvio
 
   const metodoPideDir = !!elegido && metodoPideDireccion(elegido)
-  // El respaldo "coordinar" que aparece porque la tienda no llega a esta
+  // El respaldo "coordinar" que aparece porque ningún envío llega a esta
   // dirección: el servidor necesita la dirección para comprobarlo (no la
   // guarda).
-  const respaldoPorDireccion = elegido === 'coordinar' && respaldo && noDisponibles.includes('envio_tienda')
-  const envioListo = elegido !== 'envio_tienda' || cotizacionVigente?.estado === 'ok'
-  const correoSinZona = elegido === 'correo' && !zonaCorreoElegida
+  const respaldoPorDireccion = elegido === 'coordinar' && respaldo && noDisponibles.length > 0
+  const envioListo = !metodosPorZona.includes(elegido) || cotizacionDe(elegido)?.estado === 'ok'
+  // El correo necesita el código postal: a las direcciones viejas se les pide
+  // acá mismo.
+  const correoSinCp = elegido === 'correo' && cotizacionVigente?.falta_codigo_postal === true
   const entregaLista = !!elegido && disponibles.includes(elegido) &&
-    (!metodoPideDir || !!direccionElegida) && envioListo && !correoSinZona
+    (!metodoPideDir || !!direccionElegida) && envioListo && !correoSinCp
 
   const celular = estadoCelular(formCaracteristica, formNumero)
   const datosListos = !!formNombre.trim() && !!formApellido.trim() && celular.tipo === 'valido'
@@ -239,12 +257,13 @@ function CheckoutContenido() {
     return () => { cancelado = true }
   }, [carritoListo, vendedorId, firmaItems])
 
-  // La cotización del envío de la tienda: cada vez que cambian la dirección
-  // o los precios de la tienda. La respuesta de una dirección vieja no pisa
-  // la de la nueva; mientras no llega la de la dirección elegida, se ve
-  // "Calculando..." (cotizacionVigente es null).
+  // La cotización de los envíos por zona: cada vez que cambian la dirección,
+  // los precios de la tienda o el código postal. La respuesta de una
+  // dirección vieja no pisa la de la nueva; mientras no llega la de la
+  // dirección elegida, se ve "Calculando..." (cotizacionVigente es null).
+  const tienePorZona = metodosPorZona.length > 0
   useEffect(() => {
-    if (!tiendaHaceEnvio || !direccionElegida) return
+    if (!tienePorZona || !direccionElegida) return
     let cancelado = false
     async function cotizar() {
       try {
@@ -255,17 +274,37 @@ function CheckoutContenido() {
         const data = await res.json().catch(() => ({}))
         if (cancelado) return
         setCotizacion(res.ok
-          ? { direccionId: direccionElegida, estado: data.estado, zona: data.zona ?? null, costo: data.costo ?? null }
-          : { direccionId: direccionElegida, estado: 'error', zona: null, costo: null })
+          ? { direccionId: direccionElegida, envio_tienda: data.envio_tienda ?? null, correo: data.correo ?? null, falta_codigo_postal: data.falta_codigo_postal === true }
+          : { direccionId: direccionElegida, error: true })
       } catch {
-        if (!cancelado) setCotizacion({ direccionId: direccionElegida, estado: 'error', zona: null, costo: null })
+        if (!cancelado) setCotizacion({ direccionId: direccionElegida, error: true })
       }
     }
     cotizar()
     return () => { cancelado = true }
-  }, [tiendaHaceEnvio, direccionElegida, vendedorId, entregaTienda])
+  }, [tienePorZona, direccionElegida, vendedorId, entregaTienda, vueltaCotizar])
 
-  useEffect(() => { if (metodoElegido !== 'correo') setZonaCorreoElegida(null) }, [metodoElegido])
+  // Le guarda el código postal a la dirección elegida (las viejas no lo
+  // tienen) y vuelve a cotizar. La política deja editar sólo las propias.
+  async function guardarCodigoPostal() {
+    setErrorCp('')
+    if (!codigoPostalValido(cpTexto)) {
+      setErrorCp('Escribí 4 números (8000) o el código de 8 caracteres (B8000ABC).')
+      return
+    }
+    setGuardandoCp(true)
+    const { data, error } = await supabase
+      .from('direcciones')
+      .update({ codigo_postal: normalizarCodigoPostal(cpTexto) })
+      .eq('id', direccionElegida)
+      .select()
+      .single()
+    setGuardandoCp(false)
+    if (error || !data) { setErrorCp('No pudimos guardar el código postal. Probá de nuevo.'); return }
+    setDirecciones((actual) => actual.map((d) => (d.id === data.id ? data : d)))
+    setCpTexto('')
+    setVueltaCotizar((n) => n + 1)
+  }
 
   function fmt(n) { return Number(n).toLocaleString('es-AR') }
 
@@ -341,7 +380,6 @@ function CheckoutContenido() {
           direccionId: metodoPideDir || respaldoPorDireccion ? direccionElegida : null,
           // La preferencia de turno sólo existe en los métodos que la piden.
           turnoPreferido: METODOS[elegido]?.pideTurno ? turno : null,
-          zonaCorreo: elegido === 'correo' ? zonaCorreoElegida : null,
           costoEnvio,
         }),
       })
@@ -556,36 +594,36 @@ function CheckoutContenido() {
       return { ...base, sub: sinDireccionVisible ? def.detalleCompradorSinDireccion : def.detalleComprador, costoLabel: 'Gratis' }
     }
 
-    if (id === 'envio_tienda') {
-      const c = cotizacionVigente
-      let costoLabel = 'Según tu zona'
-      let sub = base.sub
-      if (direccionElegida && !c) costoLabel = 'Calculando...'
-      else if (c?.estado === 'ok') costoLabel = c.costo === 0 ? 'Envío gratis' : `Envío a tu zona: $${fmt(c.costo)}`
-      else if (c?.estado === 'sin_precio') { costoLabel = 'No llega'; sub = `${tienda} no llega a tu dirección` }
+    // Envío de la tienda y correo: lo que diga la cotización del servidor. A
+    // quien compra nunca se le muestran la distancia ni la zona.
+    if (id === 'envio_tienda' || id === 'correo') {
+      const c = cotizacionDe(id)
+      // "a Punta Alta" cuando la dirección es de otra ciudad.
+      const destino = dirElegida && !esDeBahia(dirElegida) && dirElegida.ciudad ? dirElegida.ciudad : null
+      const etiquetaPrecio = id === 'envio_tienda' ? 'Envío a tu zona' : (destino ? `Envío a ${destino}` : 'Envío por correo')
+      let costoLabel = 'Según tu dirección'
+      let sub = id === 'correo' && destino ? `A ${destino}` : base.sub
+      if (direccionElegida && !cotizacionVigente) costoLabel = 'Calculando...'
+      else if (cotizacionVigente?.error) costoLabel = 'No pudimos calcular'
+      else if (c?.estado === 'ok') costoLabel = c.costo === 0 ? 'Envío gratis' : `${etiquetaPrecio}: $${fmt(c.costo)}`
+      else if (c?.estado === 'sin_precio' || c?.estado === 'lejos') {
+        costoLabel = 'No llega'
+        const donde = destino ? `a ${destino}` : 'a tu dirección'
+        sub = id === 'correo' ? `${tienda} no envía por correo ${donde}` : `${tienda} no llega ${donde}`
+      }
       else if (c?.estado === 'sin_zona') {
         costoLabel = 'No disponible'
         sub = dirElegida && (dirElegida.lat == null || dirElegida.lng == null)
           ? 'Tu dirección no está ubicada en el mapa: no podemos calcular el envío'
           : 'No pudimos calcular el envío a tu dirección'
       }
-      else if (c?.estado === 'error') costoLabel = 'No pudimos calcular'
       return { ...base, sub, costoLabel }
-    }
-
-    if (id === 'correo') {
-      let costoLabel = 'Elegí tu zona'
-      if (zonaCorreoElegida) {
-        const precio = precioDeZona(entregaTienda.costos_envio_zona, zonaCorreoElegida)
-        costoLabel = precio === null ? 'No disponible' : textoCostoEnvio('correo', precio)
-      }
-      return { ...base, costoLabel }
     }
 
     // coordinar
     let sub = def.detalleComprador
     if (respaldo) {
-      sub = noDisponibles.includes('envio_tienda')
+      sub = noDisponibles.length > 0
         ? `${tienda} no llega a tu dirección: arreglan la entrega por WhatsApp`
         : def.detalleCompradorRespaldo
     }
@@ -594,9 +632,9 @@ function CheckoutContenido() {
 
   const metodos = visibles.map(vistaMetodo)
   const metodoActual = metodos.find((m) => m.id === elegido)
-  // Las direcciones se muestran con un método que las pide, o cuando el envío
-  // de la tienda no llega a la elegida y se quiere probar con otra.
-  const verDirecciones = metodoActual?.pideDireccion || (mostrarDirecciones && noDisponibles.includes('envio_tienda'))
+  // Las direcciones se muestran con un método que las pide, o cuando un envío
+  // no llega a la elegida y se quiere probar con otra.
+  const verDirecciones = metodoActual?.pideDireccion || (mostrarDirecciones && noDisponibles.length > 0)
   // Estilos del paso "Tus datos": los mismos del resto del sitio.
   const estiloTitulo = { fontFamily: 'Fraunces, serif', fontWeight: 500, fontSize: '24px', color: '#0a0a0a', letterSpacing: '-0.02em', marginBottom: '6px' }
   const estiloParrafo = { fontFamily: 'Poppins, sans-serif', fontWeight: 300, fontSize: '14px', color: 'rgba(10,10,10,0.5)', lineHeight: 1.6 }
@@ -772,35 +810,30 @@ function CheckoutContenido() {
                           <span className={`text-sm font-light text-right ${m.costoLabel === 'Gratis' || m.costoLabel === 'Envío gratis' ? 'text-green-600' : 'text-[#0a0a0a]/60'}`}>{m.costoLabel}</span>
                         </div>
 
-                        {/* Envío de la tienda que no llega: se puede probar otra dirección */}
-                        {bloqueada && m.id === 'envio_tienda' && !verDirecciones && (
+                        {/* Un envío que no llega: se puede probar otra dirección */}
+                        {bloqueada && (m.id === 'envio_tienda' || m.id === 'correo') && !verDirecciones && (
                           <button type="button" onClick={() => setMostrarDirecciones(true)}
                             className="ml-10 -mt-1 mb-3 text-xs text-[#0a0a0a]/50 underline underline-offset-2 cursor-pointer bg-transparent border-none p-0">
                             Probar con otra dirección
                           </button>
                         )}
 
-                        {/* Correo: zonas */}
-                        {sel && m.id === 'correo' && (
-                          <div className="ml-10 mb-3">
-                            <p className="text-xs text-[#0a0a0a]/30 font-light mb-2">¿En qué zona estás?</p>
-                            {ZONAS_CORREO.map(zc => {
-                              const costo = precioDeZona(entregaTienda.costos_envio_zona, zc.clave)
-                              if (costo === null) return null
-                              const selZ = zonaCorreoElegida === zc.clave
-                              return (
-                                <div key={zc.clave} onClick={() => setZonaCorreoElegida(zc.clave)} className={`flex items-center gap-2 p-3 rounded-lg cursor-pointer mb-1 ${selZ ? 'bg-[#F5F2EC]' : ''}`}>
-                                  <div className={`w-3.5 h-3.5 rounded-full border-[1.5px] flex items-center justify-center shrink-0 ${selZ ? 'border-[#0a0a0a]' : 'border-[#0a0a0a]/15'}`}>
-                                    {selZ && <div className="w-1.5 h-1.5 rounded-full bg-[#0a0a0a]" />}
-                                  </div>
-                                  <div className="flex-1">
-                                    <div className="text-sm font-medium text-[#0a0a0a]">{zc.nombre}</div>
-                                    <div className="text-[10px] text-[#0a0a0a]/25 font-light">{zc.detalle}</div>
-                                  </div>
-                                  <span className="text-xs text-[#0a0a0a]/60">{textoCostoEnvio('correo', costo)}</span>
-                                </div>
-                              )
-                            })}
+                        {/* Correo con una dirección vieja sin código postal: se pide acá */}
+                        {sel && m.id === 'correo' && correoSinCp && !m.deshabilitado && (
+                          <div className="ml-10 mb-3 p-3 bg-amber-50 rounded-lg">
+                            <label className="block text-xs text-amber-800 font-light mb-2">
+                              Para enviar por correo necesitamos el código postal de esta dirección.
+                            </label>
+                            <div className="flex gap-2">
+                              <input type="text" value={cpTexto} maxLength={10} placeholder="8000 o B8000ABC"
+                                onChange={(e) => { setErrorCp(''); setCpTexto(e.target.value) }}
+                                className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-amber-200 text-sm bg-white focus:outline-none focus:border-amber-400" />
+                              <button type="button" onClick={guardarCodigoPostal} disabled={guardandoCp}
+                                className="px-4 py-2 rounded-lg bg-[#0a0a0a] text-white text-sm cursor-pointer disabled:opacity-40">
+                                {guardandoCp ? 'Guardando...' : 'Guardar'}
+                              </button>
+                            </div>
+                            {errorCp && <p className="mt-2 mb-0 text-xs text-red-700">{errorCp}</p>}
                           </div>
                         )}
 
@@ -852,11 +885,10 @@ function CheckoutContenido() {
                                 <div className="flex items-center gap-2">
                                   <span className="text-sm font-medium text-[#0a0a0a]">{dir.etiqueta || 'Sin etiqueta'}</span>
                                   {dir.es_principal && <span className="text-[10px] bg-[#F5F2EC] text-[#0a0a0a]/50 px-2 py-0.5 rounded-full font-light">Principal</span>}
-                                  {!dir.barrio_id && <span className="text-[10px] bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full font-light">Sin barrio</span>}
                                   {(dir.lat == null || dir.lng == null) && <span className="text-[10px] bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full font-light">Sin ubicar en el mapa</span>}
                                 </div>
                                 <p className="text-xs text-[#0a0a0a]/40 font-light mt-1">
-                                  {dir.calle} {dir.numero}{dir.piso_depto ? `, ${dir.piso_depto}` : ''} · Tel. {dir.telefono}
+                                  {[calleNumeroDepto(dir), ciudadProvinciaCodigo(dir), `Tel. ${dir.telefono}`].filter(Boolean).join(' · ')}
                                 </p>
                               </div>
                             </div>
@@ -924,7 +956,7 @@ function CheckoutContenido() {
                   {metodoActual?.pideTurno && <p className="text-xs text-[#0a0a0a]/30 font-light mt-1">Preferencia: {turno.toLowerCase()}</p>}
                   {metodoPideDir && dirElegida && (
                     <p className="text-xs text-[#0a0a0a]/40 font-light mt-2">
-                      {dirElegida.calle} {dirElegida.numero}{dirElegida.piso_depto ? `, ${dirElegida.piso_depto}` : ''} · Tel. {dirElegida.telefono}
+                      {[calleNumeroDepto(dirElegida), ciudadProvinciaCodigo(dirElegida), `Tel. ${dirElegida.telefono}`].filter(Boolean).join(' · ')}
                     </p>
                   )}
                 </div>
@@ -937,11 +969,7 @@ function CheckoutContenido() {
                   </div>
                   <div className="flex justify-between text-sm py-1">
                     <span className="text-[#0a0a0a]/40 font-light">
-                      {elegido === 'envio_tienda'
-                        ? 'Envío a tu zona'
-                        : elegido === 'correo' && zonaCorreoElegida
-                          ? `Envío por correo (${ZONAS_CORREO.find((z) => z.clave === zonaCorreoElegida)?.nombre.toLowerCase()})`
-                          : 'Envío'}
+                      {elegido === 'envio_tienda' ? 'Envío a tu zona' : elegido === 'correo' ? 'Envío por correo' : 'Envío'}
                     </span>
                     <span className="text-[#0a0a0a]">{elegido === 'retiro' ? 'Gratis' : textoCostoEnvio(elegido, costoEnvio)}</span>
                   </div>

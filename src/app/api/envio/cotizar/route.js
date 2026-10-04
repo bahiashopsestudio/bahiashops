@@ -1,22 +1,28 @@
-// Cuánto sale el envío de la tienda a una dirección de quien compra. Lo usa
-// el checkout para mostrar "Envío a tu zona: $X", o que la tienda no llega.
+// Cuánto sale el envío a una dirección de quien compra, para cada método por
+// zona que ofrece la tienda (envío de la tienda y correo). Lo usa el checkout
+// para mostrar "Envío a tu zona: $X", "Envío por correo: $X" o que no llega.
 //
-// Calcula igual que /api/pedidos/crear (zonaTiendaPara y la lista de
+// Calcula igual que /api/pedidos/crear (zonasPara y la lista de
 // metodosEntrega.js): lo que se muestra acá es lo que después se cobra. El
 // cobro igual vuelve a calcular todo; esto sólo informa.
 //
-// Responde { estado, zona, costo }:
-//   'ok'          la tienda llega: zona y costo (0 = envío gratis).
+// Responde { envio_tienda, correo, falta_codigo_postal }. Cada método es
+// { estado, zona, costo }, o null si la tienda no lo ofrece:
+//   'ok'          llega: zona y costo (0 = envío gratis).
 //   'sin_precio'  hay zona, pero la tienda no puso precio para ella.
+//   'lejos'       el envío de la tienda no llega (más de 20 km).
 //   'sin_zona'    falta el punto de la tienda o el de la dirección (queda
-//                 registrado). A quien compra nunca se le muestra la distancia.
-//   'no_ofrece'   la tienda no hace envíos propios.
+//                 registrado).
+// A quien compra nunca se le muestran la distancia ni la zona.
+// falta_codigo_postal: la dirección no tiene un código postal válido; el
+// correo lo necesita.
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getServiceRoleClient } from '@/lib/supabase/admin';
 import { metodosConfigurados, zonaDe, precioDeZona } from '@/lib/metodosEntrega';
-import { zonaTiendaPara } from '@/lib/zonaEnvio';
+import { zonasPara } from '@/lib/zonaEnvio';
+import { codigoPostalValido } from '@/lib/direcciones';
 
 function rechazo(status, error) {
   return NextResponse.json({ error }, { status });
@@ -55,15 +61,16 @@ export async function POST(request) {
     return rechazo(404, 'Esta tienda no está disponible.');
   }
 
-  if (!metodosConfigurados(vendedor).includes('envio_tienda')) {
-    return NextResponse.json({ estado: 'no_ofrece', zona: null, costo: null });
+  const metodos = metodosConfigurados(vendedor).filter((m) => m === 'envio_tienda' || m === 'correo');
+  if (metodos.length === 0) {
+    return NextResponse.json({ envio_tienda: null, correo: null, falta_codigo_postal: false });
   }
 
   // La dirección tiene que ser de quien pregunta. Inexistente y ajena reciben
   // la misma respuesta.
   const { data: direccion, error: errorDireccion } = await admin
     .from('direcciones')
-    .select('id, lat, lng')
+    .select('id, lat, lng, codigo_postal')
     .eq('id', direccionId)
     .eq('usuario_id', user.id)
     .maybeSingle();
@@ -73,21 +80,25 @@ export async function POST(request) {
   }
   if (!direccion) return rechazo(403, 'La dirección no es válida.');
 
-  let zona;
+  let zonas;
   try {
-    zona = await zonaTiendaPara({ admin, vendedor, direccion, origen: 'cotizar' });
+    zonas = await zonasPara({ admin, vendedor, direccion, origen: 'cotizar', metodos });
   } catch (err) {
     console.error('Cotizar: no se pudo calcular la zona', err.message);
     return rechazo(500, 'No pudimos calcular el envío.');
   }
 
-  if (zona === null) {
-    return NextResponse.json({ estado: 'sin_zona', zona: null, costo: null });
+  const respuesta = { envio_tienda: null, correo: null, falta_codigo_postal: !codigoPostalValido(direccion.codigo_postal) };
+  for (const metodo of metodos) {
+    const { zona, motivo } = zonas[metodo];
+    if (zona === null) {
+      respuesta[metodo] = { estado: motivo === 'lejos' ? 'lejos' : 'sin_zona', zona: null, costo: null };
+      continue;
+    }
+    const precio = precioDeZona(vendedor.costos_envio_zona, zonaDe(metodo, zona).clave);
+    respuesta[metodo] = precio === null
+      ? { estado: 'sin_precio', zona, costo: null }
+      : { estado: 'ok', zona, costo: precio };
   }
-
-  const precio = precioDeZona(vendedor.costos_envio_zona, zonaDe('envio_tienda', zona).clave);
-  if (precio === null) {
-    return NextResponse.json({ estado: 'sin_precio', zona, costo: null });
-  }
-  return NextResponse.json({ estado: 'ok', zona, costo: precio });
+  return NextResponse.json(respuesta);
 }

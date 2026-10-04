@@ -45,6 +45,7 @@ export async function GET() {
     .from('pedidos')
     .select(`
       id, estado, metodo_envio, zona_envio, subtotal_productos, costo_envio, total,
+      envio_empresa, envio_empresa_otra, envio_seguimiento,
       comision_plataforma, turno_preferido, franja_horaria, creado_en, actualizado_en,
       comprador_id, comprador_nombre, comprador_apellido, comprador_telefono, direccion_copia,
       items:pedido_items ( id, nombre, variante, cantidad, precio, foto_url ),

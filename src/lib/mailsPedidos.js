@@ -24,7 +24,8 @@ import {
 } from '@/lib/mailBase'
 import { normalizarTelefonoAR, formatearTelefonoAR, linkWhatsApp } from '@/lib/telefono'
 import { inicialDeApodo, colorDeApodo } from '@/lib/apodos'
-import { metodoPideDireccion, grupoEntrega, tipoEntregaDe, zonaDe, textoCostoEnvio } from '@/lib/metodosEntrega'
+import { metodoPideDireccion, grupoEntrega, tipoEntregaDe, zonaDe, textoCostoEnvio, seguimientoDe } from '@/lib/metodosEntrega'
+import { calleNumeroDepto, ciudadProvinciaCodigo } from '@/lib/direcciones'
 
 // ── 1. Piezas propias de los mails de pedido ──────────────────────────────────
 
@@ -85,14 +86,10 @@ function telefonoALaVista(telefono) {
   return String(telefono ?? '').trim()
 }
 
-// "Calle 123, 2B" a partir de la copia de la dirección guardada en el pedido.
-function calleNumeroDepto(direccion) {
-  const calle = [direccion?.calle, direccion?.numero]
-    .map((v) => (v == null ? '' : String(v).trim()))
-    .filter(Boolean)
-    .join(' ')
-  const depto = direccion?.piso_depto ? String(direccion.piso_depto).trim() : ''
-  return [calle, depto].filter(Boolean).join(', ')
+// "Alsina 235, 2B, Punta Alta, Buenos Aires (B8109)": la dirección entera,
+// para quien despacha y para quien recibe.
+function direccionCompleta(direccion) {
+  return [calleNumeroDepto(direccion), ciudadProvinciaCodigo(direccion)].filter(Boolean).join(', ')
 }
 
 // turno_preferido guarda 'Mañana', 'Tarde' o 'Indistinto' (y 'Noche' en la
@@ -129,8 +126,9 @@ export function armarMailVenta(datos) {
     datos.telefono,
     `Hola${nombre ? ` ${nombre}` : ''}, te escribimos de ${tienda} por tu pedido #${pedidoId} en Bahía Shops.`
   )
-  const direccion = tipo === 'envio'
-    ? [calleNumeroDepto(datos.direccion), String(datos.direccion?.barrio ?? '').trim()].filter(Boolean).join(' · ')
+  const direccion = tipo === 'envio' || tipo === 'correo'
+    ? [calleNumeroDepto(datos.direccion), String(datos.direccion?.barrio ?? '').trim(), ciudadProvinciaCodigo(datos.direccion)]
+      .filter(Boolean).join(' · ')
     : ''
   const turno = textoTurno(datos.turno)
   const linkPanel = `${SITIO_URL}/vendedor/pedidos?pedido=${encodeURIComponent(pedidoId)}`
@@ -149,6 +147,7 @@ export function armarMailVenta(datos) {
   const cierre = {
     retiro: `Cuando esté listo para retirar, avisale desde el panel: así ${quien} ve en qué anda su compra.`,
     envio: `Cuando lo empieces a preparar, marcalo en el panel: así ${quien} ve en qué anda su compra.`,
+    correo: `Cuando lo despaches, marcalo en el panel con el número de seguimiento: así ${quien} lo puede seguir.`,
     coordinar: 'Escribile para acordar cuándo y dónde, y después seguí los pasos en el panel.',
   }[tipo]
 
@@ -207,7 +206,9 @@ export function armarMailCompra(datos) {
   const tipo = tipoEntrega(datos.metodoEnvio)
   const nombre = String(datos.nombre ?? '').trim()
   const telefono = telefonoALaVista(datos.telefono)
-  const destino = tipo === 'envio' ? calleNumeroDepto(datos.direccion) : ''
+  const destino = tipo === 'envio' ? calleNumeroDepto(datos.direccion)
+    : tipo === 'correo' ? direccionCompleta(datos.direccion)
+    : ''
   const linkPedidos = `${SITIO_URL}/mis-pedidos`
 
   const asunto = `Tu compra en ${tienda} está confirmada`
@@ -215,18 +216,17 @@ export function armarMailCompra(datos) {
 
   // "Qué pasa ahora" se arma una vez en partes, [texto, enNegrita], y de ahí
   // salen la versión HTML (escapada) y la de texto.
-  const porCorreo = tipoEntregaDe(datos.metodoEnvio) === 'correo'
   const finales = {
     retiro: datos.direccionVisible === false
       ? [[' para coordinar dónde y cuándo lo retirás.']]
       : [[' cuando esté listo para que lo pases a buscar.']],
-    envio: porCorreo
-      ? (destino
-        ? [[' para avisarte cuando lo despache por correo a '], [destino, true], ['.']]
-        : [[' para avisarte cuando lo despache por correo.']])
-      : (destino
-        ? [[' para avisarte en qué franja horaria llega a '], [destino, true], ['.']]
-        : [[' para avisarte en qué franja horaria llega.']]),
+    envio: destino
+      ? [[' para avisarte en qué franja horaria llega a '], [destino, true], ['.']]
+      : [[' para avisarte en qué franja horaria llega.']],
+    // El número de seguimiento llega con el mail de despacho.
+    correo: destino
+      ? [[' cuando lo despache por correo a '], [destino, true], ['. Ahí te mandamos el número de seguimiento.']]
+      : [[' cuando lo despache por correo. Ahí te mandamos el número de seguimiento.']],
     coordinar: [[' para acordar la entrega.']],
   }
   const quePasa = [
@@ -274,11 +274,18 @@ export function armarMailCompra(datos) {
   return { asunto, html: plantilla({ asunto, cuerpo }), texto }
 }
 
-// Recibe { pedido: { id, subtotal_productos, costo_envio, total },
-// nombreVendedor, direccion, franja }.
+// Recibe { pedido: { id, metodo_envio, subtotal_productos, costo_envio, total,
+// envio_empresa, envio_empresa_otra, envio_seguimiento }, nombreVendedor,
+// direccion, franja }.
+//
+// Con el correo no hay franja de entrega (la franja es cuándo lo llevó al
+// correo): esa línea no va, y en su lugar va el seguimiento.
 export function armarMailDespacho({ pedido, nombreVendedor, direccion, franja }) {
   const asunto = `Tu pedido #${pedido.id} fue despachado`
   const titulo = '¡Tu pedido fue despachado! 🚀'
+  const porCorreo = tipoEntregaDe(pedido.metodo_envio) === 'correo'
+  const seguimiento = porCorreo ? seguimientoDe(pedido) : null
+  const franjaVisible = porCorreo ? null : franja
   const envio = tipoEntregaDe(pedido.metodo_envio) === 'coordinar'
     ? 'A coordinar'
     : Number(pedido.costo_envio) === 0 ? 'Gratis' : pesos(pedido.costo_envio)
@@ -289,7 +296,17 @@ export function armarMailDespacho({ pedido, nombreVendedor, direccion, franja })
     tituloTexto(titulo),
     parrafo(`${escapar(nombreVendedor)} acaba de despachar tu pedido ${negrita(`#${pedido.id}`)}.`),
     direccion ? parrafo(`Va camino a ${negrita(escapar(direccion))}.`) : '',
-    franja ? parrafo(`Franja de entrega: ${negrita(escapar(franja))}.`) : '',
+    franjaVisible ? parrafo(`Franja de entrega: ${negrita(escapar(franjaVisible))}.`) : '',
+    seguimiento ? tarjeta('SEGUIMIENTO',
+      `<table ${TABLA} width="100%">${[
+        filaMonto('Empresa', escapar(seguimiento.empresa)),
+        filaMonto('Número', `<span style="white-space:nowrap;">${negrita(escapar(seguimiento.numero))}</span>`),
+      ].join('\n')}</table>` +
+      (seguimiento.url
+        ? `<div style="height:16px;line-height:16px;font-size:16px;">&nbsp;</div>${boton('Seguir mi envío', seguimiento.url, { blanco: true })}` +
+          `<p style="margin:12px 0 0;font-family:${FUENTE_TEXTO};font-size:13px;font-weight:300;line-height:1.6;color:${GRIS};">Copiá el número y pegalo en la página de ${escapar(seguimiento.empresa)}.</p>`
+        : '')
+    ) : '',
     tarjeta('Resumen del pedido', `<table ${TABLA} width="100%">${[
       filaMonto('Productos', pesos(pedido.subtotal_productos)),
       filaMonto('Envío', envio),
@@ -303,7 +320,12 @@ export function armarMailDespacho({ pedido, nombreVendedor, direccion, franja })
     titulo,
     `${nombreVendedor} acaba de despachar tu pedido #${pedido.id}.`,
     direccion ? `Va camino a ${direccion}.` : null,
-    franja ? `Franja de entrega: ${franja}.` : null,
+    franjaVisible ? `Franja de entrega: ${franjaVisible}.` : null,
+    seguimiento
+      ? ['SEGUIMIENTO', `Empresa: ${seguimiento.empresa}`, `Número: ${seguimiento.numero}`,
+          seguimiento.url ? `Seguí tu envío en ${seguimiento.url} (copiá el número y pegalo ahí).` : null]
+          .filter(Boolean).join('\n')
+      : null,
     [
       'Resumen del pedido',
       `Productos: ${pesos(pedido.subtotal_productos)}`,
@@ -575,7 +597,8 @@ export async function avisarDespacho({ admin, pedidoId }) {
       .from('pedidos')
       .select(`
         id, total, metodo_envio, costo_envio, subtotal_productos, franja_horaria,
-        comprador_id, vendedor_nombre,
+        envio_empresa, envio_empresa_otra, envio_seguimiento,
+        comprador_id, vendedor_nombre, direccion_copia,
         vendedor:vendedores ( nombre_negocio ),
         direccion:direcciones ( calle, numero, piso_depto )
       `)
@@ -609,9 +632,10 @@ export async function avisarDespacho({ admin, pedidoId }) {
     const nombreVendedor =
       pedido.vendedor_nombre || pedido.vendedor?.nombre_negocio || 'el vendedor'
 
-    const direccion = pedido.direccion
-      ? `${pedido.direccion.calle} ${pedido.direccion.numero}` +
-        `${pedido.direccion.piso_depto ? `, ${pedido.direccion.piso_depto}` : ''}`
+    // La copia congelada en el pedido; la embebida sólo para los pedidos
+    // anteriores a la copia. Sin dirección (retiro, coordinar), nada.
+    const direccion = metodoPideDireccion(pedido.metodo_envio)
+      ? direccionCompleta(pedido.direccion_copia || pedido.direccion)
       : ''
 
     const resultado = await enviarPorResend({
