@@ -14,29 +14,12 @@
 // Es una función pura: no toca la base ni la red. Quien la llama hace las
 // lecturas y le pasa las filas. Así se puede probar entera sin levantar nada.
 
-export const ZONAS_CORREO_VALIDAS = ['correo_1', 'correo_2', 'correo_3', 'correo_4']
+import {
+  METODOS, normalizarMetodo, metodosParaComprador, zonaDe, precioDeZona,
+} from '@/lib/metodosEntrega'
 
-// 'coordinar' no se ofrece más en el checkout (no está en METODOS_CONOCIDOS),
-// pero hay pedidos viejos con ese método: se trata igual que 'acordar'.
-export const METODOS_SIN_COSTO = ['retiro', 'acordar', 'coordinar']
-
-// Si el método necesita una dirección de entrega. Es la misma regla que aplica
-// calcularEnvio: los métodos sin costo no piden dirección. La usan el servidor
-// (para no guardar una dirección que el método no usa) y el checkout (para no
-// mandarla), así que no hay una segunda lista que se desfase.
-export function metodoPideDireccion(metodoEnvio) {
-  return !METODOS_SIN_COSTO.includes(metodoEnvio)
-}
-
-// Los únicos métodos que el checkout sabe ofrecer.
-//
-// 'metodos_entrega_default' guarda además otros valores que la pantalla no
-// reconoce ('coordinar', 'envio_propio', 'flash_pedidos'), así que el servidor
-// tiene que mirar la MISMA lista. Si no, un vendedor con sólo métodos
-// desconocidos queda en el medio: la pantalla cae en 'acordar' porque no
-// reconoce ninguno, y el servidor lo rechaza porque 'acordar' no está en la
-// base. Ese vendedor no podría vender.
-export const METODOS_CONOCIDOS = ['retiro', 'cadeteria', 'correo', 'acordar']
+// Qué métodos hay, cuáles piden dirección y cuáles se ofrecen a quien compra
+// lo dice src/lib/metodosEntrega.js. Acá sólo se ponen los precios.
 
 // La comisión de la plataforma: 5% sobre los productos, nunca sobre el envío.
 export const COMISION_PRODUCTOS = 0.05
@@ -76,40 +59,42 @@ function rechazo(status, codigo, error, extra = {}) {
   return { ok: false, status, codigo, error, ...extra }
 }
 
-// Qué métodos puede elegir quien compra. Tiene que dar exactamente lo mismo
-// que arma la pantalla del checkout, o hay vendedores que no pueden vender.
+// Cuánto sale el envío según el método. Devuelve { metodo, costo, zona } o un
+// rechazo. 'metodo' es el id de la lista (un nombre viejo que mande una
+// pestaña abierta desde antes llega traducido); 'zona' es el número de zona
+// cobrado (envío de la tienda o correo), o null.
 //
-// Se filtra contra METODOS_CONOCIDOS, y el correo sólo cuenta si al menos una
-// zona tiene precio cargado: sin eso, elegirlo dejaba una lista de zonas vacía.
-// Si no queda ninguno, la salida de emergencia es 'acordar' — la misma de los
-// dos lados.
-export function metodosOfrecidos(vendedor) {
-  const metodos = Array.isArray(vendedor?.metodos_entrega_default)
-    ? vendedor.metodos_entrega_default
-    : []
-  const costos = vendedor?.costos_envio_zona || {}
+// zonaTienda la calcula quien llama, con zonaTiendaPara (src/lib/zonaEnvio.js),
+// para la dirección verificada de quien compra:
+//   undefined  no hay dirección (o la tienda no hace envíos): no se sabe.
+//   null       falta el punto de la tienda o el de la dirección.
+//   1..4       la zona.
+// Con el envío de la tienda, una zona que no se pudo calcular o sin precio es
+// un rechazo. Con el respaldo, sirve para comprobar que de verdad no quedó
+// otra opción para esa dirección.
+export function calcularEnvio({ vendedor, metodoEnvio, hayDireccion, zonaTienda, zonaCorreo }) {
+  const metodo = normalizarMetodo(metodoEnvio)
+  const { disponibles } = metodosParaComprador(vendedor, { zonaTienda })
 
-  const ofrecidos = metodos.filter((m) => {
-    if (!METODOS_CONOCIDOS.includes(m)) return false
-    if (m === 'correo') {
-      return ZONAS_CORREO_VALIDAS.some((zona) => aCentavos(costos[zona]) !== null)
+  if (metodo === 'envio_tienda') {
+    if (!hayDireccion) {
+      return rechazo(400, 'FALTA_DIRECCION', 'Para ese método de entrega hace falta una dirección.')
     }
-    return true
-  })
+    if (zonaTienda === null || zonaTienda === undefined) {
+      return rechazo(400, 'SIN_ZONA', 'No pudimos calcular el envío a esa dirección. Elegí otra dirección u otra forma de entrega.')
+    }
+  }
 
-  return ofrecidos.length > 0 ? ofrecidos : ['acordar']
-}
-
-// Cuánto sale el envío según el método. Devuelve { costo } o un rechazo.
-function calcularEnvio({ vendedor, metodoEnvio, hayDireccion, zonaCadeteria, zonaCorreo }) {
-  const permitidos = metodosOfrecidos(vendedor)
-
-  if (!permitidos.includes(metodoEnvio)) {
+  if (!metodo || !disponibles.includes(metodo)) {
+    if (metodo === 'envio_tienda') {
+      return rechazo(400, 'ZONA_SIN_COSTO', 'Esta tienda no llega a esa dirección.')
+    }
     return rechazo(400, 'METODO_INVALIDO', 'Ese método de entrega no está disponible para esta tienda.')
   }
 
-  if (!metodoPideDireccion(metodoEnvio)) {
-    return { costo: 0 }
+  const definicion = METODOS[metodo]
+  if (definicion.costo !== 'por_zona') {
+    return { metodo, costo: 0, zona: null }
   }
 
   if (!hayDireccion) {
@@ -118,33 +103,24 @@ function calcularEnvio({ vendedor, metodoEnvio, hayDireccion, zonaCadeteria, zon
 
   const costos = vendedor?.costos_envio_zona || {}
 
-  if (metodoEnvio === 'cadeteria') {
-    // zonaCadeteria la calcula quien llama, con la función de la base. null
-    // significa que no se pudo determinar (dirección sin barrio, por ejemplo).
-    if (zonaCadeteria === null || zonaCadeteria === undefined) {
-      return rechazo(400, 'SIN_ZONA', 'No pudimos determinar la zona de envío para esa dirección.')
-    }
-    const costo = aCentavos(costos[`zona_${zonaCadeteria}`])
-    if (costo === null) {
-      return rechazo(400, 'ZONA_SIN_COSTO', 'Esta tienda no hace envíos por cadetería a esa zona.')
-    }
-    return { costo: dePesos(costo) }
+  // Qué zona: la de la base para el envío de la tienda; la que eligió la
+  // persona para el correo (todavía no hay dato del que deducirla). El precio
+  // lo pone siempre el servidor.
+  let zona
+  if (metodo === 'envio_tienda') {
+    zona = zonaDe(metodo, zonaTienda)
+  } else {
+    zona = definicion.zonas.find((z) => z.clave === zonaCorreo || z.zona === Number(zonaCorreo)) || null
+    if (!zona) return rechazo(400, 'ZONA_CORREO_INVALIDA', 'Elegí una zona de envío válida.')
   }
 
-  if (metodoEnvio === 'correo') {
-    // Qué zona de correo es lo elige la persona: no hay dato en la base del
-    // que deducirlo. Lo que sí pone el servidor es el precio de esa zona.
-    if (!ZONAS_CORREO_VALIDAS.includes(zonaCorreo)) {
-      return rechazo(400, 'ZONA_CORREO_INVALIDA', 'Elegí una zona de envío válida.')
-    }
-    const costo = aCentavos(costos[zonaCorreo])
-    if (costo === null) {
-      return rechazo(400, 'ZONA_SIN_COSTO', 'Esta tienda no hace envíos por correo a esa zona.')
-    }
-    return { costo: dePesos(costo) }
+  const precio = zona ? precioDeZona(costos, zona.clave) : null
+  if (precio === null) {
+    return rechazo(400, 'ZONA_SIN_COSTO', metodo === 'correo'
+      ? 'Esta tienda no hace envíos por correo a esa zona.'
+      : 'Esta tienda no llega a esa dirección.')
   }
-
-  return rechazo(400, 'METODO_INVALIDO', 'Ese método de entrega no está disponible para esta tienda.')
+  return { metodo, costo: dePesos(aCentavos(precio)), zona: zona.zona }
 }
 
 export function calcularPedido({
@@ -155,7 +131,7 @@ export function calcularPedido({
   vendedor,
   metodoEnvio,
   hayDireccion,
-  zonaCadeteria,
+  zonaTienda,
   zonaCorreo,
   costoEnvioVisto,
 }) {
@@ -233,7 +209,7 @@ export function calcularPedido({
   }
 
   // ── 2. El envío. También puede cortar. ──
-  const envio = calcularEnvio({ vendedor, metodoEnvio, hayDireccion, zonaCadeteria, zonaCorreo })
+  const envio = calcularEnvio({ vendedor, metodoEnvio, hayDireccion, zonaTienda, zonaCorreo })
   if (envio.ok === false) return envio
 
   // ── 3. ¿Cambió algo desde que lo vio? ──
@@ -284,6 +260,8 @@ export function calcularPedido({
     ok: true,
     lineas: lineas.map(({ precioVisto, ...resto }) => resto),
     subtotal,
+    metodo: envio.metodo,
+    zonaEnvio: envio.zona,
     costoEnvio: envio.costo,
     total,
     comision,

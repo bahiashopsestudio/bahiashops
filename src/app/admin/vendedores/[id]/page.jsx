@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import Navbar from '@/components/Navbar'
+import { etiquetaMetodo } from '@/lib/metodosEntrega'
 
 const ESTADOS = {
   pendiente:        { etiqueta: 'Pendiente',        color: '#6b6d00', fondo: '#f1f29f' },
@@ -22,10 +23,6 @@ const ETIQUETAS_DESPACHO = {
   '2_5_dias': '2 a 5 días hábiles', mas_5_dias: 'Más de 5 días / a coordinar',
 }
 
-const ETIQUETAS_ENTREGA = {
-  retiro: 'Retiro en el local', coordinar: 'A coordinar', envio_propio: 'Envío propio',
-  flash_pedidos: 'Uber Flash / PedidosYa', correo: 'Correo / encomienda',
-}
 
 const ETIQUETAS_PLATAFORMA = {
   no_tengo: 'No tiene', tienda_nube: 'Tienda Nube', empretienda: 'Empretienda',
@@ -438,7 +435,7 @@ export default function AdminVendedorDetallePage() {
               </Dato>
               <Dato etiqueta="Métodos de entrega">
                 {vendedor.metodos_entrega_default?.length
-                  ? vendedor.metodos_entrega_default.map((m) => ETIQUETAS_ENTREGA[m] || m).join(' · ')
+                  ? vendedor.metodos_entrega_default.map((m) => etiquetaMetodo(m, 'admin')).join(' · ')
                   : null}
               </Dato>
               <Dato etiqueta="MercadoPago">

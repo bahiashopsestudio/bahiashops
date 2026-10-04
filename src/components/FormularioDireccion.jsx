@@ -157,6 +157,13 @@ export default function FormularioDireccion({ onGuardada, onCancelar, esPrimera 
       return;
     }
 
+    // El punto es lo que se usa para calcular el envío de la tienda. Una
+    // dirección vieja sin punto se puede editar, pero no guardar sin ubicarla.
+    if (latitud === null || latitud === undefined || longitud === null || longitud === undefined) {
+      alert('Ubicá la dirección en el mapa con el botón "Ubicar en el mapa": la usamos para calcular el costo de envío.');
+      return;
+    }
+
     if (!barrioId) {
       alert('Necesitamos saber tu barrio para calcular el costo de envío. Usá el botón "Ubicar en el mapa" o elegí tu barrio manualmente.');
       return;

@@ -8,7 +8,7 @@ import MenuTakeover from '@/components/MenuTakeover';
 import VolverAtras from '@/components/VolverAtras';
 import AvatarApodo from '@/components/AvatarApodo';
 import { linkWhatsApp } from '@/lib/telefono';
-import { metodoPideDireccion } from '@/lib/precioPedido';
+import { grupoEntrega, etiquetaMetodo, zonaDe } from '@/lib/metodosEntrega';
 
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage'];
 
@@ -27,11 +27,16 @@ const ESTADOS = {
 };
 
 // Cómo le llega el pedido a quien compra, para elegir el texto del WhatsApp:
-// 'retiro', 'acordar' (cualquier otro método sin dirección) o 'envio'.
+// 'retiro', 'coordinar' o 'envio'. La regla está en metodosEntrega.js.
 function tipoEntrega(p) {
-  if (p.metodo_envio === 'retiro') return 'retiro';
-  if (!metodoPideDireccion(p.metodo_envio)) return 'acordar';
-  return 'envio';
+  return grupoEntrega(p.metodo_envio);
+}
+
+// "Envío de la tienda · zona 2", para el panel.
+function textoEntrega(p) {
+  const etiqueta = etiquetaMetodo(p.metodo_envio, 'vendedor');
+  const zona = p.zona_envio ? zonaDe(p.metodo_envio, p.zona_envio) : null;
+  return zona ? `${etiqueta} · zona ${zona.zona}` : etiqueta;
 }
 
 // "Calle número" para el mensaje: primero la copia congelada en el pedido,
@@ -56,7 +61,7 @@ const ACCIONES = {
     // viene a buscar.
     mensajeWA: (p, franja, nombre) =>
       `¡Hola! Te escribimos de ${nombre}. Ya estamos preparando tu pedido con el código número #${p.id}. ` +
-      (p.metodo_envio === 'retiro'
+      (tipoEntrega(p) === 'retiro'
         ? '¡Te avisamos cuando esté listo para retirar!'
         : '¡Te avisamos cuando esté por salir!'),
   },
@@ -69,7 +74,7 @@ const ACCIONES = {
       if (tipo === 'retiro') {
         return `¡Hola! Te escribimos de ${nombre}. Tu pedido #${p.id} va a estar listo para retirar por la ${f}.`;
       }
-      if (tipo === 'acordar') {
+      if (tipo === 'coordinar') {
         return `¡Hola! Te escribimos de ${nombre} por tu pedido #${p.id}. Lo tendríamos listo por la ${f}. ¿Cómo te queda para coordinar la entrega?`;
       }
       const destino = calleYNumero(p);
@@ -86,7 +91,7 @@ const ACCIONES = {
       if (tipo === 'retiro') {
         return `¡Hola! Tu pedido #${p.id} ya está listo para retirar en ${nombre}. ¡Te esperamos!`;
       }
-      if (tipo === 'acordar') {
+      if (tipo === 'coordinar') {
         return `¡Hola! Tu pedido #${p.id} de ${nombre} ya está listo. Escribinos y coordinamos la entrega.`;
       }
       const destino = calleYNumero(p);
@@ -431,7 +436,7 @@ function PedidoCard({ pedido, abierto, items, avanzando, onToggle, onAvanzar }) 
               </span>
             </div>
             <p className="mt-0.5 mb-0 text-[11px] text-[#0a0a0a]/25 font-light">
-              {p.metodo_envio} · {tiempoRelativo(p.creado_en)}
+              {textoEntrega(p)} · {tiempoRelativo(p.creado_en)}
             </p>
           </div>
 
@@ -458,7 +463,7 @@ function PedidoCard({ pedido, abierto, items, avanzando, onToggle, onAvanzar }) 
 
           <div className="mb-4">
             <p className="m-0 mb-1.5 text-[11px] text-[#0a0a0a]/25 font-light uppercase tracking-wider">Entrega</p>
-            <p className="m-0 text-sm text-[#0a0a0a]/60 font-light">{p.metodo_envio}</p>
+            <p className="m-0 text-sm text-[#0a0a0a]/60 font-light">{textoEntrega(p)}</p>
             {p.turno_preferido && (
               <p className="m-0 text-[11px] text-[#0a0a0a]/25 font-light">Preferencia: {p.turno_preferido.toLowerCase()}</p>
             )}

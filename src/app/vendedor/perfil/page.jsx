@@ -9,6 +9,7 @@ import Navbar from '@/components/Navbar';
 import MenuTakeover from '@/components/MenuTakeover';
 import VolverAtras from '@/components/VolverAtras';
 import EstadoValidacion from '@/components/EstadoValidacion';
+import { entregaConfigurada } from '@/lib/metodosEntrega';
 
 
 // --- Utilidades de recorte ---
@@ -82,6 +83,8 @@ export default function PerfilVendedorPage() {
   // Sin punto, la tienda no aparece en el mapa (por ejemplo, si en el alta
   // no se pudo guardar la ubicación).
   const [sinUbicacion, setSinUbicacion] = useState(false);
+  // Sin formas de entrega listas, quien compra sólo ve "Coordinar".
+  const [sinEntrega, setSinEntrega] = useState(false);
   const [cargando, setCargando] = useState(true);
 
   const [recorte, setRecorte] = useState(null);
@@ -129,7 +132,7 @@ export default function PerfilVendedorPage() {
       if (!user) { router.replace('/entrar?next=%2Fvendedor%2Fperfil'); return; }
       const { data, error } = await supabase
         .from('vendedores')
-        .select('id, nombre_negocio, slug, logo_url, portada_url, mercadopago_conectado, estado_validacion, bloqueado, latitud')
+        .select('id, nombre_negocio, slug, logo_url, portada_url, mercadopago_conectado, estado_validacion, bloqueado, latitud, metodos_entrega_default, costos_envio_zona')
         .eq('usuario_id', user.id)
         .single();
       if (error) {
@@ -144,6 +147,7 @@ export default function PerfilVendedorPage() {
         setSlugTienda(data.slug || null);
         setBloqueado(data.bloqueado === true);
         setSinUbicacion(data.latitud === null);
+        setSinEntrega(!entregaConfigurada(data));
 
         // El mensaje del admin sólo se muestra cuando pide cambios, y no se
         // puede leer desde el navegador: va por la ruta de datos privados. Si
@@ -356,8 +360,19 @@ export default function PerfilVendedorPage() {
               </Link>
             )}
 
+            {/* ═══ AVISO: SIN FORMAS DE ENTREGA ═══ */}
+            {sinEntrega && (
+              <Link href="/vendedor/envios" className={`${sinUbicacion ? 'mt-4' : 'mt-10'} flex items-center gap-3 p-4 rounded-2xl border border-amber-200 bg-amber-50 no-underline text-amber-900 hover:bg-amber-100/60 transition-colors`}>
+                <span className="text-lg">🚚</span>
+                <span className="flex-1 text-[13px] font-light leading-relaxed">
+                  <span className="font-medium">Elegí cómo entregás tus pedidos.</span> Mientras tanto, quien compra solo puede coordinar la entrega con vos por WhatsApp.
+                </span>
+                <Chevron />
+              </Link>
+            )}
+
             {/* ═══ MENÚ DEL NEGOCIO ═══ */}
-            <div className={`${sinUbicacion ? 'mt-4' : 'mt-10'} rounded-2xl border border-[#0a0a0a]/5 divide-y divide-[#0a0a0a]/5 overflow-hidden`}>
+            <div className={`${sinUbicacion || sinEntrega ? 'mt-4' : 'mt-10'} rounded-2xl border border-[#0a0a0a]/5 divide-y divide-[#0a0a0a]/5 overflow-hidden`}>
               <Link href="/vendedor/productos" className="flex items-center gap-3 px-5 py-4 no-underline text-[#0a0a0a] hover:bg-[#0a0a0a]/[0.02] transition-colors">
                 <span className="text-lg">📦</span>
                 <span className="flex-1 text-sm font-light">Mis productos</span>
@@ -370,7 +385,7 @@ export default function PerfilVendedorPage() {
               </Link>
               <Link href="/vendedor/envios" className="flex items-center gap-3 px-5 py-4 no-underline text-[#0a0a0a] hover:bg-[#0a0a0a]/[0.02] transition-colors">
                 <span className="text-lg">🚚</span>
-                <span className="flex-1 text-sm font-light">Costos de envío</span>
+                <span className="flex-1 text-sm font-light">Cómo entregás</span>
                 <Chevron />
               </Link>
               <Link href="/vendedor/ubicacion" className="flex items-center gap-3 px-5 py-4 no-underline text-[#0a0a0a] hover:bg-[#0a0a0a]/[0.02] transition-colors">

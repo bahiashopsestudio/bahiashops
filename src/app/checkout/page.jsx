@@ -4,7 +4,10 @@ import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { idsDisponibles, itemsNoDisponibles } from '@/lib/disponibilidad'
-import { metodosOfrecidos, metodoPideDireccion } from '@/lib/precioPedido'
+import {
+  METODOS, ORDEN_METODOS, ZONAS_CORREO, metodosParaComprador, metodosConfigurados,
+  metodoPideDireccion, etiquetaMetodo, precioDeZona, textoCostoEnvio,
+} from '@/lib/metodosEntrega'
 import { useCarrito } from '@/context/CarritoContext'
 import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
@@ -18,13 +21,6 @@ const MENU_CATEGORIAS = [
   'hogar-y-deco', 'artes-y-oficios', 'bebes-y-maternidad',
   'juegos-y-juguetes', 'mascotas', 'libros',
   'deporte', 'vintage',
-]
-
-const ZONAS_CORREO = [
-  { key: 'correo_1', nombre: 'Zona 1', descripcion: 'Buenos Aires, Córdoba, Entre Ríos, La Pampa, Santa Fe' },
-  { key: 'correo_2', nombre: 'Zona 2', descripcion: 'Mendoza, San Luis, San Juan, Neuquén, Río Negro, La Rioja' },
-  { key: 'correo_3', nombre: 'Zona 3', descripcion: 'Tucumán, Salta, Jujuy, Catamarca, Chaco, Corrientes, Formosa, Misiones, Sgo. del Estero' },
-  { key: 'correo_4', nombre: 'Zona 4', descripcion: 'Chubut, Santa Cruz, Tierra del Fuego' },
 ]
 
 // Los tres pasos del checkout, en orden.
@@ -109,15 +105,18 @@ function CheckoutContenido() {
   // volver a mirar los números.
   const [avisoPrecios, setAvisoPrecios] = useState('')
 
-  const [vendedorBarrioId, setVendedorBarrioId] = useState(null)
-  // Si la tienda no muestra su dirección, el retiro se coordina con ella.
-  const [retiroACoordinar, setRetiroACoordinar] = useState(false)
-  const [metodosDisponibles, setMetodosDisponibles] = useState([])
-  const [costosVendedor, setCostosVendedor] = useState({})
-  const [zonaCadeteria, setZonaCadeteria] = useState(null)
-  const [costoCadeteria, setCostoCadeteria] = useState(null)
-  const [calculandoZona, setCalculandoZona] = useState(false)
-  const [sinBarrio, setSinBarrio] = useState(false)
+  // Lo que la tienda configuró: métodos, precios y si muestra su dirección
+  // (si no, el retiro se coordina con ella).
+  const [entregaTienda, setEntregaTienda] = useState({ metodos_entrega_default: [], costos_envio_zona: {} })
+  const [direccionVisibleTienda, setDireccionVisibleTienda] = useState(null)
+  // La cotización del envío de la tienda para la dirección elegida, de
+  // /api/envio/cotizar. { direccionId, estado, zona, costo }; estado es
+  // 'ok', 'sin_precio', 'sin_zona', 'no_ofrece' o 'error'. Si es de otra
+  // dirección, todavía no llegó la de la elegida.
+  const [cotizacion, setCotizacion] = useState(null)
+  // Para cambiar de dirección cuando el envío de la tienda no llega a la
+  // elegida (la opción está deshabilitada y no abre las direcciones).
+  const [mostrarDirecciones, setMostrarDirecciones] = useState(false)
   const [zonaCorreoElegida, setZonaCorreoElegida] = useState(null)
 
   useEffect(() => {
@@ -125,11 +124,26 @@ function CheckoutContenido() {
     return () => { document.body.style.overflow = '' }
   }, [menuOpen])
 
+  // ── Qué métodos ve quien compra ──
+  // La regla es metodosParaComprador(), de src/lib/metodosEntrega.js: la
+  // misma con la que el servidor valida. Acá sólo se decide cómo se ven.
+  const tiendaHaceEnvio = metodosConfigurados(entregaTienda).includes('envio_tienda')
+  const cotizacionVigente = cotizacion && cotizacion.direccionId === direccionElegida ? cotizacion : null
+
+  // Lo que se sabe de la dirección elegida para el envío de la tienda:
+  // undefined todavía no se sabe; null no se pudo calcular; 1..4 la zona.
+  let zonaTienda
+  if (direccionElegida && cotizacionVigente) {
+    if (cotizacionVigente.estado === 'ok' || cotizacionVigente.estado === 'sin_precio') zonaTienda = cotizacionVigente.zona
+    else if (cotizacionVigente.estado === 'sin_zona') zonaTienda = null
+  }
+  const { disponibles, noDisponibles, respaldo } = metodosParaComprador(entregaTienda, { zonaTienda })
+  const visibles = ORDEN_METODOS.filter((id) => disponibles.includes(id) || noDisponibles.includes(id))
+  const elegido = visibles.includes(metodoElegido) ? metodoElegido : null
+
   function costoEnvioActual() {
-    if (metodoElegido === 'retiro') return 0
-    if (metodoElegido === 'cadeteria') return costoCadeteria ?? 0
-    if (metodoElegido === 'correo' && zonaCorreoElegida) return costosVendedor[zonaCorreoElegida] ?? 0
-    if (metodoElegido === 'acordar') return 0
+    if (elegido === 'envio_tienda') return cotizacionVigente?.estado === 'ok' ? cotizacionVigente.costo : 0
+    if (elegido === 'correo' && zonaCorreoElegida) return precioDeZona(entregaTienda.costos_envio_zona, zonaCorreoElegida) ?? 0
     return 0
   }
 
@@ -137,10 +151,15 @@ function CheckoutContenido() {
   const subtotal = subtotalLocal(vendedorId)
   const total = subtotal + costoEnvio
 
-  const metodoPideDir = !!metodoElegido && metodoPideDireccion(metodoElegido)
-  const cadeteriaSinCosto = metodoElegido === 'cadeteria' && costoCadeteria === null && !calculandoZona
-  const correoSinZona = metodoElegido === 'correo' && !zonaCorreoElegida
-  const entregaLista = metodoElegido && (!metodoPideDir || direccionElegida) && !cadeteriaSinCosto && !correoSinZona && !sinBarrio
+  const metodoPideDir = !!elegido && metodoPideDireccion(elegido)
+  // El respaldo "coordinar" que aparece porque la tienda no llega a esta
+  // dirección: el servidor necesita la dirección para comprobarlo (no la
+  // guarda).
+  const respaldoPorDireccion = elegido === 'coordinar' && respaldo && noDisponibles.includes('envio_tienda')
+  const envioListo = elegido !== 'envio_tienda' || cotizacionVigente?.estado === 'ok'
+  const correoSinZona = elegido === 'correo' && !zonaCorreoElegida
+  const entregaLista = !!elegido && disponibles.includes(elegido) &&
+    (!metodoPideDir || !!direccionElegida) && envioListo && !correoSinZona
 
   const celular = estadoCelular(formCaracteristica, formNumero)
   const datosListos = !!formNombre.trim() && !!formApellido.trim() && celular.tipo === 'valido'
@@ -220,23 +239,31 @@ function CheckoutContenido() {
     return () => { cancelado = true }
   }, [carritoListo, vendedorId, firmaItems])
 
+  // La cotización del envío de la tienda: cada vez que cambian la dirección
+  // o los precios de la tienda. La respuesta de una dirección vieja no pisa
+  // la de la nueva; mientras no llega la de la dirección elegida, se ve
+  // "Calculando..." (cotizacionVigente es null).
   useEffect(() => {
-    async function calcularZona() {
-      if (metodoElegido !== 'cadeteria' || !direccionElegida || !vendedorBarrioId) return
-      const dir = direcciones.find(d => d.id === direccionElegida)
-      if (!dir) return
-      if (!dir.barrio_id) { setSinBarrio(true); setCostoCadeteria(null); setZonaCadeteria(null); return }
-      setSinBarrio(false); setCalculandoZona(true)
-      const { data: zona, error } = await supabase.rpc('calcular_zona_envio', { barrio_vendedor_id: vendedorBarrioId, barrio_comprador_id: dir.barrio_id })
-      if (error) { setCostoCadeteria(null); setZonaCadeteria(null) } else {
-        setZonaCadeteria(zona)
-        const costo = costosVendedor[`zona_${zona}`]
-        setCostoCadeteria(costo !== undefined && costo !== null ? costo : null)
+    if (!tiendaHaceEnvio || !direccionElegida) return
+    let cancelado = false
+    async function cotizar() {
+      try {
+        const res = await fetch('/api/envio/cotizar', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ vendedorId, direccionId: direccionElegida }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (cancelado) return
+        setCotizacion(res.ok
+          ? { direccionId: direccionElegida, estado: data.estado, zona: data.zona ?? null, costo: data.costo ?? null }
+          : { direccionId: direccionElegida, estado: 'error', zona: null, costo: null })
+      } catch {
+        if (!cancelado) setCotizacion({ direccionId: direccionElegida, estado: 'error', zona: null, costo: null })
       }
-      setCalculandoZona(false)
     }
-    calcularZona()
-  }, [metodoElegido, direccionElegida, vendedorBarrioId, costosVendedor, direcciones])
+    cotizar()
+    return () => { cancelado = true }
+  }, [tiendaHaceEnvio, direccionElegida, vendedorId, entregaTienda])
 
   useEffect(() => { if (metodoElegido !== 'correo') setZonaCorreoElegida(null) }, [metodoElegido])
 
@@ -284,12 +311,13 @@ function CheckoutContenido() {
   // Los costos de envío del vendedor. Se recargan si el servidor avisa que el
   // envío cambió mientras la persona estaba en esta pantalla.
   async function cargarVendedor() {
-    const { data: vendedor } = await supabase.from('vendedores').select('barrio_id, direccion_visible, metodos_entrega_default, costos_envio_zona').eq('id', vendedorId).single()
+    const { data: vendedor } = await supabase.from('vendedores').select('direccion_visible, metodos_entrega_default, costos_envio_zona').eq('id', vendedorId).single()
     if (vendedor) {
-      setVendedorBarrioId(vendedor.barrio_id)
-      setRetiroACoordinar(vendedor.direccion_visible === false)
-      setMetodosDisponibles(vendedor.metodos_entrega_default || [])
-      setCostosVendedor(vendedor.costos_envio_zona || {})
+      setDireccionVisibleTienda(vendedor.direccion_visible)
+      setEntregaTienda({
+        metodos_entrega_default: vendedor.metodos_entrega_default || [],
+        costos_envio_zona: vendedor.costos_envio_zona || {},
+      })
     }
   }
 
@@ -306,12 +334,14 @@ function CheckoutContenido() {
         body: JSON.stringify({
           vendedorId: local.vendedorId,
           items: local.items,
-          metodoEnvio: metodoElegido,
-          // Retiro y acordar no usan dirección: no se manda. El servidor igual
-          // la descarta si llega.
-          direccionId: metodoPideDir ? direccionElegida : null,
-          turnoPreferido: turno,
-          zonaCorreo: metodoElegido === 'correo' ? zonaCorreoElegida : null,
+          metodoEnvio: elegido,
+          // Retiro y coordinar no usan dirección: no se manda, salvo en el
+          // respaldo por dirección, donde el servidor la usa para comprobar
+          // que la tienda no llega (y no la guarda).
+          direccionId: metodoPideDir || respaldoPorDireccion ? direccionElegida : null,
+          // La preferencia de turno sólo existe en los métodos que la piden.
+          turnoPreferido: METODOS[elegido]?.pideTurno ? turno : null,
+          zonaCorreo: elegido === 'correo' ? zonaCorreoElegida : null,
           costoEnvio,
         }),
       })
@@ -505,44 +535,68 @@ function CheckoutContenido() {
     )
   }
 
-  // CUÁLES se ofrecen lo decide metodosOfrecidos(), en src/lib/precioPedido.js:
-  // el mismo módulo con el que el servidor los valida. Si la regla viviera
-  // también acá, las dos copias se separarían sin que nadie se entere, y un
-  // vendedor quedaría con métodos que la pantalla ofrece y el servidor
-  // rechaza. Acá sólo se decide CÓMO se ven y en qué orden.
-  const ofrecidos = metodosOfrecidos({
-    metodos_entrega_default: metodosDisponibles,
-    costos_envio_zona: costosVendedor,
-  })
-
-  // 'acordar' puede llegar porque el vendedor lo eligió, o como salida de
-  // emergencia cuando no le quedó ningún método usable. El texto cambia.
-  const acordarEsRespaldo = !metodosDisponibles.includes('acordar')
-
-  // Construir métodos
-  const metodos = []
-  if (ofrecidos.includes('retiro')) {
-    metodos.push(retiroACoordinar
-      ? { id: 'retiro', label: 'Retiro', sub: 'Coordinás con la tienda dónde y cuándo', costoLabel: 'Gratis', pideDireccion: false, pideTurno: false }
-      : { id: 'retiro', label: 'Retiro en el local', sub: 'Retirás en la dirección del vendedor', costoLabel: 'Gratis', pideDireccion: false, pideTurno: false })
-  }
-  if (ofrecidos.includes('cadeteria')) {
-    let costoLabel = 'Seleccioná una dirección'
-    if (calculandoZona) costoLabel = 'Calculando...'
-    else if (sinBarrio) costoLabel = 'Dirección sin barrio'
-    else if (costoCadeteria !== null) costoLabel = `$${fmt(costoCadeteria)}`
-    else if (costoCadeteria === null && zonaCadeteria) costoLabel = 'No disponible'
-    metodos.push({ id: 'cadeteria', label: 'Cadetería', sub: 'Envío dentro de Bahía Blanca', costoLabel, pideDireccion: true, pideTurno: true })
-  }
-  if (ofrecidos.includes('correo')) {
-    let costoLabel = 'Elegí tu zona'
-    if (zonaCorreoElegida) { const c = costosVendedor[zonaCorreoElegida]; costoLabel = c !== null && c !== undefined ? `$${fmt(c)}` : 'No disponible' }
-    metodos.push({ id: 'correo', label: 'Envío por correo', sub: 'Otras localidades', costoLabel, pideDireccion: true, pideTurno: false })
-  }
-  if (ofrecidos.includes('acordar')) metodos.push({ id: 'acordar', label: 'Acordar con el vendedor', sub: acordarEsRespaldo ? 'El vendedor aún no configuró envíos' : 'Coordinás por WhatsApp', costoLabel: 'A coordinar', pideDireccion: false, pideTurno: false })
-
-  const metodoActual = metodos.find(m => m.id === metodoElegido)
+  // Cómo se ve cada método. Cuáles se ofrecen ya lo decidió
+  // metodosParaComprador() más arriba.
+  const tienda = local.vendedorNombre || 'La tienda'
   const dirElegida = direcciones.find((d) => d.id === direccionElegida)
+  const sinDireccionVisible = direccionVisibleTienda === false
+
+  function vistaMetodo(id) {
+    const def = METODOS[id]
+    const base = {
+      id,
+      label: etiquetaMetodo(id, 'comprador', { direccionVisible: direccionVisibleTienda }),
+      sub: def.detalleComprador,
+      deshabilitado: noDisponibles.includes(id),
+      pideDireccion: def.pideDireccion,
+      pideTurno: def.pideTurno,
+    }
+
+    if (id === 'retiro') {
+      return { ...base, sub: sinDireccionVisible ? def.detalleCompradorSinDireccion : def.detalleComprador, costoLabel: 'Gratis' }
+    }
+
+    if (id === 'envio_tienda') {
+      const c = cotizacionVigente
+      let costoLabel = 'Según tu zona'
+      let sub = base.sub
+      if (direccionElegida && !c) costoLabel = 'Calculando...'
+      else if (c?.estado === 'ok') costoLabel = c.costo === 0 ? 'Envío gratis' : `Envío a tu zona: $${fmt(c.costo)}`
+      else if (c?.estado === 'sin_precio') { costoLabel = 'No llega'; sub = `${tienda} no llega a tu dirección` }
+      else if (c?.estado === 'sin_zona') {
+        costoLabel = 'No disponible'
+        sub = dirElegida && (dirElegida.lat == null || dirElegida.lng == null)
+          ? 'Tu dirección no está ubicada en el mapa: no podemos calcular el envío'
+          : 'No pudimos calcular el envío a tu dirección'
+      }
+      else if (c?.estado === 'error') costoLabel = 'No pudimos calcular'
+      return { ...base, sub, costoLabel }
+    }
+
+    if (id === 'correo') {
+      let costoLabel = 'Elegí tu zona'
+      if (zonaCorreoElegida) {
+        const precio = precioDeZona(entregaTienda.costos_envio_zona, zonaCorreoElegida)
+        costoLabel = precio === null ? 'No disponible' : textoCostoEnvio('correo', precio)
+      }
+      return { ...base, costoLabel }
+    }
+
+    // coordinar
+    let sub = def.detalleComprador
+    if (respaldo) {
+      sub = noDisponibles.includes('envio_tienda')
+        ? `${tienda} no llega a tu dirección: arreglan la entrega por WhatsApp`
+        : def.detalleCompradorRespaldo
+    }
+    return { ...base, sub, costoLabel: 'A coordinar' }
+  }
+
+  const metodos = visibles.map(vistaMetodo)
+  const metodoActual = metodos.find((m) => m.id === elegido)
+  // Las direcciones se muestran con un método que las pide, o cuando el envío
+  // de la tienda no llega a la elegida y se quiere probar con otra.
+  const verDirecciones = metodoActual?.pideDireccion || (mostrarDirecciones && noDisponibles.includes('envio_tienda'))
   // Estilos del paso "Tus datos": los mismos del resto del sitio.
   const estiloTitulo = { fontFamily: 'Fraunces, serif', fontWeight: 500, fontSize: '24px', color: '#0a0a0a', letterSpacing: '-0.02em', marginBottom: '6px' }
   const estiloParrafo = { fontFamily: 'Poppins, sans-serif', fontWeight: 300, fontSize: '14px', color: 'rgba(10,10,10,0.5)', lineHeight: 1.6 }
@@ -692,12 +746,19 @@ function CheckoutContenido() {
                 {/* Métodos */}
                 <div className="mb-6">
                   {metodos.map((m) => {
-                    const sel = metodoElegido === m.id
+                    const sel = elegido === m.id
+                    // Deshabilitada: se ve, pero no se elige. Si ya estaba
+                    // elegida (se cambió la dirección), queda marcada para que
+                    // se pueda volver a cambiar la dirección.
+                    const bloqueada = m.deshabilitado && !sel
                     return (
                       <div key={m.id}>
                         <div
-                          onClick={() => setMetodoElegido(m.id)}
-                          className={`flex items-center gap-3 p-4 rounded-xl cursor-pointer mb-2 transition ${
+                          onClick={() => { if (!bloqueada) setMetodoElegido(m.id) }}
+                          aria-disabled={m.deshabilitado}
+                          className={`flex items-center gap-3 p-4 rounded-xl mb-2 transition ${
+                            bloqueada ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+                          } ${
                             sel ? 'border-2 border-[#0a0a0a]' : 'border border-[#0a0a0a]/10 hover:border-[#0a0a0a]/20'
                           }`}
                         >
@@ -706,40 +767,47 @@ function CheckoutContenido() {
                           </div>
                           <div className="flex-1">
                             <div className="text-sm font-medium text-[#0a0a0a]">{m.label}</div>
-                            {m.sub && <div className="text-xs text-[#0a0a0a]/30 font-light">{m.sub}</div>}
+                            {m.sub && <div className={`text-xs font-light ${m.deshabilitado ? 'text-red-700/70' : 'text-[#0a0a0a]/30'}`}>{m.sub}</div>}
                           </div>
-                          <span className={`text-sm font-light ${m.costoLabel === 'Gratis' ? 'text-green-600' : 'text-[#0a0a0a]/60'}`}>{m.costoLabel}</span>
+                          <span className={`text-sm font-light text-right ${m.costoLabel === 'Gratis' || m.costoLabel === 'Envío gratis' ? 'text-green-600' : 'text-[#0a0a0a]/60'}`}>{m.costoLabel}</span>
                         </div>
+
+                        {/* Envío de la tienda que no llega: se puede probar otra dirección */}
+                        {bloqueada && m.id === 'envio_tienda' && !verDirecciones && (
+                          <button type="button" onClick={() => setMostrarDirecciones(true)}
+                            className="ml-10 -mt-1 mb-3 text-xs text-[#0a0a0a]/50 underline underline-offset-2 cursor-pointer bg-transparent border-none p-0">
+                            Probar con otra dirección
+                          </button>
+                        )}
 
                         {/* Correo: zonas */}
                         {sel && m.id === 'correo' && (
                           <div className="ml-10 mb-3">
                             <p className="text-xs text-[#0a0a0a]/30 font-light mb-2">¿En qué zona estás?</p>
                             {ZONAS_CORREO.map(zc => {
-                              const costo = costosVendedor[zc.key]
-                              if (costo === null || costo === undefined) return null
-                              const selZ = zonaCorreoElegida === zc.key
+                              const costo = precioDeZona(entregaTienda.costos_envio_zona, zc.clave)
+                              if (costo === null) return null
+                              const selZ = zonaCorreoElegida === zc.clave
                               return (
-                                <div key={zc.key} onClick={() => setZonaCorreoElegida(zc.key)} className={`flex items-center gap-2 p-3 rounded-lg cursor-pointer mb-1 ${selZ ? 'bg-[#F5F2EC]' : ''}`}>
+                                <div key={zc.clave} onClick={() => setZonaCorreoElegida(zc.clave)} className={`flex items-center gap-2 p-3 rounded-lg cursor-pointer mb-1 ${selZ ? 'bg-[#F5F2EC]' : ''}`}>
                                   <div className={`w-3.5 h-3.5 rounded-full border-[1.5px] flex items-center justify-center shrink-0 ${selZ ? 'border-[#0a0a0a]' : 'border-[#0a0a0a]/15'}`}>
                                     {selZ && <div className="w-1.5 h-1.5 rounded-full bg-[#0a0a0a]" />}
                                   </div>
                                   <div className="flex-1">
                                     <div className="text-sm font-medium text-[#0a0a0a]">{zc.nombre}</div>
-                                    <div className="text-[10px] text-[#0a0a0a]/25 font-light">{zc.descripcion}</div>
+                                    <div className="text-[10px] text-[#0a0a0a]/25 font-light">{zc.detalle}</div>
                                   </div>
-                                  <span className="text-xs text-[#0a0a0a]/60">${fmt(costo)}</span>
+                                  <span className="text-xs text-[#0a0a0a]/60">{textoCostoEnvio('correo', costo)}</span>
                                 </div>
                               )
                             })}
                           </div>
                         )}
 
-                        {sel && m.id === 'cadeteria' && sinBarrio && (
-                          <div className="ml-10 mb-3 p-3 bg-amber-50 rounded-lg text-xs text-amber-700">Tu dirección no tiene barrio asignado. Agregá una nueva con barrio.</div>
-                        )}
-                        {sel && m.id === 'cadeteria' && !sinBarrio && costoCadeteria === null && zonaCadeteria && (
-                          <div className="ml-10 mb-3 p-3 bg-red-50 rounded-lg text-xs text-red-700">Este vendedor no hace envíos a tu zona.</div>
+                        {sel && m.deshabilitado && (
+                          <div className="ml-10 mb-3 p-3 bg-red-50 rounded-lg text-xs text-red-700">
+                            {m.sub}. Elegí otra dirección u otra forma de entrega.
+                          </div>
                         )}
                       </div>
                     )
@@ -762,7 +830,7 @@ function CheckoutContenido() {
                 )}
 
                 {/* Dirección */}
-                {metodoActual?.pideDireccion && (
+                {verDirecciones && (
                   <div className="mb-6">
                     <label className="block text-sm text-[#0a0a0a]/40 font-light mb-3">¿A dónde lo enviamos?</label>
 
@@ -785,6 +853,7 @@ function CheckoutContenido() {
                                   <span className="text-sm font-medium text-[#0a0a0a]">{dir.etiqueta || 'Sin etiqueta'}</span>
                                   {dir.es_principal && <span className="text-[10px] bg-[#F5F2EC] text-[#0a0a0a]/50 px-2 py-0.5 rounded-full font-light">Principal</span>}
                                   {!dir.barrio_id && <span className="text-[10px] bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full font-light">Sin barrio</span>}
+                                  {(dir.lat == null || dir.lng == null) && <span className="text-[10px] bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full font-light">Sin ubicar en el mapa</span>}
                                 </div>
                                 <p className="text-xs text-[#0a0a0a]/40 font-light mt-1">
                                   {dir.calle} {dir.numero}{dir.piso_depto ? `, ${dir.piso_depto}` : ''} · Tel. {dir.telefono}
@@ -809,10 +878,10 @@ function CheckoutContenido() {
                   </div>
                 )}
 
-                {metodoElegido === 'acordar' && (
+                {elegido === 'coordinar' && (
                   <div className="flex gap-3 items-start bg-[#F5F2EC] rounded-xl p-4 mb-4">
                     <span className="text-sm">💬</span>
-                    <p className="text-xs text-[#0a0a0a]/40 font-light leading-relaxed">Pagás solo los productos ahora. El envío lo coordinás con {local.vendedorNombre} por WhatsApp después.</p>
+                    <p className="text-xs text-[#0a0a0a]/40 font-light leading-relaxed">Pagás solo los productos ahora. La entrega la coordinás con {local.vendedorNombre} por WhatsApp después.</p>
                   </div>
                 )}
 
@@ -867,8 +936,14 @@ function CheckoutContenido() {
                     <span className="text-[#0a0a0a]">${fmt(subtotal)}</span>
                   </div>
                   <div className="flex justify-between text-sm py-1">
-                    <span className="text-[#0a0a0a]/40 font-light">Envío</span>
-                    <span className="text-[#0a0a0a]">{metodoElegido === 'acordar' ? 'A coordinar' : (costoEnvio === 0 ? 'Gratis' : `$${fmt(costoEnvio)}`)}</span>
+                    <span className="text-[#0a0a0a]/40 font-light">
+                      {elegido === 'envio_tienda'
+                        ? 'Envío a tu zona'
+                        : elegido === 'correo' && zonaCorreoElegida
+                          ? `Envío por correo (${ZONAS_CORREO.find((z) => z.clave === zonaCorreoElegida)?.nombre.toLowerCase()})`
+                          : 'Envío'}
+                    </span>
+                    <span className="text-[#0a0a0a]">{elegido === 'retiro' ? 'Gratis' : textoCostoEnvio(elegido, costoEnvio)}</span>
                   </div>
                   <div className="flex justify-between text-base font-black text-[#0a0a0a] pt-3 mt-1 border-t border-[#0a0a0a]/5">
                     <span>Total</span>

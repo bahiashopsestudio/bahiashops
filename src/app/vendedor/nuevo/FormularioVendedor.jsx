@@ -7,6 +7,7 @@ import { activarCategoria, AVISO_CATEGORIA } from '@/lib/categorias'
 import BloqueHorarios, { HORARIOS_INICIALES } from './BloqueHorarios'
 import ModalContacto from '@/components/ModalContacto'
 import BloqueUbicacion, { guardarUbicacion } from '@/components/BloqueUbicacion'
+import BloqueEntrega, { ENTREGA_VACIA, errorEntrega, guardarEntrega } from '@/components/BloqueEntrega'
 import {
   inputClasses, selectClasses, fuenteTitulo, fuenteAyuda, ayudaClasses,
   btnNegro, btnNegroInactivo, btnLinea, btnAmarillo, pillActiva, pillInactiva, fuentePill,
@@ -21,8 +22,10 @@ const EJEMPLOS_RED = {
 const TITULOS_PASOS = {
   1: 'Tu emprendimiento',
   2: 'Ubicación',
-  3: 'Disponibilidad y despacho',
+  3: 'Cómo entregás',
+  4: 'Disponibilidad y despacho',
 }
+const ULTIMO_PASO = 4
 
 // Los estilos viven en @/lib/estilosVendedor para que el alta y "Mis datos" no se separen
 
@@ -110,13 +113,9 @@ export default function FormularioVendedor({ userId }) {
   const [horarios, setHorarios] = useState(HORARIOS_INICIALES)
   const [notasHorarios, setNotasHorarios] = useState('')
   const [tiempoDespacho, setTiempoDespacho] = useState('')
-  const [metodosEntrega, setMetodosEntrega] = useState([])
-
-  function toggleMetodo(metodo) {
-    setMetodosEntrega((actuales) =>
-      actuales.includes(metodo) ? actuales.filter((m) => m !== metodo) : [...actuales, metodo]
-    )
-  }
+  // Paso 3, obligatorio: al menos una forma de entrega elegida a propósito.
+  // Se guarda después del alta, por /api/vendedor/entrega.
+  const [entrega, setEntrega] = useState(ENTREGA_VACIA)
 
   const [paso, setPaso] = useState(1)
   const [guardando, setGuardando] = useState(false)
@@ -156,6 +155,9 @@ export default function FormularioVendedor({ userId }) {
     cargarDatos()
   }, [])
 
+  // El envío de la tienda se mide desde el punto del paso 2 (el exacto, o el
+  // centro del círculo).
+  const tienePuntoAlta = !!ubicacion?.completo && ubicacion?.lat != null && ubicacion?.lng != null
   const tienePlataforma = plataformaSitio !== '' && plataformaSitio !== 'no_tengo'
   const tieneRedSecundaria = redSecundariaTipo !== '' && redSecundariaTipo !== 'no_tengo'
   const placeholderRed = EJEMPLOS_RED[redSecundariaTipo] || 'https://...'
@@ -182,7 +184,11 @@ export default function FormularioVendedor({ userId }) {
       setError(ubicacion?.faltante || 'Completá tu ubicación.')
       return
     }
-    if (paso < 3) { setError(null); setPaso((p) => p + 1); window.scrollTo({ top: 0, behavior: 'smooth' }); return }
+    if (paso === 3) {
+      const problema = errorEntrega(entrega, { tienePunto: tienePuntoAlta })
+      if (problema) { setError(problema); return }
+    }
+    if (paso < ULTIMO_PASO) { setError(null); setPaso((p) => p + 1); window.scrollTo({ top: 0, behavior: 'smooth' }); return }
 
     setError(null); setGuardando(true)
     const slug = generarSlug(nombreNegocio)
@@ -201,7 +207,6 @@ export default function FormularioVendedor({ userId }) {
         email_contacto: usarOtroEmail ? emailContacto : null,
         horarios_estructurados: horarios,
         notas_horarios: notasHorarios || null, tiempo_despacho: tiempoDespacho || null,
-        metodos_entrega_default: metodosEntrega,
       })
       .select('id')
       .single()
@@ -217,6 +222,12 @@ export default function FormularioVendedor({ userId }) {
     // tienda queda creada sin ubicación y el panel le pide completarla.
     const resultadoUbicacion = await guardarUbicacion(ubicacion)
     const falloUbicacion = resultadoUbicacion.ok ? null : resultadoUbicacion.error
+
+    // Las formas de entrega, también por el servidor y después de la
+    // ubicación: el envío de la tienda necesita el barrio ya guardado. Si
+    // falla, la tienda queda sin formas de entrega y el panel se lo pide.
+    const resultadoEntrega = await guardarEntrega(entrega)
+    const falloEntrega = resultadoEntrega.ok ? null : resultadoEntrega.error
 
     // Abrir la categoría si estaba cerrada. Va por el servidor: el navegador
     // no tiene permiso de escritura sobre 'categorias'.
@@ -253,6 +264,9 @@ export default function FormularioVendedor({ userId }) {
     if (falloUbicacion) {
       avisos.push(`No pudimos guardar tu ubicación (${falloUbicacion}). Completala desde Mi negocio → Mi ubicación.`)
     }
+    if (falloEntrega) {
+      avisos.push(`No pudimos guardar cómo entregás (${falloEntrega}). Completalo desde Mi negocio → Cómo entregás.`)
+    }
     if (falloCategoria) avisos.push(AVISO_CATEGORIA)
     if (avisos.length > 0) {
       setAvisosAlta(avisos)
@@ -272,7 +286,7 @@ export default function FormularioVendedor({ userId }) {
         <h2 className="text-lg md:text-xl m-0" style={fuenteTitulo}>
           {TITULOS_PASOS[paso]}
         </h2>
-        <span className="text-[11px] text-[#0a0a0a]/40" style={fuenteAyuda}>Paso {paso} de 3</span>
+        <span className="text-[11px] text-[#0a0a0a]/40" style={fuenteAyuda}>Paso {paso} de {ULTIMO_PASO}</span>
       </div>
 
       {/* ───── PASO 1 ───── */}
@@ -510,7 +524,7 @@ export default function FormularioVendedor({ userId }) {
       )}
 
       {/* ───── PASO 2 ───── */}
-      {/* Al volver desde el paso 3, el bloque arranca con lo que ya se había
+      {/* Al volver desde un paso posterior, el bloque arranca con lo que ya se había
           cargado (inicial). Ese punto no está guardado: el servidor lo toma
           como nuevo y detecta el barrio con él. */}
       {paso === 2 && (
@@ -529,6 +543,19 @@ export default function FormularioVendedor({ userId }) {
 
       {/* ───── PASO 3 ───── */}
       {paso === 3 && (
+        <BloqueEntrega
+          valor={entrega}
+          onChange={(valor) => { setError(null); setEntrega(valor) }}
+          tienda={{
+            direccionVisible: ubicacion?.direccionVisible,
+            direccion: ubicacion?.direccion,
+            tienePunto: tienePuntoAlta,
+          }}
+        />
+      )}
+
+      {/* ───── PASO 4 ───── */}
+      {paso === 4 && (
         <div className="rounded-2xl border border-[#0a0a0a]/5 p-5 flex flex-col gap-6">
           <div>
             <span className="block mb-2 text-sm text-[#0a0a0a]/60 font-light">Horarios de atención</span>
@@ -548,24 +575,6 @@ export default function FormularioVendedor({ userId }) {
                 <input type="radio" name="tiempo_despacho" value={opcion.valor}
                   checked={tiempoDespacho === opcion.valor}
                   onChange={(e) => setTiempoDespacho(e.target.value)} required className="accent-[#0a0a0a]" />
-                <span className="text-sm">{opcion.label}</span>
-              </label>
-            ))}
-          </div>
-
-          <div className="flex flex-col gap-2.5">
-            <span className="text-sm text-[#0a0a0a]/60 font-light">Métodos de entrega típicos</span>
-            <span className={`${ayudaClasses} mb-1`} style={fuenteAyuda}>Los que usás habitualmente. Después podés ajustar producto por producto.</span>
-            {[
-              { valor: 'retiro',        label: 'Retiro en mi local / domicilio' },
-              { valor: 'coordinar',     label: 'A coordinar con el comprador' },
-              { valor: 'envio_propio',  label: 'Envío propio (yo lo llevo)' },
-              { valor: 'flash_pedidos', label: 'Uber Flash / PedidosYa Envíos' },
-              { valor: 'correo',        label: 'Correo / encomienda' },
-            ].map((opcion) => (
-              <label key={opcion.valor} className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={metodosEntrega.includes(opcion.valor)}
-                  onChange={() => toggleMetodo(opcion.valor)} className="accent-[#0a0a0a]" />
                 <span className="text-sm">{opcion.label}</span>
               </label>
             ))}
@@ -604,7 +613,7 @@ export default function FormularioVendedor({ userId }) {
 
         <button type="submit" disabled={guardando}
           className={`px-6 py-2.5 ${guardando ? btnNegroInactivo : btnNegro}`}>
-          {paso < 3 ? 'Siguiente →' : (guardando ? 'Guardando...' : 'Sumar mi emprendimiento')}
+          {paso < ULTIMO_PASO ? 'Siguiente →' : (guardando ? 'Guardando...' : 'Sumar mi emprendimiento')}
         </button>
       </div>
       </form>

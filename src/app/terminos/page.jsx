@@ -42,7 +42,7 @@ export default function TerminosPage() {
               Términos y Condiciones de Uso
             </h1>
             <p className="text-sm text-[#0a0a0a]/40 mb-10">
-              Última actualización: julio 2026
+              Última actualización: octubre 2026
             </p>
 
             {/* 1 */}
@@ -139,7 +139,7 @@ export default function TerminosPage() {
             {/* 9 */}
             <Seccion titulo="9. Envíos y Entregas">
               <p>
-                Los métodos de envío disponibles dependen de cada vendedor y pueden incluir entrega a domicilio mediante cadetería local, envío por Correo Argentino, retiro en el local del vendedor, o coordinación directa entre comprador y vendedor.
+                Las formas de entrega disponibles dependen de cada vendedor y pueden incluir: retiro en el local del vendedor (o en el lugar que acuerden, si el vendedor no muestra su dirección); envío de la tienda, dentro de Bahía Blanca, que el vendedor realiza por sus propios medios o con el servicio de mensajería que elija, con un costo según la zona de entrega; envío por correo a otras localidades, con un costo según la zona; o coordinación directa entre comprador y vendedor por WhatsApp.
               </p>
               <p>
                 Los costos y tiempos de envío se informan durante el proceso de compra. La responsabilidad por la entrega recae en el vendedor, excepto en los casos en que se utilice Correo Argentino u otro servicio de logística de terceros.

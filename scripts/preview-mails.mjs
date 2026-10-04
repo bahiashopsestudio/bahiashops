@@ -48,15 +48,22 @@ const base = {
 const direccion = { calle: 'Alsina', numero: '235', piso_depto: '2B', barrio: 'Centro' }
 
 const casos = {
-  retiro: { ...base, metodoEnvio: 'retiro' },
+  retiro: { ...base, metodoEnvio: 'retiro', direccionVisible: true },
+  'retiro-sin-direccion': { ...base, metodoEnvio: 'retiro', direccionVisible: false },
   envio: {
-    ...base, metodoEnvio: 'cadeteria', costoEnvio: 2500, total: 25300, direccion, turno: 'Tarde',
+    ...base, metodoEnvio: 'envio_tienda', zonaEnvio: 2, costoEnvio: 2500, total: 25300, direccion, turno: 'Tarde',
   },
-  acordar: { ...base, metodoEnvio: 'acordar' },
+  'envio-gratis': {
+    ...base, metodoEnvio: 'envio_tienda', zonaEnvio: 1, costoEnvio: 0, direccion, turno: null,
+  },
+  coordinar: { ...base, metodoEnvio: 'coordinar' },
+  // Un nombre viejo: se tiene que leer igual que el nuevo.
+  'nombre-viejo': { ...base, metodoEnvio: 'acordar' },
   // Todo lo que viene de la base tiene que verse como texto, no como HTML.
   escapado: {
     ...base,
-    metodoEnvio: 'cadeteria',
+    metodoEnvio: 'envio_tienda',
+    zonaEnvio: 3,
     tienda: '<b>Lo de "Pepa" & Co</b>',
     nombre: 'Ana <i>María</i>',
     apellido: "O'Connor & Hnos",
@@ -69,8 +76,8 @@ const casos = {
     turno: 'Mañana',
   },
   'sin-apodo': { ...base, metodoEnvio: 'retiro', apodo: null },
-  'envio-sin-turno': {
-    ...base, metodoEnvio: 'correo', costoEnvio: 4200, total: 27000,
+  correo: {
+    ...base, metodoEnvio: 'correo', zonaEnvio: 1, costoEnvio: 4200, total: 27000,
     direccion: { ...direccion, piso_depto: null }, turno: null,
   },
 }
@@ -81,7 +88,7 @@ for (const [caso, datos] of Object.entries(casos)) {
   mails[`compra-${caso}`] = armarMailCompra(datos)
 }
 mails.despacho = armarMailDespacho({
-  pedido: { id: 1042, subtotal_productos: 22800, costo_envio: 2500, total: 25300 },
+  pedido: { id: 1042, metodo_envio: 'envio_tienda', subtotal_productos: 22800, costo_envio: 2500, total: 25300 },
   nombreVendedor: 'Cerámica del Puerto',
   direccion: 'Alsina 235, 2B',
   franja: 'Tarde',

@@ -30,14 +30,6 @@ const OPCIONES_DESPACHO = [
   { valor: 'mas_5_dias', label: 'Más de 5 días / a coordinar' },
 ]
 
-const OPCIONES_ENTREGA = [
-  { valor: 'retiro',        label: 'Retiro en mi local / domicilio' },
-  { valor: 'coordinar',     label: 'A coordinar con el comprador' },
-  { valor: 'envio_propio',  label: 'Envío propio (yo lo llevo)' },
-  { valor: 'flash_pedidos', label: 'Uber Flash / PedidosYa Envíos' },
-  { valor: 'correo',        label: 'Correo / encomienda' },
-]
-
 // El número se guarda como +549XXXXXXXXXX; en el campo se edita sin ese prefijo
 function quitarPrefijo(telefono) {
   if (!telefono) return ''
@@ -89,7 +81,6 @@ export default function MisDatosVendedorPage() {
   const [horarios, setHorarios] = useState(HORARIOS_INICIALES)
   const [notasHorarios, setNotasHorarios] = useState('')
   const [tiempoDespacho, setTiempoDespacho] = useState('')
-  const [metodosEntrega, setMetodosEntrega] = useState([])
 
   useEffect(() => {
     if (menuOpen) { document.body.style.overflow = 'hidden' } else { document.body.style.overflow = '' }
@@ -112,7 +103,7 @@ export default function MisDatosVendedorPage() {
 
       const { data: vendedor } = await supabase
         .from('vendedores')
-        .select('id, nombre_negocio, categoria_id, descripcion_corta, descripcion_larga, instagram, plataforma_sitio, sitio_web, red_social_secundaria_tipo, red_social_secundaria_url, horarios_estructurados, notas_horarios, tiempo_despacho, metodos_entrega_default')
+        .select('id, nombre_negocio, categoria_id, descripcion_corta, descripcion_larga, instagram, plataforma_sitio, sitio_web, red_social_secundaria_tipo, red_social_secundaria_url, horarios_estructurados, notas_horarios, tiempo_despacho')
         .eq('usuario_id', user.id)
         .maybeSingle()
 
@@ -145,7 +136,6 @@ export default function MisDatosVendedorPage() {
       setHorarios(vendedor.horarios_estructurados || HORARIOS_INICIALES)
       setNotasHorarios(vendedor.notas_horarios || '')
       setTiempoDespacho(vendedor.tiempo_despacho || '')
-      setMetodosEntrega(vendedor.metodos_entrega_default || [])
 
       const { data: sellosVendedor } = await supabase
         .from('vendedor_sellos')
@@ -169,13 +159,6 @@ export default function MisDatosVendedorPage() {
     setGuardado(false)
     setSellosSeleccionados((actuales) =>
       actuales.includes(selloId) ? actuales.filter((id) => id !== selloId) : [...actuales, selloId]
-    )
-  }
-
-  function toggleMetodo(metodo) {
-    setGuardado(false)
-    setMetodosEntrega((actuales) =>
-      actuales.includes(metodo) ? actuales.filter((m) => m !== metodo) : [...actuales, metodo]
     )
   }
 
@@ -207,7 +190,6 @@ export default function MisDatosVendedorPage() {
         horarios_estructurados: horarios,
         notas_horarios: notasHorarios || null,
         tiempo_despacho: tiempoDespacho || null,
-        metodos_entrega_default: metodosEntrega,
       })
       .eq('id', vendedorId)
 
@@ -483,19 +465,22 @@ export default function MisDatosVendedorPage() {
                     </label>
                   ))}
                 </div>
-
-                <div className="flex flex-col gap-2.5">
-                  <span className={labelClasses}>Métodos de entrega típicos</span>
-                  <span className={`${ayudaClasses} mb-1`} style={fuenteAyuda}>Los que usás habitualmente. Después podés ajustar producto por producto.</span>
-                  {OPCIONES_ENTREGA.map((opcion) => (
-                    <label key={opcion.valor} className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={metodosEntrega.includes(opcion.valor)}
-                        onChange={() => toggleMetodo(opcion.valor)} className="accent-[#0a0a0a]" />
-                      <span className="text-sm">{opcion.label}</span>
-                    </label>
-                  ))}
-                </div>
               </div>
+
+              {/* Formas de entrega: viven en su propia página, con los precios */}
+              <Link href="/vendedor/envios"
+                className="flex items-center gap-3 px-5 py-4 rounded-2xl border border-[#0a0a0a]/5 hover:bg-[#F5F2EC] transition-colors no-underline">
+                <span className="text-lg">🚚</span>
+                <div className="flex-1">
+                  <span className="block text-sm text-[#0a0a0a]">Cómo entregás</span>
+                  <span className={ayudaClasses} style={fuenteAyuda}>
+                    Retiro, envío de la tienda, correo o coordinar: se eligen acá, con sus precios.
+                  </span>
+                </div>
+                <svg className="w-4 h-4 text-[#0a0a0a]/15 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                </svg>
+              </Link>
 
               {/* Ubicación: vive en su propia página porque necesita el mapa */}
               <Link href="/vendedor/ubicacion"

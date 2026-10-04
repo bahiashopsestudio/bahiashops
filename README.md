@@ -99,9 +99,11 @@ cada decisión, no sólo el *qué*.
 **El esquema no está versionado del todo.** Esos archivos son el historial *desde que se empezó a
 anotar*: las tablas base (`vendedores`, `productos`, `categorias`, `subcategorias`, `sellos`,
 `barrios`, `localidades`, `pedidos`, `usuarios`, `favoritos`, `direcciones`,
-`colecciones`…), sus políticas de RLS originales y las funciones de PostgreSQL que usa la app
-(`calcular_zona_envio`, `barrio_en_punto`, `barrios_con_poligono`) se crearon a mano desde el
-panel y **no están en el repo**. Para verlas hay que mirar Supabase.
+`colecciones`…) y sus políticas de RLS originales se crearon a mano desde el panel y **no están
+en el repo**. Para verlas hay que mirar Supabase. Las funciones de barrios (`barrio_en_punto`,
+`barrios_con_poligono`) también nacieron así; desde la migración 019 están en el repo.
+`calcular_zona_envio` se borró en la 020: la zona del envío la calcula el servidor
+(`src/lib/zonaEnvio.js`).
 
 En la práctica: si algo no cierra entre el código y la base, la base tiene la razón. Y si vas a
 cambiar el esquema, agregá una migración nueva aunque el cambio sea de una línea — es lo único que

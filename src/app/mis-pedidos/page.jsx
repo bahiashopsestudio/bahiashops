@@ -7,6 +7,24 @@ import Link from 'next/link'
 import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
 import VolverAtras from '@/components/VolverAtras'
+import { etiquetaMetodo, tipoEntregaDe, zonaDe, textoCostoEnvio } from '@/lib/metodosEntrega'
+
+// Lo que costó la entrega, al lado del método: "Envío a tu zona: $2.500",
+// "Gratis", "A coordinar".
+function textoEnvioPedido(pedido) {
+  const tipo = tipoEntregaDe(pedido.metodo_envio)
+  const costo = Number(pedido.costo_envio) || 0
+  if (tipo === 'retiro') return 'Gratis'
+  if (tipo === 'coordinar') return 'A coordinar'
+  if (tipo === 'domicilio') {
+    return costo === 0 ? 'Envío gratis' : `Envío a tu zona: ${textoCostoEnvio(pedido.metodo_envio, costo)}`
+  }
+  if (tipo === 'correo') {
+    const zona = pedido.zona_envio ? zonaDe(pedido.metodo_envio, pedido.zona_envio) : null
+    return `${zona ? `${zona.nombre}: ` : ''}${textoCostoEnvio(pedido.metodo_envio, costo)}`
+  }
+  return costo > 0 ? `$${costo.toLocaleString('es-AR')}` : ''
+}
 
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage']
 
@@ -55,9 +73,9 @@ export default function MisPedidosPage() {
       const { data, error } = await supabase
         .from('pedidos')
         .select(`
-          id, estado, total, costo_envio, metodo_envio, creado_en,
+          id, estado, total, costo_envio, metodo_envio, zona_envio, creado_en,
           vendedor_nombre, franja_horaria,
-          vendedor:vendedores(slug),
+          vendedor:vendedores(slug, direccion_visible),
           items:pedido_items(id, nombre, foto_url, cantidad, precio, variante)
         `)
         .eq('comprador_id', user.id)
@@ -199,13 +217,13 @@ export default function MisPedidosPage() {
                         </div>
                       ))}
 
-                      {/* Envío */}
-                      {pedido.costo_envio > 0 && (
-                        <div className="flex justify-between pt-2 border-t border-[#0a0a0a]/5 mt-1">
-                          <span className="text-xs text-[#0a0a0a]/25 font-light">Envío</span>
-                          <span className="text-xs text-[#0a0a0a]/40">${fmt(pedido.costo_envio)}</span>
-                        </div>
-                      )}
+                      {/* Entrega */}
+                      <div className="flex justify-between gap-3 pt-2 border-t border-[#0a0a0a]/5 mt-1">
+                        <span className="text-xs text-[#0a0a0a]/40 font-light">
+                          {etiquetaMetodo(pedido.metodo_envio, 'comprador', { direccionVisible: pedido.vendedor?.direccion_visible })}
+                        </span>
+                        <span className="text-xs text-[#0a0a0a]/40 text-right">{textoEnvioPedido(pedido)}</span>
+                      </div>
                     </div>
                   )
                 })}

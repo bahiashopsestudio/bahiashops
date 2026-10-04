@@ -24,7 +24,7 @@ import {
 } from '@/lib/mailBase'
 import { normalizarTelefonoAR, formatearTelefonoAR, linkWhatsApp } from '@/lib/telefono'
 import { inicialDeApodo, colorDeApodo } from '@/lib/apodos'
-import { metodoPideDireccion } from '@/lib/precioPedido'
+import { metodoPideDireccion, grupoEntrega, tipoEntregaDe, zonaDe, textoCostoEnvio } from '@/lib/metodosEntrega'
 
 // ── 1. Piezas propias de los mails de pedido ──────────────────────────────────
 
@@ -59,12 +59,22 @@ function textoCompra({ etiqueta, etiquetaTotal, items, costoEnvio, total, comisi
   return lineas.join('\n')
 }
 
-// Cómo le llega el pedido a quien compra: 'retiro', 'envio' (los métodos que
-// usan dirección: cadetería y correo) o 'acordar' (el resto). Es la misma
-// regla que usa el panel del vendedor para elegir el texto del WhatsApp.
-export function tipoEntrega(metodoEnvio) {
-  if (metodoEnvio === 'retiro') return 'retiro'
-  return metodoPideDireccion(metodoEnvio) ? 'envio' : 'acordar'
+// Cómo le llega el pedido a quien compra: 'retiro', 'envio' o 'coordinar'.
+// Es grupoEntrega(), de metodosEntrega.js: la misma regla que usa el panel
+// del vendedor para elegir el texto del WhatsApp.
+const tipoEntrega = grupoEntrega
+
+// "Envío de tu tienda · Zona 2 ($ 2.500)" para el mail de venta.
+function textoEntregaVenta({ metodoEnvio, zonaEnvio, costoEnvio, direccionVisible }) {
+  const tipo = tipoEntregaDe(metodoEnvio)
+  const zona = zonaEnvio ? zonaDe(metodoEnvio, zonaEnvio) : null
+  const precio = textoCostoEnvio(metodoEnvio, costoEnvio)
+  if (tipo === 'retiro') {
+    return direccionVisible === false ? 'Retira: coordinan dónde y cuándo' : 'Retira en tu local'
+  }
+  if (tipo === 'domicilio') return `Envío de tu tienda${zona ? ` · Zona ${zona.zona}` : ''} (${precio})`
+  if (tipo === 'correo') return `Correo${zona ? ` · ${zona.nombre}` : ''} (${precio})`
+  return 'A coordinar con vos'
 }
 
 // "+54 9 291 512-3456". Si el teléfono guardado no se puede normalizar, se
@@ -85,12 +95,6 @@ function calleNumeroDepto(direccion) {
   return [calle, depto].filter(Boolean).join(', ')
 }
 
-const TEXTO_ENTREGA = {
-  retiro: 'Retira en tu local',
-  envio: 'Envío a domicilio',
-  acordar: 'Acordar con vos',
-}
-
 // turno_preferido guarda 'Mañana', 'Tarde' o 'Indistinto' (y 'Noche' en la
 // lista de franjas). 'Indistinto' no es una preferencia: esa fila no va.
 const TEXTO_TURNO = {
@@ -106,7 +110,8 @@ function textoTurno(turno) {
 // ── 2. Armado ───────────────────────────────────────────────────────────────
 //
 // Los dos mails del pago reciben el mismo objeto:
-//   pedidoId, tienda, metodoEnvio (el literal de la base),
+//   pedidoId, tienda, metodoEnvio (el literal de la base), zonaEnvio,
+//   direccionVisible (de la tienda: si no, el retiro se coordina),
 //   nombre, apellido, telefono, apodo,
 //   items [{ nombre, variante, cantidad, precio }],
 //   costoEnvio, total, comision,
@@ -134,7 +139,7 @@ export function armarMailVenta(datos) {
   const compra = { etiqueta: 'LO QUE COMPRÓ', etiquetaTotal: 'Total cobrado', items, costoEnvio, total, comision }
 
   const datosEntrega = [
-    ['Entrega', TEXTO_ENTREGA[tipo]],
+    ['Entrega', textoEntregaVenta(datos)],
     ['Nombre', nombreCompleto],
     ['Teléfono', telefono],
     ['Dirección', direccion],
@@ -144,7 +149,7 @@ export function armarMailVenta(datos) {
   const cierre = {
     retiro: `Cuando esté listo para retirar, avisale desde el panel: así ${quien} ve en qué anda su compra.`,
     envio: `Cuando lo empieces a preparar, marcalo en el panel: así ${quien} ve en qué anda su compra.`,
-    acordar: 'Escribile para acordar cuándo y dónde, y después seguí los pasos en el panel.',
+    coordinar: 'Escribile para acordar cuándo y dónde, y después seguí los pasos en el panel.',
   }[tipo]
 
   const pie = [
@@ -210,12 +215,19 @@ export function armarMailCompra(datos) {
 
   // "Qué pasa ahora" se arma una vez en partes, [texto, enNegrita], y de ahí
   // salen la versión HTML (escapada) y la de texto.
+  const porCorreo = tipoEntregaDe(datos.metodoEnvio) === 'correo'
   const finales = {
-    retiro: [[' cuando esté listo para que lo pases a buscar.']],
-    envio: destino
-      ? [[' para avisarte en qué franja horaria llega a '], [destino, true], ['.']]
-      : [[' para avisarte en qué franja horaria llega.']],
-    acordar: [[' para acordar la entrega.']],
+    retiro: datos.direccionVisible === false
+      ? [[' para coordinar dónde y cuándo lo retirás.']]
+      : [[' cuando esté listo para que lo pases a buscar.']],
+    envio: porCorreo
+      ? (destino
+        ? [[' para avisarte cuando lo despache por correo a '], [destino, true], ['.']]
+        : [[' para avisarte cuando lo despache por correo.']])
+      : (destino
+        ? [[' para avisarte en qué franja horaria llega a '], [destino, true], ['.']]
+        : [[' para avisarte en qué franja horaria llega.']]),
+    coordinar: [[' para acordar la entrega.']],
   }
   const quePasa = [
     [`${tienda} te va a escribir por WhatsApp`],
@@ -267,7 +279,9 @@ export function armarMailCompra(datos) {
 export function armarMailDespacho({ pedido, nombreVendedor, direccion, franja }) {
   const asunto = `Tu pedido #${pedido.id} fue despachado`
   const titulo = '¡Tu pedido fue despachado! 🚀'
-  const envio = Number(pedido.costo_envio) === 0 ? 'Gratis' : pesos(pedido.costo_envio)
+  const envio = tipoEntregaDe(pedido.metodo_envio) === 'coordinar'
+    ? 'A coordinar'
+    : Number(pedido.costo_envio) === 0 ? 'Gratis' : pesos(pedido.costo_envio)
   const linkPedidos = `${SITIO_URL}/mis-pedidos`
   const pie = 'Este email fue enviado desde Bahía Shops. Si tenés alguna consulta, respondé a este email.'
 
@@ -383,7 +397,7 @@ export async function avisarPago({ admin, pedidoId }) {
     const { data: pedido, error: errorPedido } = await admin
       .from('pedidos')
       .select(`
-        id, vendedor_id, comprador_id, metodo_envio, turno_preferido,
+        id, vendedor_id, comprador_id, metodo_envio, zona_envio, turno_preferido,
         total, costo_envio, comision_plataforma,
         comprador_nombre, comprador_apellido, comprador_telefono, direccion_copia,
         items:pedido_items ( id, nombre, variante, cantidad, precio )
@@ -398,7 +412,7 @@ export async function avisarPago({ admin, pedidoId }) {
 
     const { data: vendedor, error: errorVendedor } = await admin
       .from('vendedores')
-      .select('nombre_negocio, usuario_id')
+      .select('nombre_negocio, usuario_id, direccion_visible')
       .eq('id', pedido.vendedor_id)
       .maybeSingle()
 
@@ -446,6 +460,8 @@ export async function avisarPago({ admin, pedidoId }) {
       pedidoId: pedido.id,
       tienda: vendedor.nombre_negocio,
       metodoEnvio: pedido.metodo_envio,
+      zonaEnvio: pedido.zona_envio,
+      direccionVisible: vendedor.direccion_visible,
       nombre: pedido.comprador_nombre,
       apellido: pedido.comprador_apellido,
       telefono: pedido.comprador_telefono,

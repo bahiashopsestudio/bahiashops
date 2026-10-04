@@ -6,6 +6,23 @@ import { Suspense, useEffect, useState } from 'react'
 import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
 import { createClient } from '@/lib/supabase/client'
+import { tipoEntregaDe } from '@/lib/metodosEntrega'
+
+// Qué pasa ahora, según cómo le llega el pedido. Sin datos del pedido (no se
+// pudo leer), el texto general.
+const TEXTO_GENERAL = 'Te va a escribir por WhatsApp para coordinar la entrega.'
+function textoQuePasa(pedido) {
+  const tipo = tipoEntregaDe(pedido?.metodo_envio)
+  if (tipo === 'retiro') {
+    return pedido.vendedor?.direccion_visible === false
+      ? 'Te va a escribir por WhatsApp para coordinar dónde y cuándo lo retirás.'
+      : 'Te va a escribir por WhatsApp cuando esté listo para retirar.'
+  }
+  if (tipo === 'domicilio') return 'Te va a escribir por WhatsApp para avisarte en qué franja horaria llega.'
+  if (tipo === 'correo') return 'Te va a escribir por WhatsApp cuando lo despache por correo.'
+  if (tipo === 'coordinar') return 'Te va a escribir por WhatsApp para arreglar la entrega.'
+  return TEXTO_GENERAL
+}
 
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage']
 
@@ -18,6 +35,7 @@ function ExitoContenido() {
   const [limpiado, setLimpiado] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [categorias, setCategorias] = useState([])
+  const [pedido, setPedido] = useState(null)
 
   useEffect(() => {
     if (menuOpen) { document.body.style.overflow = 'hidden' } else { document.body.style.overflow = '' }
@@ -31,6 +49,22 @@ function ExitoContenido() {
     }
     cargarCats()
   }, [])
+
+  // El método de entrega del pedido, para el texto de "qué pasa ahora". La
+  // política deja leer sólo los pedidos propios; si no se puede, va el texto
+  // general.
+  useEffect(() => {
+    if (!pedidoId || !/^\d+$/.test(pedidoId)) return
+    async function cargarPedido() {
+      const { data } = await supabase
+        .from('pedidos')
+        .select('metodo_envio, vendedor:vendedores(direccion_visible)')
+        .eq('id', Number(pedidoId))
+        .maybeSingle()
+      if (data) setPedido(data)
+    }
+    cargarPedido()
+  }, [pedidoId])
 
   useEffect(() => { if (!limpiado) setLimpiado(true) }, [limpiado, locales])
 
@@ -55,7 +89,7 @@ function ExitoContenido() {
             {pedidoId && <p className="text-[#0a0a0a]/20 text-sm font-light mt-1">Pedido #{pedidoId}</p>}
 
             <div className="bg-[#F5F2EC] rounded-2xl p-5 text-left mt-8 mb-8">
-              <p className="text-sm font-medium text-[#0a0a0a]">Te mandamos la confirmación por mail y ya le avisamos al vendedor. Te va a escribir por WhatsApp para coordinar la entrega.</p>
+              <p className="text-sm font-medium text-[#0a0a0a]">Te mandamos la confirmación por mail y ya le avisamos al vendedor. {pedido ? textoQuePasa(pedido) : TEXTO_GENERAL}</p>
             </div>
 
             <button

@@ -44,7 +44,7 @@ export async function GET() {
   const { data: pedidos, error } = await admin
     .from('pedidos')
     .select(`
-      id, estado, metodo_envio, subtotal_productos, costo_envio, total,
+      id, estado, metodo_envio, zona_envio, subtotal_productos, costo_envio, total,
       comision_plataforma, turno_preferido, franja_horaria, creado_en, actualizado_en,
       comprador_id, comprador_nombre, comprador_apellido, comprador_telefono, direccion_copia,
       items:pedido_items ( id, nombre, variante, cantidad, precio, foto_url ),
