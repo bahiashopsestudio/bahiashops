@@ -8,6 +8,14 @@ import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
 import VolverAtras from '@/components/VolverAtras'
 import { etiquetaMetodo, tipoEntregaDe, textoCostoEnvio, seguimientoDe } from '@/lib/metodosEntrega'
+import { pedidoVencido, pagableHasta, pedidoTienePago } from '@/lib/vencimientoPago'
+
+// "7 de octubre a las 15:30", en la hora de quien mira.
+function textoFechaYHora(fecha) {
+  const dia = fecha.toLocaleDateString('es-AR', { day: 'numeric', month: 'long' })
+  const hora = fecha.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false })
+  return `${dia} a las ${hora}`
+}
 
 // Lo que costó la entrega, al lado del método: "Envío a tu zona: $2.500",
 // "Gratis", "A coordinar". A quien compra no se le muestran zonas ni
@@ -71,6 +79,9 @@ const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','ho
 
 const ESTADOS = {
   pendiente: { label: 'Pendiente de pago', color: 'bg-amber-50 text-amber-600' },
+  // No es un estado de la base: lo arma pedidoVencido (el link de pago venció
+  // y el pedido no se cobró).
+  vencido: { label: 'Vencido', color: 'bg-gray-100 text-gray-500' },
   pagado: { label: 'Pagado', color: 'bg-green-50 text-green-600' },
   preparando: { label: 'Preparando', color: 'bg-blue-50 text-blue-600' },
   franja: { label: 'Franja horaria asignada', color: 'bg-blue-50 text-blue-600' },
@@ -85,6 +96,44 @@ export default function MisPedidosPage() {
   const supabase = createClient()
   const router = useRouter()
   const [pedidos, setPedidos] = useState([])
+  // La hora a la que se cargaron los pedidos: de ella depende qué está vencido.
+  // Va en el estado (y no se pide al dibujar) para que el render sea puro.
+  const [ahora, setAhora] = useState(0)
+  // El pedido al que se le está abriendo el pago, y el error de cada uno.
+  const [pagandoId, setPagandoId] = useState(null)
+  const [erroresPago, setErroresPago] = useState({})
+
+  // Mientras la pantalla está abierta, la hora se actualiza sola: al vencer un
+  // pedido el botón "Pagar" desaparece y queda el texto de "Vencido".
+  useEffect(() => {
+    const reloj = setInterval(() => setAhora(Date.now()), 15000)
+    return () => clearInterval(reloj)
+  }, [])
+
+  // Pide el link de pago al servidor (que comprueba que el pedido sea tuyo y
+  // siga vigente) y manda a MercadoPago. El link no se arma acá.
+  async function pagar(pedido) {
+    if (pagandoId) return
+    setPagandoId(pedido.id)
+    setErroresPago((previos) => ({ ...previos, [pedido.id]: '' }))
+    try {
+      const res = await fetch(`/api/pedidos/${pedido.id}/pagar`, { method: 'POST' })
+      const cuerpo = await res.json().catch(() => null)
+      if (res.ok && cuerpo?.url) {
+        window.location.href = cuerpo.url
+        // Si la persona vuelve con "atrás" y la página queda en pantalla, el
+        // botón no se tiene que quedar trabado.
+        setTimeout(() => setPagandoId(null), 5000)
+        return
+      }
+      setErroresPago((previos) => ({ ...previos, [pedido.id]: cuerpo?.error || 'No pudimos abrir el pago. Probá de nuevo en un rato.' }))
+      // Venció mientras la pantalla estaba abierta: se actualiza la hora.
+      if (res.status === 410) setAhora(Date.now())
+    } catch {
+      setErroresPago((previos) => ({ ...previos, [pedido.id]: 'No pudimos conectarnos. Revisá tu conexión y probá de nuevo.' }))
+    }
+    setPagandoId(null)
+  }
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState(null)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -116,6 +165,7 @@ export default function MisPedidosPage() {
         .select(`
           id, estado, total, costo_envio, metodo_envio, zona_envio, creado_en,
           vendedor_nombre, franja_horaria, envio_empresa, envio_empresa_otra, envio_seguimiento,
+          vence_en, cancelado_motivo, mp_payment_id,
           vendedor:vendedores(slug, direccion_visible),
           items:pedido_items(id, nombre, foto_url, cantidad, precio, variante)
         `)
@@ -129,6 +179,7 @@ export default function MisPedidosPage() {
         return
       }
 
+      setAhora(Date.now())
       setPedidos(data || [])
       setCargando(false)
     }
@@ -199,7 +250,16 @@ export default function MisPedidosPage() {
             ) : (
               <div className="mt-6">
                 {pedidos.map((pedido) => {
-                  const estado = ESTADOS[pedido.estado] || { label: pedido.estado, color: 'bg-gray-50 text-gray-600' }
+                  const vencido = pedidoVencido(pedido, ahora)
+                  const pagarHasta = pagableHasta(pedido, ahora)
+                  // El botón: pendiente, sin ningún pago, todavía dentro del
+                  // plazo y con la tienda a la vista (si el pedido no trae la
+                  // tienda es que dejó de estar disponible). El servidor vuelve
+                  // a comprobar todo al apretarlo.
+                  const puedePagar = !vencido && !!pagarHasta && !pedidoTienePago(pedido) && !!pedido.vendedor
+                  const estado = vencido
+                    ? ESTADOS.vencido
+                    : (ESTADOS[pedido.estado] || { label: pedido.estado, color: 'bg-gray-50 text-gray-600' })
                   // Sin franja (pedidos anteriores a la migración 009) queda
                   // la etiqueta genérica.
                   const textoEstado = etiquetaEstado(pedido, estado)
@@ -261,6 +321,35 @@ export default function MisPedidosPage() {
                         <span className="text-xs text-[#0a0a0a]/40 text-right">{textoEnvioPedido(pedido)}</span>
                       </div>
                       <Seguimiento pedido={pedido} />
+
+                      {/* El link de pago vence a los pocos días de crear el
+                          pedido (src/lib/vencimientoPago.js). */}
+                      {vencido && (
+                        <p className="pt-2 mt-1 text-xs text-[#0a0a0a]/50 font-light leading-relaxed">
+                          El link de pago venció y el pedido no se cobró. Si todavía querés estos productos, hacé el pedido de nuevo.
+                        </p>
+                      )}
+                      {!vencido && pagarHasta && (
+                        <p className="pt-2 mt-1 text-xs text-[#0a0a0a]/50 font-light leading-relaxed">
+                          Podés pagarlo hasta el {textoFechaYHora(pagarHasta)}. Después el link vence.
+                        </p>
+                      )}
+                      {puedePagar && (
+                        <div className="pt-2">
+                          <button
+                            type="button"
+                            onClick={() => pagar(pedido)}
+                            disabled={pagandoId !== null}
+                            className="bg-[#0a0a0a] text-white border border-[#0a0a0a] hover:bg-transparent hover:text-[#0a0a0a] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                            style={{ fontFamily: "'Inter', sans-serif", fontWeight: 500, fontSize: '14px', borderRadius: '4px', padding: '11px 24px' }}
+                          >
+                            {pagandoId === pedido.id ? 'Abriendo el pago…' : 'Pagar'}
+                          </button>
+                          {erroresPago[pedido.id] && (
+                            <p className="mt-2 mb-0 text-xs text-[#dc2626] font-light leading-relaxed">{erroresPago[pedido.id]}</p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )
                 })}

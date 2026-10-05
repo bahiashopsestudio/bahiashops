@@ -29,6 +29,16 @@ const ESTADOS = {
   reembolsado: { label: 'Cancelado · dinero devuelto', color: 'text-red-600', bg: 'bg-red-50', orden: -1 },
 };
 
+// El estado a mostrar. Un pedido cancelado porque el link de pago venció sin
+// que nadie pagara no es un "Cancelado" cualquiera: se dice qué pasó. (La ruta
+// /api/vendedor/pedidos los cancela al abrir el panel.)
+function estadoDe(p) {
+  if (p.estado === 'cancelado' && p.cancelado_motivo === 'pago_vencido') {
+    return { label: 'Vencido · no se pagó a tiempo', color: 'text-[#0a0a0a]/50', bg: 'bg-[#0a0a0a]/5' };
+  }
+  return ESTADOS[p.estado] || { label: p.estado, color: 'text-[#0a0a0a]/40', bg: 'bg-[#0a0a0a]/5' };
+}
+
 // Cómo le llega el pedido a quien compra, para elegir el texto del WhatsApp:
 // 'retiro', 'coordinar', 'envio' o 'correo'. La regla está en
 // metodosEntrega.js. Con el correo no hay franja de entrega ni "ya llega":
@@ -530,7 +540,7 @@ export default function VendedorPedidosPage() {
 
 function PedidoCard({ pedido, abierto, items, avanzando, onToggle, onAvanzar, onCorregirSeguimiento }) {
   const p = pedido;
-  const estado = ESTADOS[p.estado] || { label: p.estado, color: 'text-[#0a0a0a]/40', bg: 'bg-[#0a0a0a]/5' };
+  const estado = estadoDe(p);
   const accion = ACCIONES[p.estado];
   const primerItem = items[0];
   const direccion = direccionDe(p);

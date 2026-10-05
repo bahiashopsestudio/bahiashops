@@ -11,6 +11,10 @@
     "probar:018": "node scripts/probar-018.mjs",
     "probar:019-020": "node scripts/probar-019-020.mjs",
     "probar:021": "node scripts/probar-021.mjs",
+    "probar:022": "node scripts/probar-022.mjs",
+    "probar:vencimiento": "node scripts/probar-vencimiento.mjs",
+    "probar:023": "node scripts/probar-023.mjs",
+    "probar:pagar": "node scripts/probar-pagar.mjs",
     "probar:cuenta": "node scripts/probar-eliminar-cuenta.mjs"
   },
   "dependencies": {

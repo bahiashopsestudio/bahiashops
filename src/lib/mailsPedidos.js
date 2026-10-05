@@ -521,13 +521,20 @@ export async function avisarPago({ admin, pedidoId }) {
 // al vendedor, así que alguien tiene que coordinar el reembolso: el pedido NO
 // se toca, y este mail interno es el aviso. No lleva ningún dato de la persona.
 
-export function armarMailPagoTardio({ pedidoId, tienda, monto, pagoId, estado }) {
+// `motivo` es pedidos.cancelado_motivo: con 'pago_vencido' el pedido no se
+// canceló porque la persona eliminó su cuenta, sino porque el link de pago
+// venció, y el texto lo dice. Sin motivo (o con cualquier otro) queda el texto
+// de siempre.
+export function armarMailPagoTardio({ pedidoId, tienda, monto, pagoId, estado, motivo }) {
   const asunto = `Pago sobre un pedido cancelado · Pedido #${pedidoId}`
   const titulo = 'Llegó un pago sobre un pedido cancelado'
-  const explicacion =
-    'La persona que hizo este pedido eliminó su cuenta antes de que el pago se acreditara, y el pedido quedó cancelado. ' +
-    'El pago se aprobó igual y la plata ya está en la cuenta de MercadoPago de la tienda. El pedido no se modificó. ' +
-    'Hay que coordinar el reembolso con la tienda.'
+  const explicacion = motivo === 'pago_vencido'
+    ? 'El link de pago de este pedido venció sin que se pagara, y el pedido quedó cancelado. ' +
+      'Llegó un pago igual (seguramente hecho justo antes del vencimiento) y se aprobó: la plata ya está en la cuenta de MercadoPago de la tienda. El pedido no se modificó. ' +
+      'Hay que coordinar el reembolso con la tienda.'
+    : 'La persona que hizo este pedido eliminó su cuenta antes de que el pago se acreditara, y el pedido quedó cancelado. ' +
+      'El pago se aprobó igual y la plata ya está en la cuenta de MercadoPago de la tienda. El pedido no se modificó. ' +
+      'Hay que coordinar el reembolso con la tienda.'
   const datos = [
     ['Pedido', `#${pedidoId}`],
     ['Tienda', tienda || 'Sin nombre'],
@@ -554,7 +561,7 @@ export async function avisarPagoTardio({ admin, pedidoId, pago }) {
   try {
     const { data: pedido, error } = await admin
       .from('pedidos')
-      .select('id, vendedor_nombre, vendedor:vendedores ( nombre_negocio )')
+      .select('id, vendedor_nombre, cancelado_motivo, vendedor:vendedores ( nombre_negocio )')
       .eq('id', pedidoId)
       .maybeSingle()
 
@@ -577,6 +584,7 @@ export async function avisarPagoTardio({ admin, pedidoId, pago }) {
         monto: pago.transaction_amount,
         pagoId: pago.id,
         estado: pago.status,
+        motivo: pedido.cancelado_motivo,
       }),
     })
   } catch (err) {

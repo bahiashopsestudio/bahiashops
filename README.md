@@ -58,6 +58,12 @@ incidente de seguridad, no un detalle.
 | `MP_REDIRECT_URI` | A dónde vuelve MercadoPago después del OAuth. Tiene que coincidir *exactamente* con la que está cargada en el panel de MercadoPago, incluido el dominio: en desarrollo apunta a localhost, en producción al dominio real. |
 | `MP_WEBHOOK_SECRET` | Clave con la que se verifica la firma de los webhooks de pago. Si falta, el webhook **deja pasar todo** y sólo avisa por consola — cómodo en desarrollo, inaceptable en producción. |
 
+### Solo para desarrollo (opcional)
+
+| Variable | Qué es |
+| --- | --- |
+| `VENCIMIENTO_PAGO_MINUTOS` | Baja el plazo para pagar un pedido (3 días, `src/lib/vencimientoPago.js`) a esa cantidad de minutos, para probar el vencimiento en tu máquina con `npm run dev`. **Solo se respeta fuera de producción**: con `npm run build` / `npm start` y en Vercel el plazo son siempre 3 días, aunque la variable esté cargada. Nunca alarga el plazo. |
+
 ---
 
 ## La base de datos
@@ -87,10 +93,17 @@ ejecuta. **En orden numérico**, y cada una una sola vez.
 016_eliminar_cuenta.sql                  eliminar mi cuenta: cerrada_en, disparadores y las funciones del proceso
 017_localidades_activa.sql               localidades.activa: Cerri y White fuera de los selectores, la base rechaza altas ahí
 018_vendedores_zona.sql                  dirección exacta o zona aproximada; la ubicación la escribe solo el servidor
+019_envio_zona.sql                       zona del pedido y registro de zonas que no se pudieron calcular
+020_metodos_entrega.sql                  los cuatro métodos de entrega
+021_correo_ciudades.sql                  correo a cualquier ciudad y seguimiento del envío
+022_pedidos_vencimiento.sql              los links de pago vencen (pedidos.vence_en) y se cancelan los vencidos
+023_pedidos_link_de_pago.sql             pedidos.link_de_pago: el link para volver a pagar desde Mis pedidos
 ```
 
 Las pruebas de la 016 (contra una base local, sin tocar Supabase): `npm run probar:sql`.
 Las de la 018 (estado a medias y de cero, redondeo, permisos): `npm run probar:018`.
+Las de la 022 (cancelar vencidos, filtro por tienda, permisos): `npm run probar:022`. Las funciones de JavaScript
+del vencimiento (plazo, qué está vencido, fechas para MercadoPago): `npm run probar:vencimiento`.
 
 Algunas piden un paso manual antes (crear un bucket de Storage desde el panel, por ejemplo). Está
 aclarado en el encabezado de cada archivo — vale la pena leerlos, tienen escrito el *por qué* de

@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mockup · Pausar tu tienda</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&family=Fraunces:opsz,wght@9..144,100..900&family=Poppins:wght@300;400;500&display=swap">
+<style>
+  :root {
+    --negro: #0a0a0a;
+    --crema: #F5F2EC;
+    --fondo: #faf9f7;
+    --arena: #ECEAE3;
+    --marca: #4164fe;
+    --mp: #009ee3;
+    --amarillo: #f1f29f;
+    --amarillo-borde: #e3e48a;
+    --amarillo-texto: #5a5c00;
+    --ambar-fondo: #fffbeb;
+    --ambar-borde: #fde68a;
+    --ambar-texto: #78350f;
+    --rojo: #dc2626;
+    --verde-fondo: #d1fae5;
+    --verde-texto: #047857;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 16px 64px; background: #e9e7e1; color: var(--negro);
+    font-family: 'Inter', sans-serif;
+  }
+  h1.titulo { font-family: 'Fraunces', serif; font-weight: 500; font-size: 28px; margin: 0 0 6px; }
+  p.sub { font-family: 'Poppins', sans-serif; font-weight: 300; font-size: 14px; color: rgba(10,10,10,.55); margin: 0 0 28px; max-width: 760px; line-height: 1.6; }
+  .grilla { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 28px; align-items: start; max-width: 1700px; }
+  .pantalla { display: flex; flex-direction: column; gap: 10px; }
+  .rotulo { font-size: 11px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: rgba(10,10,10,.45); }
+  .marco { position: relative; background: #fff; border-radius: 18px; border: 1px solid rgba(10,10,10,.1); overflow: hidden; box-shadow: 0 10px 30px rgba(10,10,10,.08); max-width: 440px; width: 100%; }
+  .barra { height: 52px; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; border-bottom: 1px solid rgba(10,10,10,.05); background: #fff; }
+  .barra .logo { font-weight: 800; font-size: 11px; letter-spacing: 3px; text-transform: uppercase; }
+  .barra .iconos { display: flex; gap: 14px; color: rgba(10,10,10,.35); font-size: 14px; }
+  .contenido { padding: 22px 18px 28px; min-height: 640px; }
+  .volver { font-size: 12px; color: rgba(10,10,10,.4); margin-bottom: 18px; display: inline-block; }
+  .linea-sup { font-size: 10px; text-transform: uppercase; letter-spacing: 2px; color: rgba(10,10,10,.3); margin: 0 0 8px; }
+  .h1 { font-family: 'Fraunces', serif; font-weight: 500; font-size: 26px; margin: 0 0 2px; }
+  .nombre { font-family: 'Poppins', sans-serif; font-weight: 300; font-size: 13px; color: rgba(10,10,10,.45); margin: 0 0 18px; }
+
+  .estado-publicada { background: var(--amarillo); border: 1px solid var(--amarillo-borde); border-radius: 16px; padding: 18px; }
+  .estado-publicada .t { font-family: 'Fraunces', serif; font-weight: 500; font-size: 17px; color: var(--amarillo-texto); margin: 0; }
+  .estado-publicada .d { font-family: 'Poppins', sans-serif; font-weight: 300; font-size: 13px; color: var(--amarillo-texto); margin: 6px 0 0; line-height: 1.6; }
+  .estado-pausada { background: #ececec; border: 1px solid #d9d9d9; border-radius: 16px; padding: 18px; }
+  .estado-pausada .t { font-family: 'Fraunces', serif; font-weight: 500; font-size: 17px; color: #2a2a2a; margin: 0; }
+  .estado-pausada .d { font-family: 'Poppins', sans-serif; font-weight: 300; font-size: 13px; color: rgba(10,10,10,.65); margin: 6px 0 0; line-height: 1.6; }
+  .msg-publico { margin: 12px 0 0; padding: 12px 14px; border-radius: 12px; background: rgba(255,255,255,.75); font-size: 13px; line-height: 1.55; }
+  .msg-publico small { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: rgba(10,10,10,.4); margin-bottom: 4px; font-weight: 500; }
+
+  .btn-negro { display: inline-block; background: var(--negro); color: #fff; border: 0; border-radius: 4px; padding: 13px 22px; font-family: 'Inter', sans-serif; font-weight: 500; font-size: 14px; cursor: pointer; }
+  .btn-linea { display: inline-block; background: #fff; color: var(--negro); border: 1px solid rgba(10,10,10,.25); border-radius: 4px; padding: 12px 20px; font-family: 'Inter', sans-serif; font-weight: 500; font-size: 14px; cursor: pointer; }
+  .btn-pill { display: inline-block; background: #fff; border: 1px solid rgba(10,10,10,.1); border-radius: 999px; padding: 10px 20px; font-size: 14px; font-weight: 300; color: rgba(10,10,10,.6); cursor: pointer; }
+  .btn-pill.rojo { background: var(--negro); color: #fff; border-color: var(--negro); font-weight: 500; }
+  .enlace { color: rgba(10,10,10,.5); font-size: 12px; font-weight: 300; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; background: none; border: 0; padding: 0; font-family: inherit; }
+
+  .fila-menu { border: 1px solid rgba(10,10,10,.05); border-radius: 16px; overflow: hidden; margin-top: 18px; }
+  .fila-menu div { display: flex; align-items: center; gap: 12px; padding: 14px 18px; font-size: 14px; font-weight: 300; border-top: 1px solid rgba(10,10,10,.05); }
+  .fila-menu div:first-child { border-top: 0; }
+  .fila-menu .flecha { margin-left: auto; color: rgba(10,10,10,.25); }
+  .tarjeta { border: 1px solid rgba(10,10,10,.05); border-radius: 16px; padding: 16px 18px; margin-top: 14px; }
+  .tarjeta .fila { display: flex; align-items: center; gap: 12px; }
+  .tarjeta .tit { font-size: 14px; font-weight: 500; }
+  .tarjeta .ayuda { font-size: 11px; color: rgba(10,10,10,.35); font-weight: 300; margin-top: 2px; line-height: 1.5; }
+  .chip-activo { margin-left: auto; font-size: 10px; background: var(--verde-fondo); color: var(--verde-texto); padding: 4px 10px; border-radius: 999px; font-weight: 500; }
+  .parrafo { font-family: 'Poppins', sans-serif; font-weight: 300; font-size: 13px; color: rgba(10,10,10,.5); line-height: 1.6; margin: 8px 0 14px; }
+  .aviso-ambar { margin-top: 14px; padding: 14px 16px; border-radius: 16px; background: var(--ambar-fondo); border: 1px solid var(--ambar-borde); color: var(--ambar-texto); font-size: 13px; font-weight: 300; line-height: 1.55; }
+  .aviso-ambar b { font-weight: 500; }
+
+  .velo { position: absolute; inset: 0; background: rgba(10,10,10,.5); display: flex; align-items: flex-end; justify-content: center; padding: 12px; }
+  .modal { background: #fff; border-radius: 16px; width: 100%; overflow: hidden; }
+  .modal .cab { padding: 16px 20px; border-bottom: 1px solid rgba(10,10,10,.05); font-family: 'Fraunces', serif; font-weight: 500; font-size: 18px; }
+  .modal .cuerpo { padding: 14px 20px 6px; font-size: 13px; font-weight: 300; color: rgba(10,10,10,.65); line-height: 1.6; }
+  .modal ul { margin: 8px 0 12px; padding-left: 18px; }
+  .modal li { margin-bottom: 6px; }
+  .modal li b { font-weight: 500; color: var(--negro); }
+  .modal label { display: block; font-size: 13px; font-weight: 500; color: var(--negro); margin: 10px 0 6px; }
+  .modal textarea { width: 100%; height: 78px; border: 1px solid rgba(10,10,10,.12); border-radius: 8px; padding: 10px 12px; font-family: 'Inter', sans-serif; font-size: 14px; resize: none; background: #fff; color: var(--negro); }
+  .modal .meta { display: flex; justify-content: space-between; font-size: 11px; color: rgba(10,10,10,.4); margin-top: 4px; font-weight: 300; }
+  .modal .pie { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 20px 18px; border-top: 1px solid rgba(10,10,10,.05); margin-top: 8px; }
+  .modal .nota { font-size: 11px; color: rgba(10,10,10,.4); margin: 4px 0 0; }
+
+  /* ficha pública */
+  .portada { height: 150px; background: linear-gradient(135deg, #0a0a0a, #1a1a1a 55%, #333); position: relative; }
+  .portada .vuelta { position: absolute; top: 12px; left: 12px; width: 36px; height: 36px; border-radius: 999px; background: var(--crema); display: flex; align-items: center; justify-content: center; font-size: 14px; }
+  .identidad { display: flex; align-items: flex-end; gap: 14px; padding: 0 18px; margin-top: -34px; }
+  .logo-tienda { width: 84px; height: 84px; border-radius: 16px; border: 4px solid #fff; background: var(--negro); color: #fff; font-weight: 700; font-size: 26px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .identidad h2 { margin: 0 0 4px; font-size: 22px; font-weight: 900; letter-spacing: -.02em; line-height: 1.1; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .chip { font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: 999px; background: rgba(10,10,10,.05); color: rgba(10,10,10,.6); }
+  .chip.barrio { background: none; padding: 0; color: rgba(10,10,10,.35); font-weight: 300; }
+  .cartel-pausa { margin: 22px 18px 0; background: var(--crema); border-radius: 16px; padding: 26px 22px; text-align: center; }
+  .cartel-pausa .ico { width: 44px; height: 44px; border-radius: 999px; background: #fff; margin: 0 auto 12px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  .cartel-pausa h3 { font-family: 'Fraunces', serif; font-weight: 500; font-size: 20px; margin: 0 0 6px; }
+  .cartel-pausa .m { font-family: 'Poppins', sans-serif; font-weight: 300; font-size: 14px; line-height: 1.65; color: rgba(10,10,10,.65); margin: 10px 0 0; }
+  .cartel-pausa .sin { font-family: 'Poppins', sans-serif; font-weight: 300; font-size: 13px; color: rgba(10,10,10,.45); margin: 8px 0 0; }
+  .cartel-pausa .btn-negro { margin-top: 18px; }
+  .sobre { margin: 14px 18px 0; background: var(--crema); border-radius: 16px; padding: 20px; }
+  .sobre h4 { font-family: 'Fraunces', serif; font-weight: 500; font-size: 17px; margin: 0 0 8px; }
+  .sobre p { font-family: 'Poppins', sans-serif; font-weight: 300; font-size: 13px; line-height: 1.65; color: rgba(10,10,10,.5); margin: 0; }
+
+  .leyenda { max-width: 440px; font-family: 'Poppins', sans-serif; font-weight: 300; font-size: 12px; line-height: 1.6; color: rgba(10,10,10,.55); }
+  .leyenda b { font-weight: 500; color: var(--negro); }
+</style>
+</head>
+<body>
+
+<h1 class="titulo">Pausar tu tienda</h1>
+<p class="sub">Cuatro pantallas del flujo: el panel con el botón, la confirmación con el mensaje opcional, el panel mientras está en pausa y la ficha pública con el cartel. Es un mockup estático: los textos son los propuestos y los colores y tipografías son los del sitio (Fraunces, Poppins e Inter; negro #0a0a0a, crema #F5F2EC, amarillo #f1f29f).</p>
+
+<div class="grilla">
+
+  <!-- ═══════════ 1. PANEL CON EL BOTÓN ═══════════ -->
+  <section class="pantalla">
+    <div class="rotulo">1 · El panel, con el botón</div>
+    <div class="marco">
+      <div class="barra"><span class="logo">Bahía Shops</span><span class="iconos">♡ &nbsp; 🛒 &nbsp; ◯</span></div>
+      <div class="contenido">
+        <span class="volver">← Volver a Mi perfil</span>
+        <p class="linea-sup">Tu tienda</p>
+        <h2 class="h1">Mi negocio</h2>
+        <p class="nombre">Ludoméstica</p>
+
+        <div class="estado-publicada">
+          <p class="t">¡Listo! Tu tienda ya está publicada.</p>
+          <p class="d">Cargá tus productos para que la gente pueda encontrarte y comprarte.</p>
+        </div>
+
+        <div class="fila-menu">
+          <div><span>📦</span> Mis productos <span class="flecha">›</span></div>
+          <div><span>🛒</span> Mis pedidos <span class="flecha">›</span></div>
+          <div><span>🚚</span> Cómo entregás <span class="flecha">›</span></div>
+          <div><span>📍</span> Mi ubicación <span class="flecha">›</span></div>
+        </div>
+
+        <div class="tarjeta">
+          <div class="fila"><span>💳</span><div><div class="tit">MercadoPago conectado</div><div class="ayuda">Recibís el dinero de tus ventas en tu cuenta.</div></div><span class="chip-activo">Activo</span></div>
+          <div style="margin-top:10px"><button class="enlace">Desconectar cuenta</button></div>
+        </div>
+
+        <div class="tarjeta">
+          <div class="fila"><span>⏸</span><div class="tit">Pausar tu tienda</div></div>
+          <p class="parrafo" style="margin-bottom:12px">¿Cerrás por un tiempo, o para siempre? Tu tienda deja de verse y de recibir pedidos. No perdés nada y la reactivás cuando quieras.</p>
+          <button class="btn-linea">Pausar mi tienda</button>
+        </div>
+      </div>
+    </div>
+    <p class="leyenda"><b>Dónde va:</b> debajo de “Cobros” en <code>/vendedor/perfil</code>. Desde “Eliminar mi cuenta” se llega con <code>?pausar=1</code> y el modal ya viene abierto.</p>
+  </section>
+
+  <!-- ═══════════ 2. CONFIRMACIÓN ═══════════ -->
+  <section class="pantalla">
+    <div class="rotulo">2 · La confirmación, con el mensaje</div>
+    <div class="marco">
+      <div class="barra"><span class="logo">Bahía Shops</span><span class="iconos">♡ &nbsp; 🛒 &nbsp; ◯</span></div>
+      <div class="contenido" style="filter: brightness(.9);">
+        <span class="volver">← Volver a Mi perfil</span>
+        <p class="linea-sup">Tu tienda</p>
+        <h2 class="h1">Mi negocio</h2>
+        <p class="nombre">Ludoméstica</p>
+        <div class="estado-publicada">
+          <p class="t">¡Listo! Tu tienda ya está publicada.</p>
+          <p class="d">Cargá tus productos para que la gente pueda encontrarte y comprarte.</p>
+        </div>
+      </div>
+      <div class="velo">
+        <div class="modal">
+          <div class="cab">¿Pausar tu tienda?</div>
+          <div class="cuerpo">
+            Mientras esté pausada:
+            <ul>
+              <li><b>Tu tienda y tus productos se ocultan.</b> No aparecen en el inicio, el mapa, las búsquedas ni las categorías, y nadie puede comprarlos.</li>
+              <li>Quien entre con el link de tu tienda ve un cartel de que está inactiva, <b>sin productos</b>.</li>
+              <li>Los pedidos que ya recibiste siguen en tu panel para que los despaches. <b>Tenés 1 pedido para entregar.</b></li>
+              <li><b>No perdés nada:</b> productos, datos, historial y tu MercadoPago conectado quedan como están, y podés seguir editando.</li>
+            </ul>
+            <label for="m">Mensaje para quien visite tu tienda <span style="font-weight:300;color:rgba(10,10,10,.4)">(opcional)</span></label>
+            <textarea id="m" readonly>Estamos de vacaciones, volvemos el 15 de febrero.</textarea>
+            <div class="meta"><span>Sin teléfonos, mails ni links.</span><span>49 / 200</span></div>
+            <p class="nota">Te mandamos un mail para confirmarlo, con los pasos para reactivarla.</p>
+          </div>
+          <div class="pie">
+            <button class="btn-pill">Cancelar</button>
+            <button class="btn-pill rojo">Sí, pausar mi tienda</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="leyenda"><b>Si tiene ventas en curso</b> la línea del pedido cambia a “Tenés N pedidos para entregar”. Si no tiene, esa línea no aparece.</p>
+  </section>
+
+  <!-- ═══════════ 3. PANEL EN PAUSA ═══════════ -->
+  <section class="pantalla">
+    <div class="rotulo">3 · El panel con la tienda en pausa</div>
+    <div class="marco">
+      <div class="barra"><span class="logo">Bahía Shops</span><span class="iconos">♡ &nbsp; 🛒 &nbsp; ◯</span></div>
+      <div class="contenido">
+        <span class="volver">← Volver a Mi perfil</span>
+        <p class="linea-sup">Tu tienda</p>
+        <h2 class="h1">Mi negocio</h2>
+        <p class="nombre">Ludoméstica</p>
+
+        <div class="estado-pausada">
+          <p class="t">Tu tienda está en pausa</p>
+          <p class="d">Desde el 4 de octubre no se ve en el sitio y nadie puede comprarte. Tus productos están ocultos, pero no se borró nada.</p>
+          <div class="msg-publico"><small>Lo que ve quien entra a tu tienda</small>“Estamos de vacaciones, volvemos el 15 de febrero.”</div>
+          <div style="margin-top:14px; display:flex; gap:12px; align-items:center; flex-wrap:wrap">
+            <button class="btn-negro">Reactivar mi tienda</button>
+            <button class="enlace">Editar el mensaje</button>
+          </div>
+        </div>
+
+        <div class="aviso-ambar">
+          <b>Tu conexión con MercadoPago vence el 17 de febrero de 2027.</b> Si para entonces no la renovamos, vas a tener que volver a conectarla para cobrar. Al reactivar la tienda lo revisamos y te avisamos.
+        </div>
+
+        <a style="display:flex;gap:12px;align-items:center;margin-top:14px;padding:14px 18px;border:1px solid rgba(10,10,10,.05);border-radius:16px;font-size:14px;font-weight:300;color:var(--negro);text-decoration:none">
+          <span>🛒</span> Tenés 1 pedido para despachar <span style="margin-left:auto;color:rgba(10,10,10,.25)">›</span>
+        </a>
+
+        <div class="fila-menu">
+          <div><span>📦</span> Mis productos <span class="flecha">›</span></div>
+          <div><span>🛒</span> Mis pedidos <span class="flecha">›</span></div>
+          <div><span>🚚</span> Cómo entregás <span class="flecha">›</span></div>
+          <div><span>📍</span> Mi ubicación <span class="flecha">›</span></div>
+        </div>
+
+        <p class="parrafo" style="margin-top:20px">¿Cerrás el negocio para siempre? Con la tienda en pausa podés <button class="enlace">eliminar tu cuenta</button>: la tienda y sus datos se eliminan con ella.</p>
+      </div>
+    </div>
+    <p class="leyenda"><b>Si además está bloqueada</b> manda el cartel rojo del bloqueo (el de hoy) y abajo una línea: “También la pausaste vos”.</p>
+  </section>
+
+  <!-- ═══════════ 4. FICHA PÚBLICA EN PAUSA ═══════════ -->
+  <section class="pantalla">
+    <div class="rotulo">4 · La ficha pública en pausa</div>
+    <div class="marco">
+      <div class="barra"><span class="logo">Bahía Shops</span><span class="iconos">♡ &nbsp; 🛒 &nbsp; ◯</span></div>
+      <div class="portada"><span class="vuelta">‹</span></div>
+      <div class="identidad">
+        <div class="logo-tienda">L</div>
+        <div style="padding-bottom:4px">
+          <h2>Ludoméstica</h2>
+          <div class="chips"><span class="chip">Juegos y juguetes</span><span class="chip barrio">📍 Universitario</span></div>
+        </div>
+      </div>
+
+      <div class="cartel-pausa">
+        <div class="ico">⏸</div>
+        <h3>Esta tienda está inactiva por ahora</h3>
+        <p class="m">“Estamos de vacaciones, volvemos el 15 de febrero.”</p>
+        <p class="sin">Mientras tanto no tiene productos a la venta.</p>
+        <button class="btn-negro">Explorar otras tiendas</button>
+      </div>
+
+      <div class="sobre">
+        <h4>Sobre Ludoméstica</h4>
+        <p>Juegos de mesa y ludoteca hecha en Bahía Blanca.</p>
+      </div>
+      <div style="height:26px"></div>
+    </div>
+    <p class="leyenda"><b>Sin mensaje:</b> el cartel dice solo “Esta tienda está inactiva por ahora”. Sin botón “Seguir”, con <code>noindex</code> en la página, y sin productos.</p>
+  </section>
+
+</div>
+</body>
+</html>

@@ -14,6 +14,7 @@
 // tiene la forma esperada, NO se elimina nada (falla cerrado).
 
 import { getValidAccessToken } from '@/lib/mercadopago/tokens'
+import { vencerPreferencia } from '@/lib/mercadopago/preferencias'
 
 export const PALABRA_CONFIRMACION = 'ELIMINAR'
 
@@ -36,12 +37,6 @@ function ordenarMotivos(motivos) {
     const ib = ORDEN_MOTIVOS.indexOf(b)
     return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib)
   })
-}
-
-// "2026-10-01T09:30:00.000-03:00": hora de Argentina con su desfase, el formato
-// que muestra la documentación de MercadoPago.
-function fechaAR(ms) {
-  return new Date(ms - 3 * 3600 * 1000).toISOString().replace('Z', '-03:00')
 }
 
 class MercadoPagoNoResponde extends Error {}
@@ -94,33 +89,10 @@ async function pagosDelPedido(token, pedidoId) {
   return datos.results.map((p) => ({ id: p.id, status: p.status }))
 }
 
-// Vence el link de pago de un pedido. Mejor esfuerzo: nunca lanza.
-// Primero con una fecha ya pasada; si la API no la acepta, con un minuto de
-// margen. Si MercadoPago dejara pagar igual una preferencia vencida, el aviso
-// interno del webhook (pago sobre pedido cancelado) es la cobertura.
-async function vencerPreferencia(token, preferenciaId, etiqueta) {
-  const ahora = Date.now()
-  const intentos = [
-    { desde: ahora - 2 * 3600 * 1000, hasta: ahora - 3600 * 1000 },
-    { desde: ahora - 60 * 1000, hasta: ahora + 60 * 1000 },
-  ]
-  for (const { desde, hasta } of intentos) {
-    try {
-      const res = await fetch(`https://api.mercadopago.com/checkout/preferences/${encodeURIComponent(preferenciaId)}`, {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ expires: true, expiration_date_from: fechaAR(desde), expiration_date_to: fechaAR(hasta) }),
-        signal: AbortSignal.timeout(TIEMPO_MAXIMO_MP_MS),
-      })
-      if (res.ok) return true
-    } catch (err) {
-      console.warn(`Eliminar cuenta: no se pudo vencer la preferencia de ${etiqueta} — ${err?.message || err}`)
-      return false
-    }
-  }
-  console.warn(`Eliminar cuenta: MercadoPago no aceptó vencer la preferencia de ${etiqueta}.`)
-  return false
-}
+// vencerPreferencia (vence el link de pago de un pedido) vive en
+// src/lib/mercadopago/preferencias.js: la comparte la regularización de pedidos
+// viejos. Se llama con el contexto por defecto, 'Eliminar cuenta', así que los
+// mensajes del log son los mismos de siempre.
 
 async function vencerPreferencias(admin, pedidos, yaVencidas = new Set()) {
   const pendientes = pedidos.filter((p) => p.mp_preference_id && !yaVencidas.has(p.mp_preference_id))

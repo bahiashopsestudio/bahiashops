@@ -40,6 +40,14 @@ export async function GET() {
     return NextResponse.json({ error: 'No encontramos tu cuenta de vendedor.' }, { status: 403 });
   }
 
+  // Los pedidos cuyo link de pago venció sin pagarse se cancelan ACÁ, al abrir
+  // el panel: no hay tarea programada. Es mejor esfuerzo: si falla, la lista
+  // sale igual (con el pedido todavía pendiente) y se reintenta la próxima vez.
+  const { error: errorVencidos } = await admin.rpc('rpc_cancelar_pedidos_vencidos', { p_vendedor_id: vendedor.id });
+  if (errorVencidos) {
+    console.error('No se pudieron cancelar los pedidos vencidos', vendedor.id, errorVencidos.message);
+  }
+
   // Sólo los suyos. El filtro va acá, no en el cliente.
   const { data: pedidos, error } = await admin
     .from('pedidos')
@@ -47,6 +55,7 @@ export async function GET() {
       id, estado, metodo_envio, zona_envio, subtotal_productos, costo_envio, total,
       envio_empresa, envio_empresa_otra, envio_seguimiento,
       comision_plataforma, turno_preferido, franja_horaria, creado_en, actualizado_en,
+      vence_en, cancelado_motivo,
       comprador_id, comprador_nombre, comprador_apellido, comprador_telefono, direccion_copia,
       items:pedido_items ( id, nombre, variante, cantidad, precio, foto_url ),
       direccion:direcciones ( calle, numero, piso_depto, telefono, barrio_id )
