@@ -36,7 +36,20 @@ function estadoDe(p) {
   if (p.estado === 'cancelado' && p.cancelado_motivo === 'pago_vencido') {
     return { label: 'Vencido · no se pagó a tiempo', color: 'text-[#0a0a0a]/50', bg: 'bg-[#0a0a0a]/5' };
   }
+  if (p.estado === 'cancelado' && p.cancelado_motivo === 'cuenta_mp_cambiada') {
+    return { label: 'Cancelado · cambió tu cuenta de MercadoPago', color: 'text-red-600', bg: 'bg-red-50' };
+  }
   return ESTADOS[p.estado] || { label: p.estado, color: 'text-[#0a0a0a]/40', bg: 'bg-[#0a0a0a]/5' };
+}
+
+// Lo que se ve en lugar de los datos de contacto de un pedido que no se pagó.
+// Pendiente: todavía puede pagarse. Rechazado, cancelado o vencido: no se pagó
+// y no va a haber datos.
+function textoDatosOcultos(p) {
+  if (p.estado === 'pendiente') {
+    return 'Los datos de contacto de quien compra (nombre, teléfono y dirección) aparecen cuando se acredite el pago.';
+  }
+  return 'Este pedido no se pagó, por eso no tiene datos de contacto.';
 }
 
 // Cómo le llega el pedido a quien compra, para elegir el texto del WhatsApp:
@@ -622,7 +635,12 @@ function PedidoCard({ pedido, abierto, items, avanzando, onToggle, onAvanzar, on
                 )}
               </p>
             )}
-            {p.comprador_eliminado ? (
+            {p.datos_de_contacto === 'ocultos' ? (
+              // Sin pagar: la ruta ni siquiera manda nombre, teléfono ni dirección.
+              <p className="mt-1 mb-0 text-sm text-[#0a0a0a]/40 font-light leading-relaxed">
+                {textoDatosOcultos(p)}
+              </p>
+            ) : p.comprador_eliminado ? (
               // Cuenta eliminada: el método de entrega queda a la vista; el nombre,
               // el teléfono y la dirección ya no existen.
               <p className="mt-1 mb-0 text-sm text-[#0a0a0a]/40 font-light">Quien hizo esta compra eliminó su cuenta.</p>

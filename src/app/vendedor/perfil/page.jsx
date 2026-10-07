@@ -100,6 +100,8 @@ export default function PerfilVendedorPage() {
   const [categorias, setCategorias] = useState([]);
 
   const [resultadoMp, setResultadoMp] = useState(null);
+  // La cuenta de MercadoPago conectada: { id, nickname, conectado_en, dias_restantes }.
+  const [cuentaMp, setCuentaMp] = useState(null);
   const [confirmarDesconexion, setConfirmarDesconexion] = useState(false);
   const [desconectando, setDesconectando] = useState(false);
   const [errorDesconexion, setErrorDesconexion] = useState(null);
@@ -118,10 +120,16 @@ export default function PerfilVendedorPage() {
       const mp = params.get('mp');
       if (!mp) return;
 
-      setResultadoMp(mp === 'exito' ? { ok: true } : { ok: false, motivo: params.get('motivo') });
+      // 'cancelados' viene solo cuando se cambió a OTRA cuenta de MercadoPago:
+      // cuántos pedidos sin pagar se cancelaron.
+      const cancelados = Number(params.get('cancelados'));
+      setResultadoMp(mp === 'exito'
+        ? { ok: true, cancelados: Number.isFinite(cancelados) && params.has('cancelados') ? cancelados : null }
+        : { ok: false, motivo: params.get('motivo') });
 
       params.delete('mp');
       params.delete('motivo');
+      params.delete('cancelados');
       const query = params.toString();
       window.history.replaceState({}, '', window.location.pathname + (query ? '?' + query : ''));
     }
@@ -146,6 +154,18 @@ export default function PerfilVendedorPage() {
         setLogoUrl(data.logo_url);
         setPortadaUrl(data.portada_url);
         setMpConectado(data.mercadopago_conectado || false);
+
+        // Qué cuenta es: no se puede leer desde el navegador (la tabla guarda
+        // los tokens), va por una ruta. Si falla, el panel sale igual.
+        if (data.mercadopago_conectado) {
+          try {
+            const res = await fetch('/api/mercadopago/cuenta');
+            const cuenta = res.ok ? await res.json() : null;
+            if (cuenta?.conectada) setCuentaMp(cuenta);
+          } catch (err) {
+            console.error('No se pudo cargar la cuenta de MercadoPago:', err);
+          }
+        }
         setEstadoValidacion(data.estado_validacion || 'aprobado');
         setSlugTienda(data.slug || null);
         setBloqueado(data.bloqueado === true);
@@ -416,6 +436,11 @@ export default function PerfilVendedorPage() {
                 <p className="text-sm font-medium text-emerald-800 m-0">¡Listo! Conectaste tu cuenta de MercadoPago.</p>
                 <p className="text-[13px] text-emerald-700 font-light mt-1 mb-0 leading-relaxed">
                   Ya podés recibir el dinero de tus ventas en tu cuenta.
+                  {resultadoMp.cancelados !== null && resultadoMp.cancelados !== undefined && (
+                    resultadoMp.cancelados > 0
+                      ? ` Como cambiaste de cuenta, cancelamos ${resultadoMp.cancelados} ${resultadoMp.cancelados === 1 ? 'pedido que todavía no se había pagado' : 'pedidos que todavía no se habían pagado'}: cobraban en la cuenta anterior. Te mandamos un mail con el detalle.`
+                      : ' Como cambiaste de cuenta, te mandamos un mail con el detalle.'
+                  )}
                 </p>
               </div>
             )}
@@ -438,8 +463,18 @@ export default function PerfilVendedorPage() {
                     <div className="flex-1">
                       <span className="text-sm font-medium text-[#0a0a0a]">MercadoPago conectado</span>
                       <p className="text-[11px] text-[#0a0a0a]/30 font-light mt-0.5 mb-0">
-                        Recibís el dinero de tus ventas en tu cuenta.
+                        {cuentaMp
+                          ? <>Cuenta conectada: <span className="text-[#0a0a0a]/60">{cuentaMp.nickname || 'sin nombre'}</span> · N° {cuentaMp.id}</>
+                          : 'Recibís el dinero de tus ventas en tu cuenta.'}
                       </p>
+                      {cuentaMp && (
+                        <p className="text-[11px] text-[#0a0a0a]/30 font-light mt-0.5 mb-0">
+                          {cuentaMp.conectado_en
+                            ? `Conectada el ${new Date(cuentaMp.conectado_en).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })}. `
+                            : ''}
+                          Recibís el dinero de tus ventas en esa cuenta.
+                        </p>
+                      )}
                     </div>
                     <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full font-medium">
                       Activo
@@ -506,6 +541,7 @@ export default function PerfilVendedorPage() {
               <p className="text-sm text-[#0a0a0a]/60 font-light leading-relaxed m-0">
                 Si desconectás tu cuenta vas a dejar de poder cobrar tus ventas a través de Bahía Shops.
                 Tus productos siguen publicados, pero nadie va a poder pagarlos por la plataforma.
+                Los pedidos que todavía no se pagaron se cancelan, porque su link de pago cobraba en esta cuenta.
               </p>
               <p className="text-sm text-[#0a0a0a]/60 font-light leading-relaxed mt-3 mb-0">
                 Para volver a cobrar vas a tener que vincular tu cuenta de MercadoPago de nuevo.

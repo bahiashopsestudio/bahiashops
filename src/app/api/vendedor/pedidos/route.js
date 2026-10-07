@@ -14,6 +14,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getServiceRoleClient } from '@/lib/supabase/admin';
+import { pedidoTuvoPago, pedidoParaLaTienda } from '@/lib/pedidos';
 
 export async function GET() {
   const supabase = await createClient();
@@ -49,6 +50,10 @@ export async function GET() {
   }
 
   // Sólo los suyos. El filtro va acá, no en el cliente.
+  //
+  // Esta primera lectura NO trae ningún dato de contacto de quien compra: la
+  // tienda los recibe recién cuando el pedido se pagó (ver pedidoTuvoPago en
+  // src/lib/pedidos.js). Antes del pago, solo ve el apodo.
   const { data: pedidos, error } = await admin
     .from('pedidos')
     .select(`
@@ -56,9 +61,8 @@ export async function GET() {
       envio_empresa, envio_empresa_otra, envio_seguimiento,
       comision_plataforma, turno_preferido, franja_horaria, creado_en, actualizado_en,
       vence_en, cancelado_motivo,
-      comprador_id, comprador_nombre, comprador_apellido, comprador_telefono, direccion_copia,
-      items:pedido_items ( id, nombre, variante, cantidad, precio, foto_url ),
-      direccion:direcciones ( calle, numero, piso_depto, telefono, barrio_id )
+      comprador_id,
+      items:pedido_items ( id, nombre, variante, cantidad, precio, foto_url )
     `)
     .eq('vendedor_id', vendedor.id)
     .order('creado_en', { ascending: false });
@@ -66,6 +70,30 @@ export async function GET() {
   if (error) {
     console.error('No se pudieron leer los pedidos', vendedor.id, error.message);
     return NextResponse.json({ error: 'No se pudieron cargar los pedidos.' }, { status: 500 });
+  }
+
+  // Los datos de contacto, SOLO de los pedidos que se pagaron (una segunda
+  // lectura, por la lista de ids): los de un pedido sin pagar ni se leen.
+  const idsPagados = (pedidos || []).filter(pedidoTuvoPago).map((p) => p.id);
+  const contactos = new Map();
+
+  if (idsPagados.length > 0) {
+    const { data: filasContacto, error: errorContacto } = await admin
+      .from('pedidos')
+      .select(`
+        id, comprador_nombre, comprador_apellido, comprador_telefono, direccion_copia,
+        direccion:direcciones ( calle, numero, piso_depto, telefono, barrio_id )
+      `)
+      .in('id', idsPagados)
+      .eq('vendedor_id', vendedor.id);
+
+    if (errorContacto) {
+      // Sin esto no se puede mostrar un pedido pagado completo: mejor un error
+      // que una lista a medias que parezca que la persona no dejó datos.
+      console.error('No se pudieron leer los datos de contacto de los pedidos pagados', vendedor.id, errorContacto.message);
+      return NextResponse.json({ error: 'No se pudieron cargar los pedidos.' }, { status: 500 });
+    }
+    for (const { id, ...contacto } of filasContacto || []) contactos.set(id, contacto);
   }
 
   // El apodo de cada comprador, para la lista. Va en una segunda consulta por
@@ -93,12 +121,14 @@ export async function GET() {
     }
   }
 
-  // Del comprador viaja su apodo, lo que quedó congelado en el pedido (nombre,
-  // apellido, teléfono y, si el método pedía dirección, direccion_copia) y las
-  // cinco columnas de la dirección embebida. El comprador_id no sale de acá:
-  // sólo se usó para buscar el apodo.
+  // Del comprador viaja siempre su apodo. Lo que quedó congelado en el pedido
+  // (nombre, apellido, teléfono y, si el método pedía dirección,
+  // direccion_copia) y las columnas de la dirección embebida viajan SOLO si el
+  // pedido se pagó. pedidoParaLaTienda es la última barrera: aunque algo de
+  // arriba cambie, un pedido sin pagar sale con esos campos en null. El
+  // comprador_id no sale de acá: sólo se usó para buscar el apodo.
   const respuesta = (pedidos || []).map(({ comprador_id, ...pedido }) => ({
-    ...pedido,
+    ...pedidoParaLaTienda({ ...pedido, ...(contactos.get(pedido.id) || {}) }),
     comprador_apodo: apodos.get(comprador_id) || null,
     comprador_eliminado: eliminados.has(comprador_id),
   }));

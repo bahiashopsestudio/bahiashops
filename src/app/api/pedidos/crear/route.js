@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
-import { getValidAccessToken } from '@/lib/mercadopago/tokens';
+import { getCuentaValida } from '@/lib/mercadopago/tokens';
 import { camposDeVencimiento, vencerPreferencia } from '@/lib/mercadopago/preferencias';
 import { calcularVencimiento } from '@/lib/vencimientoPago';
 import { SITIO_URL } from '@/lib/sitio';
@@ -344,10 +344,13 @@ export async function POST(request) {
     }
   }
 
-  // 5. Obtener un token válido del vendedor (se auto-renueva si está por vencer).
+  // 5. Obtener un token válido del vendedor (se auto-renueva si está por vencer),
+  // junto con QUÉ cuenta de MercadoPago es: el pedido guarda cuál lo cobra, y
+  // "Pagar" solo ofrece el link mientras esa sea la cuenta conectada.
   let accessToken;
+  let cuentaDeCobro;
   try {
-    accessToken = await getValidAccessToken(vendedorId, admin);
+    ({ accessToken, mpUserId: cuentaDeCobro } = await getCuentaValida(vendedorId, admin));
   } catch (err) {
     const mensajes = {
       VENDEDOR_SIN_MP: 'Este vendedor no tiene MercadoPago conectado.',
@@ -358,6 +361,10 @@ export async function POST(request) {
       { error: mensajes[err.message] || 'Error con la conexión de MercadoPago del vendedor.' },
       { status: 400 }
     );
+  }
+
+  if (!cuentaDeCobro) {
+    console.warn(`Tienda ${vendedorId}: la cuenta de MercadoPago no tiene mp_user_id; el pedido se crea sin saber qué cuenta lo cobra (no va a ofrecer "Pagar").`);
   }
 
   // 6. Anotar el pedido en la libreta (estado: pendiente, porque todavía no pagó).
@@ -373,6 +380,9 @@ export async function POST(request) {
     .insert({
       comprador_id: user.id,
       vence_en: new Date(venceEnMs).toISOString(),
+      // La cuenta de MercadoPago que cobra este pedido (null si no se sabe: sin
+      // ese dato, "Pagar" no ofrece el link).
+      mp_user_id_cobro: cuentaDeCobro,
       // comprador_nombre, comprador_apellido, comprador_telefono y
       // direccion_copia (esta última sólo si el método pide dirección).
       ...contactoComprador,

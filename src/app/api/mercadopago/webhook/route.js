@@ -6,7 +6,7 @@ import {
   validarPago, estadoDelPedido, MOTIVOS_DE_FRAUDE, ESTADOS_REEMPLAZABLES, DEVOLUCIONES_MP, SIN_CAMBIOS_MP,
   MOTIVO_PEDIDO_CANCELADO,
 } from '@/lib/validarPago';
-import { avisarPago, avisarPagoTardio } from '@/lib/mailsPedidos';
+import { avisarPago, avisarPagoTardio, avisarPagoSinResolver } from '@/lib/mailsPedidos';
 
 // ── Verificar que el webhook realmente viene de MercadoPago ──
 // MercadoPago firma cada notificación con HMAC-SHA256.
@@ -124,6 +124,7 @@ export async function POST(request) {
 
     if (!cuentas || cuentas.length === 0) {
       console.log('No hay vendedores conectados con MercadoPago.');
+      await avisarPagoSinResolver({ pagoId: paymentId, accion: body.action, cobrador: body.user_id, enVivo: body.live_mode });
       return NextResponse.json({ recibido: true });
     }
 
@@ -138,6 +139,9 @@ export async function POST(request) {
 
     if (!consulta) {
       console.log('No pudimos consultar el pago con ningún vendedor.');
+      // Un pago real en un link de una cuenta que la tienda ya no tiene
+      // conectada cae acá: sin este aviso nadie se enteraría.
+      await avisarPagoSinResolver({ pagoId: paymentId, accion: body.action, cobrador: body.user_id, enVivo: body.live_mode });
       return NextResponse.json({ recibido: true });
     }
 

@@ -14,7 +14,10 @@
     "probar:022": "node scripts/probar-022.mjs",
     "probar:vencimiento": "node scripts/probar-vencimiento.mjs",
     "probar:023": "node scripts/probar-023.mjs",
+    "probar:024": "node scripts/probar-024.mjs",
+    "probar:cuenta-mp": "node scripts/probar-cambio-cuenta.mjs",
     "probar:pagar": "node scripts/probar-pagar.mjs",
+    "probar:datos-pedido": "node scripts/probar-datos-pedido.mjs",
     "probar:cuenta": "node scripts/probar-eliminar-cuenta.mjs"
   },
   "dependencies": {

@@ -98,12 +98,15 @@ ejecuta. **En orden numérico**, y cada una una sola vez.
 021_correo_ciudades.sql                  correo a cualquier ciudad y seguimiento del envío
 022_pedidos_vencimiento.sql              los links de pago vencen (pedidos.vence_en) y se cancelan los vencidos
 023_pedidos_link_de_pago.sql             pedidos.link_de_pago: el link para volver a pagar desde Mis pedidos
+024_mp_cuenta_de_cobro.sql               pedidos.mp_user_id_cobro: qué cuenta de MercadoPago cobra cada pedido; cancelar los pendientes al cambiar de cuenta
 ```
 
 Las pruebas de la 016 (contra una base local, sin tocar Supabase): `npm run probar:sql`.
 Las de la 018 (estado a medias y de cero, redondeo, permisos): `npm run probar:018`.
 Las de la 022 (cancelar vencidos, filtro por tienda, permisos): `npm run probar:022`. Las funciones de JavaScript
 del vencimiento (plazo, qué está vencido, fechas para MercadoPago): `npm run probar:vencimiento`.
+Las de la 024 (cancelar pendientes por tienda y por cuenta, permisos): `npm run probar:024`. Cambiar o desconectar
+la cuenta de MercadoPago, de punta a punta con las rutas reales y todo de mentira: `npm run probar:cuenta-mp`.
 
 Algunas piden un paso manual antes (crear un bucket de Storage desde el panel, por ejemplo). Está
 aclarado en el encabezado de cada archivo — vale la pena leerlos, tienen escrito el *por qué* de

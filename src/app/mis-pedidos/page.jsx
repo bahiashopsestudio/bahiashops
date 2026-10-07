@@ -99,6 +99,10 @@ export default function MisPedidosPage() {
   // La hora a la que se cargaron los pedidos: de ella depende qué está vencido.
   // Va en el estado (y no se pide al dibujar) para que el render sea puro.
   const [ahora, setAhora] = useState(0)
+  // Los ids de los pedidos que se pueden pagar AHORA. Los decide el servidor
+  // (/api/pedidos/pagables): solo él sabe si la tienda sigue disponible y si
+  // sigue cobrando con la misma cuenta de MercadoPago.
+  const [pagables, setPagables] = useState([])
   // El pedido al que se le está abriendo el pago, y el error de cada uno.
   const [pagandoId, setPagandoId] = useState(null)
   const [erroresPago, setErroresPago] = useState({})
@@ -182,6 +186,17 @@ export default function MisPedidosPage() {
       setAhora(Date.now())
       setPedidos(data || [])
       setCargando(false)
+
+      // El botón "Pagar" solo aparece en los que el servidor dice. Si la
+      // consulta falla, simplemente no hay botones: el resto de la pantalla
+      // anda igual.
+      if ((data || []).some((p) => p.estado === 'pendiente')) {
+        try {
+          const res = await fetch('/api/pedidos/pagables')
+          const cuerpo = res.ok ? await res.json() : null
+          if (Array.isArray(cuerpo?.ids)) setPagables(cuerpo.ids)
+        } catch { /* sin botones */ }
+      }
     }
     cargar()
   }, [])
@@ -253,10 +268,11 @@ export default function MisPedidosPage() {
                   const vencido = pedidoVencido(pedido, ahora)
                   const pagarHasta = pagableHasta(pedido, ahora)
                   // El botón: pendiente, sin ningún pago, todavía dentro del
-                  // plazo y con la tienda a la vista (si el pedido no trae la
-                  // tienda es que dejó de estar disponible). El servidor vuelve
-                  // a comprobar todo al apretarlo.
-                  const puedePagar = !vencido && !!pagarHasta && !pedidoTienePago(pedido) && !!pedido.vendedor
+                  // plazo (esto lo ve la pantalla, para que desaparezca solo al
+                  // vencer) y en la lista de pedidos que el servidor dice que se
+                  // pueden pagar (tienda disponible, misma cuenta de MercadoPago,
+                  // con link). El servidor vuelve a comprobar todo al apretarlo.
+                  const puedePagar = !vencido && !!pagarHasta && !pedidoTienePago(pedido) && pagables.includes(pedido.id)
                   const estado = vencido
                     ? ESTADOS.vencido
                     : (ESTADOS[pedido.estado] || { label: pedido.estado, color: 'bg-gray-50 text-gray-600' })
@@ -329,7 +345,12 @@ export default function MisPedidosPage() {
                           El link de pago venció y el pedido no se cobró. Si todavía querés estos productos, hacé el pedido de nuevo.
                         </p>
                       )}
-                      {!vencido && pagarHasta && (
+                      {pedido.estado === 'cancelado' && pedido.cancelado_motivo === 'cuenta_mp_cambiada' && (
+                        <p className="pt-2 mt-1 text-xs text-[#0a0a0a]/50 font-light leading-relaxed">
+                          La tienda cambió su cuenta de cobro y este pedido se canceló sin cobrarse. Si todavía querés estos productos, hacé el pedido de nuevo.
+                        </p>
+                      )}
+                      {!vencido && pagarHasta && (puedePagar || pedidoTienePago(pedido)) && (
                         <p className="pt-2 mt-1 text-xs text-[#0a0a0a]/50 font-light leading-relaxed">
                           Podés pagarlo hasta el {textoFechaYHora(pagarHasta)}. Después el link vence.
                         </p>

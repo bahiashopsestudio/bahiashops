@@ -97,3 +97,40 @@ export function validarAvance({ pedido, vendedorId, destino }) {
 
   return { ok: true, siguiente }
 }
+
+// ── Datos de contacto de quien compró ─────────────────────────────────────────
+//
+// La tienda recibe los datos duros de quien compra (nombre, apellido, teléfono,
+// dirección: lo que permite contactar a la persona) recién cuando el pedido se
+// pagó. Antes del pago, solo ve el apodo. Es una decisión de producto: quien
+// abandona un carrito no tiene por qué quedar en manos de la tienda.
+//
+// El criterio es "el pedido tuvo un pago aprobado alguna vez", NO el estado de
+// hoy: un pedido reembolsado (Cancelado · dinero devuelto) se pagó, y la tienda
+// necesita los datos para coordinar la devolución. Se deduce del estado porque
+// la máquina de estados no vuelve atrás: desde un estado pagado solo se avanza,
+// o se pasa a 'reembolsado' (reembolso o contracargo, que exigen un pago
+// aprobado). Un pago en proceso (pendiente con mp_payment_id) NO cuenta, y un
+// estado que no se conozca tampoco: falla cerrado.
+export const ESTADOS_CON_PAGO = ['pagado', 'preparando', 'franja', 'por_salir', 'despachado', ESTADO_REEMBOLSADO]
+
+export function pedidoTuvoPago(pedido) {
+  return ESTADOS_CON_PAGO.includes(pedido?.estado)
+}
+
+// Lo que se saca de un pedido antes de mandárselo a la tienda si no se pagó.
+// comprador_id nunca viaja (ya lo saca la ruta): sale el apodo, aparte.
+const CAMPOS_DE_CONTACTO = ['comprador_nombre', 'comprador_apellido', 'comprador_telefono', 'direccion_copia', 'direccion']
+
+// Devuelve el pedido tal como puede verlo la tienda: con los datos de contacto
+// si se pagó y con esos campos en null si no, más `datos_de_contacto`
+// ('visibles' u 'ocultos') para que la pantalla elija el texto. Una copia: no
+// toca el original.
+export function pedidoParaLaTienda(pedido) {
+  const visibles = pedidoTuvoPago(pedido)
+  const copia = { ...pedido, datos_de_contacto: visibles ? 'visibles' : 'ocultos' }
+  if (!visibles) {
+    for (const campo of CAMPOS_DE_CONTACTO) copia[campo] = null
+  }
+  return copia
+}

@@ -17,10 +17,22 @@ const MARGEN_DIAS = 7;
  * @returns {string} access_token válido
  */
 export async function getValidAccessToken(vendedorId, admin) {
+  return (await getCuentaValida(vendedorId, admin)).accessToken;
+}
+
+/**
+ * Lo mismo, pero devuelve también QUÉ cuenta de MercadoPago es (su mp_user_id),
+ * leída en la MISMA consulta que el token: así el token y el id no pueden ser de
+ * cuentas distintas aunque la tienda cambie de cuenta justo en ese momento.
+ * Lo usa /api/pedidos/crear para guardar en el pedido qué cuenta lo cobra.
+ *
+ * @returns {{ accessToken: string, mpUserId: string|null }}
+ */
+export async function getCuentaValida(vendedorId, admin) {
   // 1. Buscar las llaves del vendedor en la base.
   const { data: cuenta, error } = await admin
     .from('mercadopago_cuentas')
-    .select('access_token, refresh_token, token_expira_en')
+    .select('access_token, refresh_token, token_expira_en, mp_user_id')
     .eq('vendedor_id', vendedorId)
     .single();
 
@@ -33,9 +45,11 @@ export async function getValidAccessToken(vendedorId, admin) {
   const vence = new Date(cuenta.token_expira_en);
   const diasRestantes = (vence - ahora) / (1000 * 60 * 60 * 24);
 
+  const mpUserId = idDeCuenta(cuenta.mp_user_id);
+
   if (diasRestantes > MARGEN_DIAS) {
     // Tranqui, todavía le queda. Devolvemos el que hay.
-    return cuenta.access_token;
+    return { accessToken: cuenta.access_token, mpUserId };
   }
 
   // 3. Le quedan menos de 7 días (o ya venció). Toca renovar.
@@ -88,7 +102,14 @@ export async function getValidAccessToken(vendedorId, admin) {
     console.error('Token renovado pero no se pudo guardar:', errorUpdate);
   }
 
-  return datos.access_token;
+  return { accessToken: datos.access_token, mpUserId };
+}
+
+// El id de la cuenta, o null si falta o quedó guardado como el texto "null" o
+// "undefined" (lo mismo que trata como vacío validarPago.js).
+function idDeCuenta(valor) {
+  const texto = valor === null || valor === undefined ? '' : String(valor).trim();
+  return texto === '' || texto === 'null' || texto === 'undefined' ? null : texto;
 }
 
 /**

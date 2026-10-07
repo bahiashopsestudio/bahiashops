@@ -212,3 +212,20 @@ if (problemas.length > 0) {
   process.exit(1)
 }
 console.log('\n✓ Parte 4: MercadoPago aceptó y devolvió los cuatro campos en A, B y C.')
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 5. Quién es la cuenta conectada (GET /users/me)
+//
+// El callback de la conexión con MercadoPago lo usa para leer el NOMBRE de la
+// cuenta (nickname) y mostrarlo en el panel y en el mail. Solo se mira que
+// devuelva id y nickname; el mail de la cuenta que trae la respuesta ni se lee
+// ni se imprime acá.
+// ─────────────────────────────────────────────────────────────────────────────
+console.log('\n── 5. Quién es la cuenta (GET /users/me) ──')
+const yo = await mp('GET', '/users/me')
+console.log('  HTTP', yo.status, JSON.stringify({ id: yo.datos?.id, nickname: yo.datos?.nickname }))
+if (!yo.ok || !yo.datos?.id) {
+  console.log('  ✗ /users/me no devolvió el id de la cuenta: el panel va a mostrar la cuenta sin nombre (la conexión anda igual). Avisá.')
+  process.exit(1)
+}
+console.log(yo.datos.nickname ? '  ✓ devuelve id y nickname' : '  ! devuelve el id pero NO el nickname: el panel va a decir "sin nombre"')

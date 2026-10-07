@@ -26,6 +26,7 @@ import { normalizarTelefonoAR, formatearTelefonoAR, linkWhatsApp } from '@/lib/t
 import { inicialDeApodo, colorDeApodo } from '@/lib/apodos'
 import { metodoPideDireccion, grupoEntrega, tipoEntregaDe, zonaDe, textoCostoEnvio, seguimientoDe } from '@/lib/metodosEntrega'
 import { calleNumeroDepto, ciudadProvinciaCodigo } from '@/lib/direcciones'
+import { pedidoTuvoPago } from '@/lib/pedidos'
 
 // ── 1. Piezas propias de los mails de pedido ──────────────────────────────────
 
@@ -419,7 +420,7 @@ export async function avisarPago({ admin, pedidoId }) {
     const { data: pedido, error: errorPedido } = await admin
       .from('pedidos')
       .select(`
-        id, vendedor_id, comprador_id, metodo_envio, zona_envio, turno_preferido,
+        id, estado, vendedor_id, comprador_id, metodo_envio, zona_envio, turno_preferido,
         total, costo_envio, comision_plataforma,
         comprador_nombre, comprador_apellido, comprador_telefono, direccion_copia,
         items:pedido_items ( id, nombre, variante, cantidad, precio )
@@ -430,6 +431,15 @@ export async function avisarPago({ admin, pedidoId }) {
     if (errorPedido || !pedido) {
       console.error(`Pedido ${pedidoId}: mails del pago no enviados — no se pudo leer el pedido.`, errorPedido?.message)
       return { vendedor: sinDatos, comprador: sinDatos }
+    }
+
+    // El aviso de venta lleva nombre, teléfono, dirección y el botón de WhatsApp de
+    // quien compró: solo sale si el pedido se pagó. Quien llama (el webhook) ya lo
+    // comprueba; esta es la segunda barrera, para que un cambio futuro no mande
+    // los datos de un pedido sin pagar.
+    if (!pedidoTuvoPago(pedido)) {
+      console.error(`Pedido ${pedidoId}: mails del pago no enviados — el pedido está en "${pedido.estado}", no se pagó.`)
+      return { vendedor: { enviado: false, motivo: 'sin_pago' }, comprador: { enviado: false, motivo: 'sin_pago' } }
     }
 
     const { data: vendedor, error: errorVendedor } = await admin
@@ -589,6 +599,65 @@ export async function avisarPagoTardio({ admin, pedidoId, pago }) {
     })
   } catch (err) {
     console.error(`Pedido ${pedidoId}: error en el aviso de pago tardío`, err)
+    return { enviado: false, motivo: 'excepcion' }
+  }
+}
+
+// ── Aviso de MercadoPago que ninguna cuenta puede verificar ───────────────────
+//
+// MercadoPago avisó de un pago, pero con el token de ninguna tienda conectada
+// se pudo consultar. Pasa, por ejemplo, con un pago hecho en un link que cobraba
+// para una cuenta que la tienda ya cambió o desconectó: el pago existe, el
+// dinero llegó a otra cuenta y el pedido no se puede actualizar. Hasta ahora
+// solo quedaba una línea en el log. Este mail interno es para enterarse. Puede
+// llegar más de una vez por el mismo pago (una por cada aviso). No lleva ningún
+// dato de ninguna persona.
+
+export function armarMailPagoSinResolver({ pagoId, accion, cobrador, enVivo }) {
+  const asunto = `Aviso de pago que no se pudo verificar · Pago ${pagoId}`
+  const titulo = 'Llegó un aviso de pago que no se pudo verificar'
+  const explicacion =
+    'MercadoPago avisó de un pago, pero ninguna de las cuentas conectadas pudo consultarlo. Puede ser un pago hecho en un link que cobraba ' +
+    'para una cuenta que una tienda ya cambió o desconectó (o un aviso de prueba). No se modificó ningún pedido. ' +
+    'Si el pago es real, hay que buscarlo en la cuenta de MercadoPago que cobró y coordinar con la tienda.'
+  const datos = [
+    ['Pago de MercadoPago', String(pagoId)],
+    ['Tipo de aviso', accion ? String(accion) : 'sin dato'],
+    ['Cuenta que cobró', cobrador !== undefined && cobrador !== null && cobrador !== '' ? String(cobrador) : 'sin dato'],
+    ['En vivo', enVivo === true ? 'sí' : enVivo === false ? 'no (prueba)' : 'sin dato'],
+  ]
+
+  const cuerpo = [
+    tituloTexto(titulo),
+    parrafo(escapar(explicacion)),
+    tarjeta('Datos del aviso', `<table ${TABLA} width="100%">${datos.map(([etiqueta, valor]) => filaMonto(escapar(etiqueta), escapar(valor))).join('\n')}</table>`),
+  ].join('\n')
+
+  const texto = [titulo, explicacion, ['Datos del aviso', ...datos.map(([e, v]) => `${e}: ${v}`)].join('\n')].join('\n')
+  return { asunto, html: plantilla({ asunto, cuerpo }), texto }
+}
+
+// Manda el aviso interno. Nunca lanza: el webhook responde 200 igual.
+export async function avisarPagoSinResolver({ pagoId, accion, cobrador, enVivo }) {
+  const etiqueta = `Aviso interno de pago sin verificar (pago ${pagoId})`
+  try {
+    if (!process.env.RESEND_API_KEY) {
+      console.error(`${etiqueta} no enviado — RESEND_API_KEY no configurada.`)
+      return { enviado: false, motivo: 'sin_configurar' }
+    }
+    const resultado = await enviarPorResend({
+      para: EMAIL_NOTIFICACIONES,
+      mail: armarMailPagoSinResolver({ pagoId, accion, cobrador, enVivo }),
+      desde: REMITENTE_NO_REPLY,
+      responderA: EMAIL_NOTIFICACIONES,
+    })
+    if (!resultado.ok) {
+      console.error(`${etiqueta} falló — ${resultado.motivo}`)
+      return { enviado: false, motivo: 'resend_error' }
+    }
+    return { enviado: true }
+  } catch (err) {
+    console.error(`${etiqueta} falló —`, err)
     return { enviado: false, motivo: 'excepcion' }
   }
 }

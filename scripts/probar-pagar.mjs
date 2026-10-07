@@ -24,14 +24,16 @@ const MIN = 60 * 1000
 const iso = (ms) => new Date(ms).toISOString()
 const YO = 'aaaaaaaa-0000-0000-0000-000000000001'
 const OTRO = 'bbbbbbbb-0000-0000-0000-000000000002'
-const LINK = 'https://www.mercadopago.com.ar/checkout/v1/redirect?pref_id=123-abc'
+const CUENTA = '161947825'
+const LINK ='https://www.mercadopago.com.ar/checkout/v1/redirect?pref_id=123-abc'
 
 const pedido = (extra = {}) => ({
   comprador_id: YO, estado: 'pendiente', cancelado_motivo: null, mp_payment_id: null,
-  vence_en: iso(AHORA + 60 * MIN), link_de_pago: LINK, ...extra,
+  vence_en: iso(AHORA + 60 * MIN), link_de_pago: LINK, mp_user_id_cobro: CUENTA, ...extra,
 })
 const tienda = (extra = {}) => ({ bloqueado: false, estado_validacion: 'aprobado', ...extra })
-const evaluar = (p, v = tienda(), usuarioId = YO) => evaluarPagoDePedido({ pedido: p, vendedor: v, usuarioId, ahoraMs: AHORA })
+const cuenta = (id = CUENTA) => ({ mp_user_id: id })
+const evaluar = (p, v = tienda(), usuarioId = YO, c = cuenta()) => evaluarPagoDePedido({ pedido: p, vendedor: v, cuentaMp: c, usuarioId, ahoraMs: AHORA })
 
 console.log('El caso que sí se puede')
 let r = evaluar(pedido())
@@ -83,6 +85,29 @@ for (const [nombre, v] of [
   r = evaluar(pedido(), v)
   ok(!r.ok && r.status === 409 && r.codigo === 'TIENDA_NO_DISPONIBLE', `${nombre}: 409 TIENDA_NO_DISPONIBLE`)
 }
+
+console.log('\nLa cuenta de MercadoPago que cobra')
+r = evaluar(pedido({ mp_user_id_cobro: 161947825 }))
+ok(r.ok, 'la cuenta guardada como número y la conectada como texto son la misma')
+r = evaluar(pedido({ mp_user_id_cobro: '  161947825 ' }))
+ok(r.ok, 'espacios alrededor del id: se ignoran')
+r = evaluar(pedido(), tienda(), YO, cuenta('999999999'))
+ok(!r.ok && r.status === 409 && r.codigo === 'CUENTA_CAMBIADA', 'la tienda conectó OTRA cuenta: 409 CUENTA_CAMBIADA (no se ofrece el link de la cuenta vieja)')
+ok(!/999999999|161947825/.test(r.error), 'el mensaje no nombra ninguna de las dos cuentas')
+for (const v of [null, undefined, '', '  ', 'null', 'undefined']) {
+  r = evaluar(pedido({ mp_user_id_cobro: v }))
+  ok(!r.ok && r.status === 409 && r.codigo === 'SIN_CUENTA_DE_COBRO', `el pedido no guardó qué cuenta lo cobra (${JSON.stringify(v)}): no se ofrece`)
+}
+for (const [nombre, c] of [['sin cuenta conectada', null], ['cuenta sin id', cuenta('')], ['cuenta con id "null"', cuenta('null')]]) {
+  r = evaluar(pedido(), tienda(), YO, c)
+  ok(!r.ok && r.status === 409 && r.codigo === 'TIENDA_SIN_MP', `${nombre}: 409 TIENDA_SIN_MP`)
+}
+r = evaluar(pedido({ mp_user_id_cobro: null }), tienda(), YO, cuenta('999'))
+ok(r.codigo === 'SIN_CUENTA_DE_COBRO', 'sin dato en el pedido manda sobre cualquier cuenta: nunca se deduce')
+r = evaluar(pedido({ estado: 'cancelado', cancelado_motivo: 'cuenta_mp_cambiada' }))
+ok(!r.ok && r.status === 410 && r.codigo === 'CUENTA_CAMBIADA', 'cancelado por cuenta_mp_cambiada: 410 CUENTA_CAMBIADA')
+r = evaluar(pedido({ comprador_id: OTRO }), tienda(), YO, cuenta('999'))
+ok(r.codigo === 'NO_EXISTE', 'un pedido ajeno sigue respondiendo "no existe", aunque la cuenta no coincida')
 
 console.log('\nEl link guardado')
 for (const [nombre, link] of [['sin link', null], ['vacío', ''], ['http sin s', 'http://www.mercadopago.com.ar/x'], ['no es un link', 'hola'], ['javascript:', 'javascript:alert(1)']]) {
