@@ -30,9 +30,8 @@ function ExitoContenido() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const supabase = createClient()
-  const { locales } = useCarrito()
+  const { vaciarLocal, listo: carritoListo } = useCarrito()
   const pedidoId = searchParams.get('pedido')
-  const [limpiado, setLimpiado] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [categorias, setCategorias] = useState([])
   const [pedido, setPedido] = useState(null)
@@ -58,7 +57,7 @@ function ExitoContenido() {
     async function cargarPedido() {
       const { data } = await supabase
         .from('pedidos')
-        .select('metodo_envio, vendedor:vendedores(direccion_visible)')
+        .select('vendedor_id, metodo_envio, vendedor:vendedores(direccion_visible)')
         .eq('id', Number(pedidoId))
         .maybeSingle()
       if (data) setPedido(data)
@@ -66,7 +65,13 @@ function ExitoContenido() {
     cargarPedido()
   }, [pedidoId])
 
-  useEffect(() => { if (!limpiado) setLimpiado(true) }, [limpiado, locales])
+  // Ya se pagó: del carrito sale SOLO lo de esta tienda. El pedido se lee con la
+  // sesión de quien compra (la política deja leer solo los propios), así que el
+  // número de la tienda no sale de la dirección de la página.
+  const tiendaPagada = pedido?.vendedor_id
+  useEffect(() => {
+    if (carritoListo && tiendaPagada) vaciarLocal(tiendaPagada)
+  }, [carritoListo, tiendaPagada])
 
   const menuCats = MENU_CATEGORIAS.map(s => categorias.find(c => c.slug === s)).filter(Boolean)
 

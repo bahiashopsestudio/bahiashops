@@ -1,0 +1,11 @@
+Elegí una contraseña nueva
+
+Recibimos un pedido para cambiar la contraseña de tu cuenta ({{ .Email }}). Tocá el botón para elegir una nueva.
+
+El enlace sirve una sola vez y por un tiempo limitado.
+
+Elegir contraseña nueva: {{ .SiteURL }}/auth/confirmar?token_hash={{ .TokenHash }}&type=recovery
+
+Si no lo pediste vos, ignorá este mail: tu contraseña sigue siendo la misma.
+
+Bahía Shops · Bahía Blanca, Argentina.

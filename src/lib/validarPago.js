@@ -15,14 +15,18 @@
 //
 // Recibe:
 //   pago               la respuesta de la API
-//   pedido             { id, vendedor_id, total, estado, mp_payment_id } o null
+//   pedido             { id, vendedor_id, total, estado, cancelado_motivo,
+//                        mp_payment_id } o null
 //   cuentaMp           la fila de mercadopago_cuentas del vendedor del pedido
 //                      ({ vendedor_id, mp_user_id }) o null
 //   idVendedorDelToken el vendedor_id de la fila cuyo token consultó el pago
 //
-// Devuelve { ok: true } o { ok: false, motivo }.
+// Devuelve { ok: true } o { ok: false, motivo }. Con { ok: true, revive: true } el
+// pago es válido sobre un pedido que el vencimiento había cancelado
+// (cancelado / pago_vencido): el webhook lo revive.
 
 import { ESTADOS_DE_PAGO, ESTADO_REEMBOLSADO } from '@/lib/pedidos'
+import { esCuponEnEfectivo } from '@/lib/vencimientoPago'
 
 // Estados de MercadoPago que dicen que la plata volvió al comprador, con la
 // palabra que va al log. Bahía Shops no ejecuta reembolsos: sólo refleja los
@@ -38,10 +42,19 @@ export const SIN_CAMBIOS_MP = { in_mediation: 'reclamo abierto' }
 // pedido. El webhook usa la misma lista en la condición de su escritura.
 export const ESTADOS_REEMPLAZABLES = ['pendiente', 'rechazado']
 
-// Un pago que llega sobre un pedido cancelado: la persona eliminó su cuenta
-// antes de pagar. El pedido no se revive; el webhook avisa para coordinar el
-// reembolso, porque la plata ya le llegó al vendedor.
+// Un pago que llega sobre un pedido cancelado por otra razón que el vencimiento
+// (la persona eliminó su cuenta antes de pagar, la tienda se cerró). El pedido
+// no se revive; el webhook avisa para coordinar el reembolso, porque la plata
+// ya le llegó al vendedor.
 export const MOTIVO_PEDIDO_CANCELADO = 'pedido cancelado'
+
+// Un pago que llega sobre un pedido que el vencimiento canceló, pero que no
+// alcanza para revivirlo (por ejemplo, un pago rechazado). No se aplica.
+export const MOTIVO_PEDIDO_VENCIDO = 'pedido vencido'
+
+// El pago ya está registrado en otro pago del pedido. Si el pago nuevo está
+// aprobado, es un pago doble.
+export const MOTIVO_YA_TENIA_OTRO_PAGO = 'ya tenía otro pago'
 
 // Los motivos que indican un intento de cobrar un pedido ajeno.
 export const MOTIVOS_DE_FRAUDE = ['cobrador distinto', 'token de otro vendedor', 'monto distinto', 'cuenta de MP sin id']
@@ -105,10 +118,21 @@ export function validarPago(pago, pedido, cuentaMp, idVendedorDelToken) {
     return { ok: true }
   }
 
-  // 3b. Un pedido cancelado no admite ningún pago nuevo: se cancela cuando la
-  // persona elimina su cuenta, y desde ahí no vuelve a pagado. Va antes que la
-  // lista de estados de cobro, que incluye 'cancelado'.
-  if (pedido.estado === 'cancelado') return rechazo(MOTIVO_PEDIDO_CANCELADO)
+  // 3b. Un pedido cancelado porque el link venció SÍ se revive con un pago
+  // válido: una venta existe cuando se paga, aunque el pago llegue después del
+  // vencimiento (por ejemplo, un cupón que se acredita al otro día). Se revive
+  // con un pago aprobado, o con un cupón en efectivo todavía vigente. Con
+  // cualquier otro estado de pago no se toca.
+  //
+  // Los demás pedidos cancelados (la persona eliminó su cuenta, la tienda se
+  // cerró) no admiten ningún pago: desde ahí no vuelven a pagado. Va antes que
+  // la lista de estados de cobro, que incluye 'cancelado'.
+  if (pedido.estado === 'cancelado') {
+    if (pedido.cancelado_motivo !== 'pago_vencido') return rechazo(MOTIVO_PEDIDO_CANCELADO)
+    const cuponVigente = esCuponEnEfectivo(pago) && Date.parse(pago.date_of_expiration) > Date.now()
+    if (pago.status === 'approved' || cuponVigente) return { ok: true, revive: true }
+    return rechazo(MOTIVO_PEDIDO_VENCIDO)
+  }
 
   // 4. El pedido todavía está en un estado de cobro.
   if (!ESTADOS_DE_PAGO.includes(pedido.estado)) return rechazo('estado no admite pago')
@@ -121,7 +145,7 @@ export function validarPago(pago, pedido, cuentaMp, idVendedorDelToken) {
   // reintento normal de MercadoPago.
   const pagoGuardado = idOVacio(pedido.mp_payment_id)
   const esOtroPago = pagoGuardado && pagoGuardado !== idOVacio(pago.id)
-  if (esOtroPago && !ESTADOS_REEMPLAZABLES.includes(pedido.estado)) return rechazo('ya tenía otro pago')
+  if (esOtroPago && !ESTADOS_REEMPLAZABLES.includes(pedido.estado)) return rechazo(MOTIVO_YA_TENIA_OTRO_PAGO)
 
   return { ok: true }
 }

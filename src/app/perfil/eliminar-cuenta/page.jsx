@@ -7,6 +7,7 @@ import Link from 'next/link'
 import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
 import ModalContacto from '@/components/ModalContacto'
+import { cerrarSesion } from '@/lib/datosDelNavegador'
 
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage']
 
@@ -236,8 +237,9 @@ export default function EliminarCuentaPage() {
 
       if (res.ok && cuerpo?.ok) {
         // La sesión ya la cerró el servidor; esto limpia lo que quedó en el
-        // navegador y avisa al Navbar.
-        try { await supabase.auth.signOut({ scope: 'local' }) } catch { /* ya no hay sesión */ }
+        // navegador (también el carrito y las tiendas seguidas, en LimpiezaDeSesion)
+        // y avisa al Navbar y a las otras pestañas.
+        try { await cerrarSesion(supabase, { scope: 'local' }) } catch { /* ya no hay sesión */ }
         setPantalla('listo')
         router.refresh()
         setEliminando(false)

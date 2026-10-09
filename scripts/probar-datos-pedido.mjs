@@ -44,6 +44,15 @@ const pedidos = estados.map((estado, i) => ({
   direccion: { calle: 'Alsina', numero: '45', piso_depto: null, telefono: '2915559999', barrio_id: 3 },
   items: [{ id: 1, nombre: 'Taza', variante: null, cantidad: 1, precio: 1000, foto_url: null }],
 }))
+// Un pago en efectivo en proceso con el cupón vigente: una venta en curso. Se
+// ve, pero sin datos.
+const DIA = 24 * 3600 * 1000
+pedidos.push({ ...pedidos[0], id: 200, estado: 'pendiente', mp_payment_id: '501', efectivo_vence_en: new Date(Date.now() + 2 * DIA).toISOString(), comprador_id: 'u-0' })
+// Un cupón que venció sin pagarse NO es una venta: es un carrito abandonado. No
+// viaja, ni mientras la base todavía lo tiene pendiente (hay un margen de unas
+// horas antes de cancelarlo) ni una vez cancelado por vencido.
+pedidos.push({ ...pedidos[0], id: 201, estado: 'pendiente', mp_payment_id: '502', efectivo_vence_en: new Date(Date.now() - 3600 * 1000).toISOString(), comprador_id: 'u-0' })
+pedidos.push({ ...pedidos[0], id: 202, estado: 'cancelado', cancelado_motivo: 'pago_vencido', mp_payment_id: '503', efectivo_vence_en: new Date(Date.now() - 2 * DIA).toISOString(), comprador_id: 'u-0' })
 // Un pedido de otra tienda: no tiene que aparecer.
 pedidos.push({ ...pedidos[4], id: 999, vendedor_id: 99, estado: 'pagado' })
 
@@ -107,12 +116,22 @@ async function llamar() {
 console.log('1. La respuesta, pedido por pedido')
 const r = await llamar()
 ok(r.status === 200 && Array.isArray(r.body.pedidos), 'responde 200 con la lista')
-ok(r.body.pedidos.length === estados.length, `trae solo los pedidos de la tienda (${estados.length}), no los de otra`)
+// Una venta existe solo cuando se paga: de los demás, solo viaja el pago en efectivo en proceso.
+const VISIBLES_SIN_PAGO = [200]
+const NO_VENTAS = ['pendiente', 'rechazado', 'cancelado', 'estado_inventado']
+ok(r.body.pedidos.length === 6 + VISIBLES_SIN_PAGO.length, 'trae solo las ventas de la tienda: los 6 estados pagados y el pago en efectivo en proceso')
+for (const estado of NO_VENTAS) {
+  ok(!r.body.pedidos.some((p) => p.estado === estado && p.id !== 200), `${estado}: sin pago no es una venta, ni siquiera viaja`)
+}
+ok(!JSON.stringify(r.body).includes('mp_payment_id'), 'el id del pago de MercadoPago no viaja')
+ok(!r.body.pedidos.some((p) => p.id === 201), 'un cupón vencido que la base todavía tiene pendiente NO viaja')
+ok(!r.body.pedidos.some((p) => p.id === 202), 'un cupón vencido ya cancelado por vencido NO viaja')
+ok(r.body.pedidos.some((p) => p.id === 200), 'el cupón vigente sí viaja')
 ok(!r.body.pedidos.some((p) => p.id === 999), 'el pedido de otra tienda no aparece')
 
 const PAGADOS = ['pagado', 'preparando', 'franja', 'por_salir', 'despachado', 'reembolsado']
-for (const estado of estados) {
-  const p = r.body.pedidos.find((x) => x.estado === estado)
+for (const estado of [...PAGADOS, 'efectivo']) {
+  const p = estado === 'efectivo' ? r.body.pedidos.find((x) => x.id === 200) : r.body.pedidos.find((x) => x.estado === estado)
   const texto = JSON.stringify(p)
   if (PAGADOS.includes(estado)) {
     ok(p.datos_de_contacto === 'visibles' && p.comprador_nombre === 'Marcela' && p.comprador_apellido === 'Quiroga' && p.comprador_telefono === '2915551234'
@@ -124,7 +143,7 @@ for (const estado of estados) {
     ok(p.datos_de_contacto === 'ocultos' && p.comprador_nombre === null && p.comprador_telefono === null && p.direccion_copia === null && p.direccion === null,
       `${estado}: los campos de contacto vienen en null y marcados como ocultos`)
   }
-  ok(p.comprador_apodo === `Zorro ${estados.indexOf(estado)}`, `${estado}: el apodo siempre viaja`)
+  ok(!!p.comprador_apodo, `${estado}: el apodo siempre viaja`)
   ok(!('comprador_id' in p), `${estado}: el comprador_id no sale`)
 }
 
@@ -137,7 +156,7 @@ ok(!PERSONALES.some((c) => general.columnas.includes(c)), 'la lectura general NO
 ok(/comprador_id/.test(general.select) && !/telefono|direcciones/.test(general.select), 'ni el teléfono ni la dirección embebida, en ningún nivel')
 const idsPedidos = contacto.in?.[1] || []
 ok(JSON.stringify([...idsPedidos].sort()) === JSON.stringify(pedidos.filter((p) => PAGADOS.includes(p.estado) && p.vendedor_id === TIENDA).map((p) => p.id).sort()),
-  'la lectura de contacto es SOLO por los pedidos pagados (incluido el reembolsado)')
+  'la lectura de contacto es SOLO por los pedidos pagados (incluido el reembolsado), nunca por el pago en efectivo en proceso')
 ok(contacto.eq?.some(([c, v]) => c === 'vendedor_id' && v === TIENDA), 'y también filtrada por la tienda')
 
 console.log('\n3. Sin ningún pedido pagado no hay segunda lectura')

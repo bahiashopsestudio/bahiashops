@@ -62,7 +62,8 @@ incidente de seguridad, no un detalle.
 
 | Variable | Qué es |
 | --- | --- |
-| `VENCIMIENTO_PAGO_MINUTOS` | Baja el plazo para pagar un pedido (3 días, `src/lib/vencimientoPago.js`) a esa cantidad de minutos, para probar el vencimiento en tu máquina con `npm run dev`. **Solo se respeta fuera de producción**: con `npm run build` / `npm start` y en Vercel el plazo son siempre 3 días, aunque la variable esté cargada. Nunca alarga el plazo. |
+| `VENCIMIENTO_PAGO_MINUTOS` | Baja el plazo del LINK de pago de un pedido (2 horas, `src/lib/vencimientoPago.js`) a esa cantidad de minutos, para probar el vencimiento en tu máquina con `npm run dev`. El cupón en efectivo (3 días) no cambia. **Solo se respeta fuera de producción**: con `npm run build` / `npm start` y en Vercel el plazo son siempre 2 horas, aunque la variable esté cargada. Nunca alarga el plazo. |
+| `URL_PUBLICA_DESARROLLO` | Para probar pagos en tu máquina: la dirección https de un túnel hacia `localhost:3000` (por ejemplo `cloudflared tunnel --url http://localhost:3000`). MercadoPago manda el aviso del pago (`notification_url`) y la vuelta después de pagar (`back_urls`) a esa dirección, y no al sitio publicado (`src/lib/sitio.js`). Hay que recorrer la compra por la dirección del túnel; su dominio se habilita en `allowedDevOrigins` (`next.config.mjs`), sin eso la página carga pero no responde. **Solo se respeta fuera de producción.** Probarlo: `npm run probar:url-mp`. |
 
 ---
 
@@ -97,16 +98,34 @@ ejecuta. **En orden numérico**, y cada una una sola vez.
 020_metodos_entrega.sql                  los cuatro métodos de entrega
 021_correo_ciudades.sql                  correo a cualquier ciudad y seguimiento del envío
 022_pedidos_vencimiento.sql              los links de pago vencen (pedidos.vence_en) y se cancelan los vencidos
-023_pedidos_link_de_pago.sql             pedidos.link_de_pago: el link para volver a pagar desde Mis pedidos
-024_mp_cuenta_de_cobro.sql               pedidos.mp_user_id_cobro: qué cuenta de MercadoPago cobra cada pedido; cancelar los pendientes al cambiar de cuenta
+023_pedidos_link_de_pago.sql             pedidos.link_de_pago (el modelo nuevo no lo usa; lo borra la 026)
+024_mp_cuenta_de_cobro.sql               pedidos.mp_user_id_cobro: qué cuenta de MercadoPago cobra cada pedido
+025_pago_en_efectivo.sql                 pedidos.efectivo_vence_en (el cupón en efectivo vive por su cuenta), vencidos con margen de 6 horas, pagos_dobles
+026_limpieza_modelo_pagos.sql            borra link_de_pago y las funciones de cancelar por tienda; SE CORRE DESPUÉS de publicar el código nuevo
+027_endurecer_permisos.sql               sin TRUNCATE, REFERENCES ni TRIGGER para el navegador; anon solo inserta en mensajes_contacto (corrida en producción)
 ```
 
 Las pruebas de la 016 (contra una base local, sin tocar Supabase): `npm run probar:sql`.
 Las de la 018 (estado a medias y de cero, redondeo, permisos): `npm run probar:018`.
 Las de la 022 (cancelar vencidos, filtro por tienda, permisos): `npm run probar:022`. Las funciones de JavaScript
 del vencimiento (plazo, qué está vencido, fechas para MercadoPago): `npm run probar:vencimiento`.
-Las de la 024 (cancelar pendientes por tienda y por cuenta, permisos): `npm run probar:024`. Cambiar o desconectar
-la cuenta de MercadoPago, de punta a punta con las rutas reales y todo de mentira: `npm run probar:cuenta-mp`.
+Las de la 024 (cancelar pendientes por tienda y por cuenta, permisos): `npm run probar:024`. Las de la 025 y la 026:
+`npm run probar:025`, `npm run probar:026`. Cambiar o desconectar la cuenta de MercadoPago y el `state` del OAuth, de punta
+a punta con las rutas reales y todo de mentira: `npm run probar:cuenta-mp`. El webhook (cupón en efectivo, pago tardío que
+revive un pedido, pago doble): `npm run probar:webhook`. «Pagar ahora»: `npm run probar:pagar-ahora`. El carrito al pagar:
+`npm run probar:carrito`. Qué pedidos ve la tienda y en qué pestaña del panel cae cada uno (el cupón vencido no es una venta):
+`npm run probar:pestanas` y `npm run probar:datos-pedido`.
+Que los mails internos de los formularios públicos escapen lo que escribe la persona: `npm run probar:lead-gastronomia`.
+Que el formulario de contacto no quede con el email de una sesión anterior: `npm run probar:contacto`. Las plantillas de
+los mails de Supabase Auth (ver plantillas-auth/README.md): `npm run plantillas-auth` y `npm run probar:plantillas-auth`. La confirmación de los
+enlaces de esos mails desde cualquier navegador: `npm run probar:confirmar`. Que al cerrar sesión no quede nada de la persona
+en el navegador: `npm run probar:limpieza-sesion`.
+
+Contra MercadoPago de verdad (con el token de una cuenta de PRUEBA vendedora): `scripts/probar-mp.mjs` y, para comprobar que el
+cupón en efectivo sobrevive al vencimiento del link, `scripts/probar-mp-efectivo.mjs` (`npm run probar:mp-efectivo`).
+
+En el modelo de pagos una venta existe solo cuando se paga. Un pedido sin pagar es un carrito abandonado: no se muestra a la
+tienda ni en Mis pedidos. Un cupón en efectivo generado sí es una venta en curso («Pago en efectivo pendiente»).
 
 Algunas piden un paso manual antes (crear un bucket de Storage desde el panel, por ejemplo). Está
 aclarado en el encabezado de cada archivo — vale la pena leerlos, tienen escrito el *por qué* de
@@ -144,7 +163,7 @@ src/app/            las rutas (App Router)
   vendedor/         panel del vendedor
 src/components/     componentes compartidos
 src/lib/            clientes de Supabase, MercadoPago, mails y reglas de negocio
-src/middleware.js   refresco de sesión + modo "próximamente"
+src/middleware.js   refresco de la cookie de sesión
 sql/migrations/     ver más arriba
 ```
 
@@ -157,9 +176,3 @@ Dos reglas que conviene no romper:
 - **Nada de lo que decide el navegador es un control.** El panel de admin y el checkout vuelven a
   verificar del lado del servidor.
 
----
-
-## Modo "próximamente"
-
-`src/middleware.js` tiene una constante `COMING_SOON`. En `true`, todo el sitio redirige a
-`/proximamente` salvo para quien tenga sesión iniciada. Hoy está en `false`.

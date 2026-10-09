@@ -5,6 +5,7 @@ import { Suspense, useState, useEffect } from 'react'
 import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
 import { createClient } from '@/lib/supabase/client'
+import { useCarrito } from '@/context/CarritoContext'
 
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage']
 
@@ -12,9 +13,11 @@ function PendienteContenido() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const supabase = createClient()
+  const { vaciarLocal, listo: carritoListo } = useCarrito()
   const pedidoId = searchParams.get('pedido')
   const [menuOpen, setMenuOpen] = useState(false)
   const [categorias, setCategorias] = useState([])
+  const [tiendaPagada, setTiendaPagada] = useState(null)
 
   useEffect(() => {
     if (menuOpen) { document.body.style.overflow = 'hidden' } else { document.body.style.overflow = '' }
@@ -28,6 +31,22 @@ function PendienteContenido() {
     }
     cargarCats()
   }, [])
+
+  // Un pago en proceso (por ejemplo un cupón en efectivo) es una venta en curso,
+  // no un carrito abandonado: del carrito sale lo de esta tienda. El pedido se
+  // lee con la sesión de quien compra (la política deja leer solo los propios).
+  useEffect(() => {
+    if (!pedidoId || !/^\d+$/.test(pedidoId)) return
+    async function cargarPedido() {
+      const { data } = await supabase.from('pedidos').select('vendedor_id').eq('id', Number(pedidoId)).maybeSingle()
+      if (data?.vendedor_id) setTiendaPagada(data.vendedor_id)
+    }
+    cargarPedido()
+  }, [pedidoId])
+
+  useEffect(() => {
+    if (carritoListo && tiendaPagada) vaciarLocal(tiendaPagada)
+  }, [carritoListo, tiendaPagada])
 
   const menuCats = MENU_CATEGORIAS.map(s => categorias.find(c => c.slug === s)).filter(Boolean)
 

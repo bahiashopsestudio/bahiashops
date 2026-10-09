@@ -14,7 +14,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getServiceRoleClient } from '@/lib/supabase/admin';
-import { pedidoTuvoPago, pedidoParaLaTienda } from '@/lib/pedidos';
+import { pedidoTuvoPago, pedidoParaLaTienda, pestanaDePedido } from '@/lib/pedidos';
 
 export async function GET() {
   const supabase = await createClient();
@@ -41,7 +41,7 @@ export async function GET() {
     return NextResponse.json({ error: 'No encontramos tu cuenta de vendedor.' }, { status: 403 });
   }
 
-  // Los pedidos cuyo link de pago venció sin pagarse se cancelan ACÁ, al abrir
+  // Los pedidos cuyo link o cupón venció sin pagarse se cancelan ACÁ, al abrir
   // el panel: no hay tarea programada. Es mejor esfuerzo: si falla, la lista
   // sale igual (con el pedido todavía pendiente) y se reintenta la próxima vez.
   const { error: errorVencidos } = await admin.rpc('rpc_cancelar_pedidos_vencidos', { p_vendedor_id: vendedor.id });
@@ -60,7 +60,7 @@ export async function GET() {
       id, estado, metodo_envio, zona_envio, subtotal_productos, costo_envio, total,
       envio_empresa, envio_empresa_otra, envio_seguimiento,
       comision_plataforma, turno_preferido, franja_horaria, creado_en, actualizado_en,
-      vence_en, cancelado_motivo,
+      vence_en, efectivo_vence_en, cancelado_motivo, mp_payment_id,
       comprador_id,
       items:pedido_items ( id, nombre, variante, cantidad, precio, foto_url )
     `)
@@ -72,9 +72,17 @@ export async function GET() {
     return NextResponse.json({ error: 'No se pudieron cargar los pedidos.' }, { status: 500 });
   }
 
+  // Una venta existe solo cuando se paga. La tienda ve las ventas y los pagos en
+  // efectivo en proceso con el cupón vigente (ventas en curso); un pedido que
+  // nunca se pagó, o un cupón que venció sin pagarse, es un carrito abandonado y
+  // no es una venta: no viaja. El filtro va acá, en el servidor
+  // (pestanaDePedido en src/lib/pedidos.js dice qué pestaña le toca a cada uno).
+  const ahoraMs = Date.now();
+  const ventas = (pedidos || []).filter((p) => pestanaDePedido(p, ahoraMs) !== null);
+
   // Los datos de contacto, SOLO de los pedidos que se pagaron (una segunda
   // lectura, por la lista de ids): los de un pedido sin pagar ni se leen.
-  const idsPagados = (pedidos || []).filter(pedidoTuvoPago).map((p) => p.id);
+  const idsPagados = ventas.filter(pedidoTuvoPago).map((p) => p.id);
   const contactos = new Map();
 
   if (idsPagados.length > 0) {
@@ -100,7 +108,7 @@ export async function GET() {
   // la lista de ids y no embebido, para no depender de que exista una
   // relación declarada entre pedidos.comprador_id y usuarios. Si falla, la
   // pantalla muestra "Comprador": no es motivo para no mostrar los pedidos.
-  const idsCompradores = [...new Set((pedidos || []).map((p) => p.comprador_id).filter(Boolean))];
+  const idsCompradores = [...new Set(ventas.map((p) => p.comprador_id).filter(Boolean))];
   const apodos = new Map();
   // Las cuentas eliminadas: en sus pedidos la persona figura como "Cuenta
   // eliminada" (sus datos ya no existen, ni en el pedido).
@@ -127,7 +135,8 @@ export async function GET() {
   // pedido se pagó. pedidoParaLaTienda es la última barrera: aunque algo de
   // arriba cambie, un pedido sin pagar sale con esos campos en null. El
   // comprador_id no sale de acá: sólo se usó para buscar el apodo.
-  const respuesta = (pedidos || []).map(({ comprador_id, ...pedido }) => ({
+  const respuesta = ventas.map(({ comprador_id, mp_payment_id, ...pedido }) => ({
+    // mp_payment_id se usa solo para decidir qué es una venta: no viaja.
     ...pedidoParaLaTienda({ ...pedido, ...(contactos.get(pedido.id) || {}) }),
     comprador_apodo: apodos.get(comprador_id) || null,
     comprador_eliminado: eliminados.has(comprador_id),

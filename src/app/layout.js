@@ -3,6 +3,7 @@ import "./globals.css";
 import { CarritoProvider } from "@/context/CarritoContext";
 import { SITIO_URL } from "@/lib/sitio";
 import BotonContacto from '@/components/BotonContacto';
+import LimpiezaDeSesion from '@/components/LimpiezaDeSesion';
 import Footer from '@/components/Footer';
 
 const inter = Inter({
@@ -36,6 +37,7 @@ export default function RootLayout({ children }) {
     >
       <body className="min-h-full flex flex-col">
         <CarritoProvider>
+          <LimpiezaDeSesion />
           {children}
           <Footer />
           <BotonContacto />

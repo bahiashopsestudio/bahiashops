@@ -2,9 +2,18 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { sesionParaContacto, precargarEmail } from '@/lib/formularioContacto'
 
-export default function ModalContacto({
-  abierto,
+// Cerrado no se dibuja nada, y el formulario de adentro se monta de nuevo cada
+// vez que se abre: así arranca siempre vacío (lo que se escribió la vez anterior
+// no queda) y vuelve a leer la sesión. Importa porque BotonContacto vive en el
+// layout raíz y nunca se desmonta al navegar ni al cerrar sesión.
+export default function ModalContacto({ abierto, ...props }) {
+  if (!abierto) return null
+  return <FormularioContacto {...props} />
+}
+
+function FormularioContacto({
   onClose,
   mensajeInicial = '',
   titulo = 'Contactanos',
@@ -17,23 +26,25 @@ export default function ModalContacto({
   const [mensaje, setMensaje] = useState(mensajeInicial)
   const [enviando, setEnviando] = useState(false)
   const [enviado, setEnviado] = useState(false)
-  const [userId, setUserId] = useState(null)
 
-  // Si está logueado, pre-llenar el email
+  // El email se precarga solo si hay una sesión activa al abrir. Si la sesión se
+  // cierra con el formulario abierto (en otra pestaña, por ejemplo), se vacía.
   useEffect(() => {
-    async function cargarUsuario() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        setEmail(user.email || '')
-        setUserId(user.id)
+    let vigente = true
+    sesionParaContacto(supabase).then((sesion) => {
+      if (vigente) setEmail((actual) => precargarEmail(actual, sesion))
+    })
+    const { data } = supabase.auth.onAuthStateChange((evento) => {
+      if (evento === 'SIGNED_OUT') {
+        setEmail('')
+        setMensaje('')
       }
+    })
+    return () => {
+      vigente = false
+      data?.subscription?.unsubscribe()
     }
-    cargarUsuario()
   }, [])
-
-  useEffect(() => {
-    if (abierto) setMensaje(mensajeInicial)
-  }, [abierto, mensajeInicial])
 
   async function enviar(e) {
     e.preventDefault()
@@ -50,13 +61,17 @@ export default function ModalContacto({
 ${mensaje.trim()}` : mensaje.trim()
 
     try {
+      // La cuenta se vuelve a leer al enviar: el mensaje sale a nombre de quien
+      // tiene la sesión AHORA (o de nadie), nunca de una sesión anterior.
+      const { usuarioId } = await sesionParaContacto(supabase)
+
       // Guardar en Supabase
       const { error: dbError } = await supabase
         .from('mensajes_contacto')
         .insert({
           email: email.trim(),
           mensaje: cuerpo,
-          usuario_id: userId,
+          usuario_id: usuarioId,
         })
 
       if (dbError) throw dbError
@@ -91,8 +106,6 @@ ${mensaje.trim()}` : mensaje.trim()
       setEnviando(false)
     }
   }
-
-  if (!abierto) return null
 
   return (
     <div

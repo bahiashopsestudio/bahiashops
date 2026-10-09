@@ -1,0 +1,9 @@
+Te invitaron a Bahía Shops
+
+Te invitaron a sumarte a Bahía Shops, el mercado online de emprendimientos de Bahía Blanca. Tocá el botón para aceptar la invitación y entrar.
+
+Aceptar la invitación: {{ .SiteURL }}/auth/confirmar?token_hash={{ .TokenHash }}&type=invite
+
+Si no esperabas esta invitación, ignorá este mail.
+
+Bahía Shops · Bahía Blanca, Argentina.

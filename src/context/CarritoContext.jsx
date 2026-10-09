@@ -1,6 +1,7 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { sinElLocal, guardarCarrito } from '@/lib/carrito';
 
 const CarritoContext = createContext(null);
 
@@ -24,8 +25,9 @@ export function CarritoProvider({ children }) {
   }, []);
 
   // Cada vez que cambia, lo vuelve a guardar (para que no se pierda al recargar).
+  // Vacío no se guarda nada: la clave se borra.
   useEffect(() => {
-    if (listo) localStorage.setItem(CLAVE, JSON.stringify(locales));
+    if (listo) guardarCarrito(localStorage, CLAVE, locales);
   }, [locales, listo]);
 
   // Agrega un producto al local que corresponde. Nunca borra otros locales.
@@ -99,14 +101,16 @@ export function CarritoProvider({ children }) {
     );
   }
 
-  // Vacía un local entero (lo usamos después de que se compró ese local).
+  // Vacía un local entero (lo usamos después de que se pagó ese local). Los de
+  // las demás tiendas no se tocan.
   function vaciarLocal(vendedorId) {
-    setLocales((actual) => actual.filter((l) => l.vendedorId !== vendedorId));
+    setLocales((actual) => sinElLocal(actual, vendedorId));
   }
 
-  function vaciarTodo() {
+  // Estable entre renders: lo usa LimpiezaDeSesion al cerrar sesión.
+  const vaciarTodo = useCallback(() => {
     setLocales([]);
-  }
+  }, []);
 
   // Datos útiles ya calculados para las pantallas.
   const cantidadTotal = locales.reduce((s, l) => s + l.items.reduce((x, it) => x + it.cantidad, 0), 0);

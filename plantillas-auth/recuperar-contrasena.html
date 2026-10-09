@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<title>Cambiá tu contraseña de Bahía Shops</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500&amp;family=Poppins:wght@300;500&amp;family=Inter:wght@500;600&amp;display=swap">
+</head>
+<body style="margin:0;padding:0;background-color:#faf9f7;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#faf9f7" style="background-color:#faf9f7;">
+<tr><td align="center" style="padding:32px 16px;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width:100%;max-width:600px;">
+<tr><td align="center" style="padding:0 0 32px;">
+<img src="https://bahiashops.com.ar/email/logo.png" width="160" alt="Bahía Shops" style="display:block;border:0;font-family:Fraunces, Georgia, serif;font-size:22px;color:#0a0a0a;">
+</td></tr>
+<tr><td align="left" style="font-family:Poppins, Arial, sans-serif;font-size:15px;font-weight:300;line-height:1.6;color:#0a0a0a;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">Recibimos un pedido para cambiar tu contraseña.</div>
+<p style="margin:0 0 10px;font-family:Inter, Arial, sans-serif;font-size:12px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:#4164fe;">Tu cuenta</p>
+<img src="https://bahiashops.com.ar/email/titulo-contrasena.png" width="500" height="40" alt="Elegí una contraseña nueva" style="display:block;border:0;max-width:100%;height:auto;margin:0 0 20px;font-family:Fraunces, Georgia, serif;font-size:26px;font-weight:500;line-height:1.25;color:#0a0a0a;">
+<p style="margin:0 0 20px;font-family:Poppins, Arial, sans-serif;font-size:15px;font-weight:300;line-height:1.6;color:#0a0a0a;">Recibimos un pedido para cambiar la contraseña de tu cuenta (<strong style="font-weight:500;">{{ .Email }}</strong>). Tocá el botón para elegir una nueva.</p>
+<p style="margin:0 0 20px;font-family:Poppins, Arial, sans-serif;font-size:15px;font-weight:300;line-height:1.6;color:#0a0a0a;">El enlace sirve una sola vez y por un tiempo limitado.</p>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+<tr><td align="center" bgcolor="#0a0a0a" style="background-color:#0a0a0a;border:1px solid #0a0a0a;border-radius:4px;">
+<a href="{{ .SiteURL }}/auth/confirmar?token_hash={{ .TokenHash }}&amp;type=recovery" target="_blank" style="display:block;padding:14px 20px;font-family:Inter, Arial, sans-serif;font-size:14px;font-weight:600;line-height:1.2;color:#ffffff;text-decoration:none;border-radius:4px;">Elegir contraseña nueva</a>
+</td></tr>
+</table>
+<p style="margin:20px 0 0;font-family:Poppins, Arial, sans-serif;font-size:13px;font-weight:300;line-height:1.6;color:#6f6f6f;">Si el botón no funciona, copiá este enlace y pegalo en tu navegador:<br><a href="{{ .SiteURL }}/auth/confirmar?token_hash={{ .TokenHash }}&amp;type=recovery" style="color:#4164fe;word-break:break-all;">{{ .SiteURL }}/auth/confirmar?token_hash={{ .TokenHash }}&amp;type=recovery</a></p>
+<p style="margin:20px 0 0;font-family:Poppins, Arial, sans-serif;font-size:13px;font-weight:300;line-height:1.6;color:#6f6f6f;">Si no lo pediste vos, ignorá este mail: tu contraseña sigue siendo la misma.</p>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:28px 0 0;"><tr><td style="border-top:1px solid #e8e5df;padding:16px 0 0;font-family:Poppins, Arial, sans-serif;font-size:12px;font-weight:300;line-height:1.6;color:#6f6f6f;">Bahía Shops · Bahía Blanca, Argentina. Este mail lo mandamos automáticamente: no hace falta responderlo.</td></tr></table>
+</td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>

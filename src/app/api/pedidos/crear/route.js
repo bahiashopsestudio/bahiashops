@@ -3,8 +3,8 @@ import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { getCuentaValida } from '@/lib/mercadopago/tokens';
 import { camposDeVencimiento, vencerPreferencia } from '@/lib/mercadopago/preferencias';
-import { calcularVencimiento } from '@/lib/vencimientoPago';
-import { SITIO_URL } from '@/lib/sitio';
+import { calcularVencimiento, calcularVencimientoCupon } from '@/lib/vencimientoPago';
+import { urlParaMercadoPago } from '@/lib/sitio';
 import { calcularPedido } from '@/lib/precioPedido';
 import { metodoPideDireccion, normalizarMetodo, metodosConfigurados } from '@/lib/metodosEntrega';
 import { zonasPara } from '@/lib/zonaEnvio';
@@ -364,24 +364,26 @@ export async function POST(request) {
   }
 
   if (!cuentaDeCobro) {
-    console.warn(`Tienda ${vendedorId}: la cuenta de MercadoPago no tiene mp_user_id; el pedido se crea sin saber qué cuenta lo cobra (no va a ofrecer "Pagar").`);
+    console.warn(`Tienda ${vendedorId}: la cuenta de MercadoPago no tiene mp_user_id; el pedido se crea sin saber qué cuenta lo cobra.`);
   }
 
   // 6. Anotar el pedido en la libreta (estado: pendiente, porque todavía no pagó).
   //
-  // El link de pago vence a los PLAZO_PAGO_DIAS (src/lib/vencimientoPago.js).
-  // La misma fecha se guarda en el pedido y se le manda a MercadoPago en el
-  // paso 8: lo que dice vence_en es lo que de verdad vale el link.
+  // Dos plazos que no se pisan (src/lib/vencimientoPago.js): el link de pago
+  // vence a las PLAZO_LINK_HORAS y el cupón en efectivo a los PLAZO_CUPON_DIAS.
+  // La fecha del link se guarda en el pedido (vence_en) y las dos se le mandan a
+  // MercadoPago en el paso 8: lo que dice vence_en es lo que de verdad vale el
+  // link. La del cupón real se guarda después, cuando el webhook ve el cupón.
   const ahoraMs = Date.now();
   const venceEnMs = calcularVencimiento(ahoraMs);
+  const venceCuponMs = calcularVencimientoCupon(ahoraMs);
 
   const { data: pedido, error: errorPedido } = await admin
     .from('pedidos')
     .insert({
       comprador_id: user.id,
       vence_en: new Date(venceEnMs).toISOString(),
-      // La cuenta de MercadoPago que cobra este pedido (null si no se sabe: sin
-      // ese dato, "Pagar" no ofrece el link).
+      // La cuenta de MercadoPago que cobra este pedido (null si no se sabe).
       mp_user_id_cobro: cuentaDeCobro,
       // comprador_nombre, comprador_apellido, comprador_telefono y
       // direccion_copia (esta última sólo si el método pide dirección).
@@ -529,6 +531,10 @@ export async function POST(request) {
 
   const ERROR_MP = 'No se pudo crear el pago en MercadoPago.';
 
+  // El sitio publicado, o el túnel hacia la máquina de quien desarrolla
+  // (src/lib/sitio.js: solo fuera de producción).
+  const urlMp = urlParaMercadoPago();
+
   let mpResponse;
   let mpData;
   try {
@@ -544,16 +550,16 @@ export async function POST(request) {
         marketplace_fee: comision,
         statement_descriptor: 'BAHIASHOPS',
         back_urls: {
-          success: `${SITIO_URL}/compra/exito?pedido=${pedido.id}`,
-          failure: `${SITIO_URL}/compra/fallo?pedido=${pedido.id}`,
-          pending: `${SITIO_URL}/compra/pendiente?pedido=${pedido.id}`,
+          success: `${urlMp}/compra/exito?pedido=${pedido.id}`,
+          failure: `${urlMp}/compra/fallo?pedido=${pedido.id}`,
+          pending: `${urlMp}/compra/pendiente?pedido=${pedido.id}`,
         },
         auto_return: 'approved',
-        notification_url: `${SITIO_URL}/api/mercadopago/webhook`,
+        notification_url: `${urlMp}/api/mercadopago/webhook`,
         external_reference: String(pedido.id),
-        // expires, expiration_date_from, expiration_date_to y date_of_expiration
-        // (este último es el del ticket en efectivo).
-        ...camposDeVencimiento(venceEnMs, ahoraMs),
+        // expires, expiration_date_from y expiration_date_to (el link, 2 horas) y
+        // date_of_expiration (el cupón en efectivo, 3 días).
+        ...camposDeVencimiento(venceEnMs, venceCuponMs, ahoraMs),
       }),
     });
     mpData = await mpResponse.json();
@@ -585,23 +591,15 @@ export async function POST(request) {
   // comprobar, con un pedido real, que el link y el ticket llevan fecha.
   console.log(`Pedido ${pedido.id}: preferencia ${mpData.id} vence ${mpData.expiration_date_to}; ticket en efectivo ${mpData.date_of_expiration ?? 'sin dato en la respuesta'}.`);
 
-  // 9. Guardar el id de la preferencia en el pedido (para rastrearlo después) y
-  // el link de pago TAL CUAL lo devolvió MercadoPago (init_point, el de
-  // producción; nunca sandbox_init_point). Con ese link, Mis pedidos puede
-  // volver a abrir el pago mientras no venza (/api/pedidos/[id]/pagar).
-  // (La base solo acepta links https: algo distinto se guarda como null, para
-  // que no se pierda también mp_preference_id.)
-  const linkDePago = typeof mpData.init_point === 'string' && mpData.init_point.startsWith('https://')
-    ? mpData.init_point
-    : null;
-  if (!linkDePago) console.error(`Pedido ${pedido.id}: MercadoPago no devolvió un init_point https (${mpData.init_point}); el pedido queda sin botón "Pagar".`);
-
+  // 9. Guardar el id de la preferencia en el pedido (para rastrearlo después).
+  // El link de pago ya no se guarda: dura 2 horas, y "Pagar ahora" arma uno
+  // nuevo cada vez que se aprieta.
   const { error: errorPreferencia } = await admin
     .from('pedidos')
-    .update({ mp_preference_id: mpData.id, link_de_pago: linkDePago })
+    .update({ mp_preference_id: mpData.id })
     .eq('id', pedido.id);
   if (errorPreferencia) {
-    console.error(`Pedido ${pedido.id}: no se pudo guardar la preferencia ni el link de pago —`, errorPreferencia.message);
+    console.error(`Pedido ${pedido.id}: no se pudo guardar la preferencia —`, errorPreferencia.message);
   }
 
   // 10. Devolver el link de pago al checkout para que mande al comprador.

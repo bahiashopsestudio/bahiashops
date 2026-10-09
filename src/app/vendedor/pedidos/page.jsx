@@ -12,14 +12,24 @@ import {
   grupoEntrega, etiquetaMetodo, zonaDe, EMPRESAS_ENVIO, validarSeguimiento, seguimientoDe,
 } from '@/lib/metodosEntrega';
 import { calleNumeroDepto, ciudadProvinciaCodigo } from '@/lib/direcciones';
+import { pestanaDePedido } from '@/lib/pedidos';
 
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage'];
 
+// Las pestañas del panel. Qué pedido va en cada una lo decide pestanaDePedido
+// (src/lib/pedidos.js); el servidor ya manda solo las ventas. El contador se
+// muestra en las dos primeras.
+const PESTANAS = [
+  { clave: 'ventas', label: 'Ventas nuevas', contador: true, vacio: 'No tenés ventas nuevas por ahora.' },
+  { clave: 'preparacion', label: 'En preparación', contador: true, vacio: 'No tenés pedidos en preparación.' },
+  { clave: 'historial', label: 'Historial', contador: false, vacio: 'Todavía no hay pedidos terminados.' },
+];
+
 const ESTADOS = {
-  pendiente:  { label: 'Esperando pago',  color: 'text-amber-700',   bg: 'bg-amber-100',   orden: 0 },
+  // Un pedido pendiente que llega acá es siempre un pago en efectivo en proceso
+  // con el cupón vigente: solo la etiqueta, sin botones ni datos de contacto.
+  pendiente:  { label: 'Pago en efectivo pendiente', color: 'text-amber-800', bg: 'bg-amber-50', orden: 0 },
   pagado:     { label: 'Pagado',           color: 'text-emerald-700', bg: 'bg-emerald-100',  orden: 1 },
-  rechazado:  { label: 'Pago rechazado',   color: 'text-red-600',     bg: 'bg-red-50',       orden: -1 },
-  cancelado:  { label: 'Cancelado',        color: 'text-red-600',     bg: 'bg-red-50',       orden: -1 },
   preparando: { label: 'Preparando',       color: 'text-blue-700',    bg: 'bg-blue-50',      orden: 2 },
   franja:     { label: 'Franja horaria avisada', color: 'text-violet-600',  bg: 'bg-violet-100',   orden: 3 },
   por_salir:  { label: 'Por salir',        color: 'text-amber-600',   bg: 'bg-amber-50',     orden: 4 },
@@ -29,27 +39,16 @@ const ESTADOS = {
   reembolsado: { label: 'Cancelado · dinero devuelto', color: 'text-red-600', bg: 'bg-red-50', orden: -1 },
 };
 
-// El estado a mostrar. Un pedido cancelado porque el link de pago venció sin
-// que nadie pagara no es un "Cancelado" cualquiera: se dice qué pasó. (La ruta
-// /api/vendedor/pedidos los cancela al abrir el panel.)
+// El estado a mostrar. La ruta /api/vendedor/pedidos solo manda ventas, así que
+// los estados de abajo son los únicos que llegan.
 function estadoDe(p) {
-  if (p.estado === 'cancelado' && p.cancelado_motivo === 'pago_vencido') {
-    return { label: 'Vencido · no se pagó a tiempo', color: 'text-[#0a0a0a]/50', bg: 'bg-[#0a0a0a]/5' };
-  }
-  if (p.estado === 'cancelado' && p.cancelado_motivo === 'cuenta_mp_cambiada') {
-    return { label: 'Cancelado · cambió tu cuenta de MercadoPago', color: 'text-red-600', bg: 'bg-red-50' };
-  }
   return ESTADOS[p.estado] || { label: p.estado, color: 'text-[#0a0a0a]/40', bg: 'bg-[#0a0a0a]/5' };
 }
 
-// Lo que se ve en lugar de los datos de contacto de un pedido que no se pagó.
-// Pendiente: todavía puede pagarse. Rechazado, cancelado o vencido: no se pagó
-// y no va a haber datos.
-function textoDatosOcultos(p) {
-  if (p.estado === 'pendiente') {
-    return 'Los datos de contacto de quien compra (nombre, teléfono y dirección) aparecen cuando se acredite el pago.';
-  }
-  return 'Este pedido no se pagó, por eso no tiene datos de contacto.';
+// Lo que se ve en lugar de los datos de contacto de un pago en efectivo en
+// proceso: todavía no se pagó.
+function textoDatosOcultos() {
+  return 'Los datos de contacto de quien compra (nombre, teléfono y dirección) aparecen cuando se acredite el pago.';
 }
 
 // Cómo le llega el pedido a quien compra, para elegir el texto del WhatsApp:
@@ -208,6 +207,11 @@ export default function VendedorPedidosPage() {
   const [segGuardando, setSegGuardando] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [categorias, setCategorias] = useState([]);
+  const [pestana, setPestana] = useState('ventas');
+  // La hora a la que se cargó la lista: de ella depende en qué pestaña cae un
+  // pago en efectivo (si el cupón sigue vigente). Va en el estado para que el
+  // render sea puro.
+  const [ahora, setAhora] = useState(0);
 
   useEffect(() => {
     if (menuOpen) { document.body.style.overflow = 'hidden' } else { document.body.style.overflow = '' }
@@ -243,12 +247,16 @@ export default function VendedorPedidosPage() {
 
         setNombreNegocio(datos.vendedor?.nombre_negocio || '');
         setPedidos(datos.pedidos || []);
+        setAhora(Date.now());
 
         // El link del mail de venta trae ?pedido=N: si ese pedido está en la
         // lista (o sea, es de esta tienda), se abre desplegado. Si no está, la
         // lista se muestra normal, sin error.
         const pedidoDelLink = Number(new URLSearchParams(window.location.search).get('pedido'));
-        if (pedidoDelLink && (datos.pedidos || []).some((p) => p.id === pedidoDelLink)) {
+        const delLink = (datos.pedidos || []).find((p) => p.id === pedidoDelLink);
+        if (pedidoDelLink && delLink) {
+          // Se abre en la pestaña donde está ese pedido.
+          setPestana(pestanaDePedido(delLink) || 'ventas');
           setAbierto(pedidoDelLink);
           aScrollear.current = pedidoDelLink;
         }
@@ -406,10 +414,15 @@ export default function VendedorPedidosPage() {
     );
   }
 
-  const activos = pedidos.filter(p => ['pagado', 'preparando', 'franja', 'por_salir'].includes(p.estado));
-  // 'cancelado' y 'reembolsado' van al historial: el pedido terminó, no hay
-  // nada que preparar, pero no puede desaparecer del panel.
-  const completados = pedidos.filter(p => ['despachado', 'rechazado', 'pendiente', 'cancelado', 'reembolsado'].includes(p.estado));
+  // Cada pedido en su pestaña. Un pago en efectivo cuyo cupón venció con el panel
+  // abierto sale de la lista (pestanaDePedido devuelve null).
+  const porPestana = { ventas: [], preparacion: [], historial: [] };
+  for (const p of pedidos) {
+    const clave = pestanaDePedido(p, ahora);
+    if (clave) porPestana[clave].push(p);
+  }
+  const totalPedidos = porPestana.ventas.length + porPestana.preparacion.length + porPestana.historial.length;
+  const actual = PESTANAS.find((t) => t.clave === pestana) || PESTANAS[0];
 
   return (
     <>
@@ -425,41 +438,51 @@ export default function VendedorPedidosPage() {
 
             <h1 className="text-2xl md:text-3xl font-black text-[#0a0a0a] tracking-tight m-0 mb-1">Pedidos de mi negocio</h1>
             <p className="text-sm text-[#0a0a0a]/30 font-light m-0 mb-6">
-              {pedidos.length} {pedidos.length === 1 ? 'pedido' : 'pedidos'} en total
+              {totalPedidos} {totalPedidos === 1 ? 'pedido' : 'pedidos'} en total
             </p>
 
-            {pedidos.length === 0 && (
+            {totalPedidos === 0 ? (
               <div className="border border-dashed border-[#0a0a0a]/10 rounded-2xl px-8 py-12 text-center">
                 <p className="text-3xl m-0 mb-2">📦</p>
                 <p className="text-sm text-[#0a0a0a]/30 font-light m-0">Todavía no recibiste pedidos. ¡Van a llegar!</p>
               </div>
-            )}
-
-            {activos.length > 0 && (
+            ) : (
               <>
-                <h2 className="text-sm font-medium text-[#0a0a0a]/40 m-0 mb-3">
-                  Pedidos activos ({activos.length})
-                </h2>
-                {activos.map(p => (
-                  <PedidoCard key={p.id} pedido={p} abierto={abierto === p.id}
-                    items={p.items || []} avanzando={avanzando === p.id}
-                    onToggle={() => toggleDetalle(p.id)} onAvanzar={() => iniciarAvance(p)}
-                    onCorregirSeguimiento={() => abrirSeguimiento(p, 'corregir')} />
-                ))}
-              </>
-            )}
+                {/* Las pestañas del panel (mismo estilo que el mockup aprobado):
+                    texto con subrayado en la activa y un contador al lado. */}
+                <div role="tablist" className="flex gap-5 border-b border-[#0a0a0a]/[0.08] mb-5 overflow-x-auto whitespace-nowrap no-scrollbar">
+                  {PESTANAS.map((t) => {
+                    const activa = t.clave === actual.clave;
+                    const cantidad = porPestana[t.clave].length;
+                    return (
+                      <button key={t.clave} type="button" role="tab" aria-selected={activa}
+                        onClick={() => { setPestana(t.clave); setAbierto(null); }}
+                        className={`bg-transparent border-0 border-b-2 -mb-px pb-2.5 px-0 text-[13px] cursor-pointer transition-colors ${
+                          activa
+                            ? 'border-[#0a0a0a] text-[#0a0a0a] font-medium'
+                            : 'border-transparent text-[#0a0a0a]/45 font-light hover:text-[#0a0a0a]/70'
+                        }`}>
+                        {t.label}
+                        {t.contador && cantidad > 0 && (
+                          <span className="ml-1.5 text-[10px] font-medium bg-[#0a0a0a]/[0.06] text-[#0a0a0a]/60 rounded-full px-[7px] py-0.5">
+                            {cantidad}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
 
-            {completados.length > 0 && (
-              <>
-                <h2 className="text-sm font-medium text-[#0a0a0a]/25 mt-8 mb-3">
-                  Historial ({completados.length})
-                </h2>
-                {completados.map(p => (
-                  <PedidoCard key={p.id} pedido={p} abierto={abierto === p.id}
-                    items={p.items || []} avanzando={avanzando === p.id}
-                    onToggle={() => toggleDetalle(p.id)} onAvanzar={() => iniciarAvance(p)}
-                    onCorregirSeguimiento={() => abrirSeguimiento(p, 'corregir')} />
-                ))}
+                {porPestana[actual.clave].length === 0 ? (
+                  <p className="text-sm text-[#0a0a0a]/30 font-light m-0 py-6">{actual.vacio}</p>
+                ) : (
+                  porPestana[actual.clave].map(p => (
+                    <PedidoCard key={p.id} pedido={p} abierto={abierto === p.id}
+                      items={p.items || []} avanzando={avanzando === p.id}
+                      onToggle={() => toggleDetalle(p.id)} onAvanzar={() => iniciarAvance(p)}
+                      onCorregirSeguimiento={() => abrirSeguimiento(p, 'corregir')} />
+                  ))
+                )}
               </>
             )}
 
@@ -638,7 +661,7 @@ function PedidoCard({ pedido, abierto, items, avanzando, onToggle, onAvanzar, on
             {p.datos_de_contacto === 'ocultos' ? (
               // Sin pagar: la ruta ni siquiera manda nombre, teléfono ni dirección.
               <p className="mt-1 mb-0 text-sm text-[#0a0a0a]/40 font-light leading-relaxed">
-                {textoDatosOcultos(p)}
+                {textoDatosOcultos()}
               </p>
             ) : p.comprador_eliminado ? (
               // Cuenta eliminada: el método de entrega queda a la vista; el nombre,

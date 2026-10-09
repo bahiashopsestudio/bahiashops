@@ -10,6 +10,7 @@ import AvatarApodo from '@/components/AvatarApodo'
 import EditorApodo from '@/components/EditorApodo'
 import PreguntaFuncion from '@/components/PreguntaFuncion'
 import { validarApodo, avisarApodoCambiado } from '@/lib/apodos'
+import { cerrarSesion } from '@/lib/datosDelNavegador'
 
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage']
 
@@ -95,8 +96,10 @@ export default function PerfilPage() {
     cargar()
   }, [])
 
-  async function cerrarSesion() {
-    await supabase.auth.signOut()
+  async function salir() {
+    // cerrarSesion marca que el cierre es de esta pestaña: LimpiezaDeSesion
+    // borra los datos del navegador y las otras pestañas se recargan.
+    await cerrarSesion(supabase)
     router.push('/')
     router.refresh()
   }
@@ -288,7 +291,7 @@ export default function PerfilPage() {
             <div className="mt-10">
               <button
                 type="button"
-                onClick={cerrarSesion}
+                onClick={salir}
                 className="w-full py-3.5 border border-[#0a0a0a]/10 rounded-full text-sm text-[#0a0a0a]/40 font-light hover:border-[#4164fe]/30 hover:text-[#4164fe] transition cursor-pointer"
               >
                 Cerrar sesión

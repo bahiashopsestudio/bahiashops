@@ -4,9 +4,10 @@ import crypto from 'crypto';
 import { ESTADOS_DE_PAGO, ESTADO_REEMBOLSADO } from '@/lib/pedidos';
 import {
   validarPago, estadoDelPedido, MOTIVOS_DE_FRAUDE, ESTADOS_REEMPLAZABLES, DEVOLUCIONES_MP, SIN_CAMBIOS_MP,
-  MOTIVO_PEDIDO_CANCELADO,
+  MOTIVO_PEDIDO_CANCELADO, MOTIVO_YA_TENIA_OTRO_PAGO,
 } from '@/lib/validarPago';
-import { avisarPago, avisarPagoTardio, avisarPagoSinResolver } from '@/lib/mailsPedidos';
+import { esCuponEnEfectivo, vencimientoDeCupon } from '@/lib/vencimientoPago';
+import { avisarPago, avisarPagoTardio, avisarPagoSinResolver, avisarPagoDoble } from '@/lib/mailsPedidos';
 
 // ── Verificar que el webhook realmente viene de MercadoPago ──
 // MercadoPago firma cada notificación con HMAC-SHA256.
@@ -95,6 +96,54 @@ async function pagoSobrePedidoCancelado({ admin, pedidoId, pago }) {
   }
 }
 
+// Un segundo pago aprobado sobre un pedido que ya tiene otro: el pedido NO se
+// toca. Queda registrado en pagos_dobles y le llega un mail interno al equipo
+// con el pedido y los dos ids, para devolver el segundo pago a mano desde
+// MercadoPago.
+//
+// MercadoPago reintenta los avisos y puede mandar dos a la vez, así que el
+// registro (clave pedido + pago) evita avisar de más: si el pago ya está
+// registrado no se manda nada. El mail va ANTES del registro: si el mail
+// falla, no queda registrado y el próximo reintento de MercadoPago lo vuelve a
+// intentar (es preferible un mail repetido, en una carrera muy rara, a uno
+// perdido). Nunca lanza.
+async function registrarPagoDoble({ admin, pedidoId, pago }) {
+  const idPago = String(pago.id);
+  console.error(
+    `[webhook] PAGO DOBLE — pedido ${pedidoId}, pago nuevo ${idPago} (aprobado, ${pago.transaction_amount}). ` +
+    'El pedido NO se modificó: hay que devolver el segundo pago a mano desde MercadoPago.'
+  );
+  try {
+    const { data: yaRegistrado, error: errorLectura } = await admin
+      .from('pagos_dobles')
+      .select('pedido_id')
+      .eq('pedido_id', pedidoId)
+      .eq('pago_id', idPago)
+      .maybeSingle();
+    if (errorLectura) {
+      console.error(`Pedido ${pedidoId}: no se pudo leer pagos_dobles — ${errorLectura.message}. Se avisa igual.`);
+    } else if (yaRegistrado) {
+      console.log(`Pedido ${pedidoId}: el pago doble ${idPago} ya estaba registrado y avisado.`);
+      return;
+    }
+
+    const aviso = await avisarPagoDoble({ admin, pedidoId, pagoNuevo: pago });
+    if (!aviso.enviado) {
+      console.error(`Pedido ${pedidoId}: el aviso del pago doble ${idPago} no salió (${aviso.motivo}); se reintenta con el próximo aviso de MercadoPago.`);
+      return;
+    }
+
+    const { error: errorRegistro } = await admin
+      .from('pagos_dobles')
+      .insert({ pedido_id: pedidoId, pago_id: idPago });
+    if (errorRegistro && errorRegistro.code !== '23505') {
+      console.error(`Pedido ${pedidoId}: el pago doble ${idPago} se avisó pero no se pudo registrar — ${errorRegistro.message}`);
+    }
+  } catch (err) {
+    console.error(`Pedido ${pedidoId}: error registrando el pago doble ${idPago}`, err);
+  }
+}
+
 export async function POST(request) {
   try {
     const body = await request.json();
@@ -156,7 +205,7 @@ export async function POST(request) {
     if (/^[1-9]\d*$/.test(referencia)) {
       const { data, error: errorPedido } = await admin
         .from('pedidos')
-        .select('id, vendedor_id, total, estado, mp_payment_id, aviso_vendedor_en, aviso_comprador_en')
+        .select('id, vendedor_id, total, estado, cancelado_motivo, creado_en, mp_payment_id, aviso_vendedor_en, aviso_comprador_en')
         .eq('id', Number(referencia))
         .maybeSingle();
 
@@ -177,6 +226,12 @@ export async function POST(request) {
 
     if (!veredicto.ok && veredicto.motivo === MOTIVO_PEDIDO_CANCELADO) {
       await pagoSobrePedidoCancelado({ admin, pedidoId: pedido.id, pago });
+      return NextResponse.json({ recibido: true });
+    }
+
+    // Otro pago aprobado sobre un pedido que ya tenía el suyo: pago doble.
+    if (!veredicto.ok && veredicto.motivo === MOTIVO_YA_TENIA_OTRO_PAGO && pago.status === 'approved') {
+      await registrarPagoDoble({ admin, pedidoId: pedido.id, pago });
       return NextResponse.json({ recibido: true });
     }
 
@@ -213,6 +268,19 @@ export async function POST(request) {
     }
 
     const nuestroEstado = estadoDelPedido(pago.status);
+
+    // Un cupón en efectivo recién generado: el pedido sigue pendiente, con el
+    // pago guardado y la fecha hasta la que el cupón vale (la del pago, como
+    // instante absoluto). Un pago pendiente que NO es un cupón (por ejemplo una
+    // tarjeta que se está acreditando) borra la fecha de un cupón anterior.
+    const esCupon = esCuponEnEfectivo(pago);
+    const datosCupon = esCupon
+      ? { efectivo_vence_en: vencimientoDeCupon(pago, pedido) }
+      : (nuestroEstado === 'pendiente' ? { efectivo_vence_en: null } : {});
+
+    // MercadoPago cancela solo el cupón que nadie pagó a tiempo
+    // (cancelled / expired): el pedido vence igual que lo haría en la base.
+    const cuponVencido = pago.status === 'cancelled' && pago.status_detail === 'expired';
 
     // El mismo aviso otra vez, sin nada nuevo: no se toca el pedido.
     if (String(pedido.mp_payment_id ?? '') === idPago && pedido.estado === nuestroEstado) {
@@ -260,6 +328,64 @@ export async function POST(request) {
       return NextResponse.json({ recibido: true });
     }
 
+    // Un cupón que se pagó después de que el pedido venció, o un pago aprobado
+    // llegado tarde: el pedido se revive. Una venta existe cuando se paga, y el
+    // WHERE solo toca un pedido que sigue cancelado por vencimiento.
+    async function revivirPedido() {
+      const { data: vivo, error: errorRevivir } = await admin
+        .from('pedidos')
+        .update({
+          mp_payment_id: idPago,
+          estado: nuestroEstado,
+          cancelado_motivo: null,
+          ...datosCupon,
+          actualizado_en: new Date().toISOString(),
+        })
+        .eq('id', pedido.id)
+        .eq('estado', 'cancelado')
+        .eq('cancelado_motivo', 'pago_vencido')
+        .select('id, estado')
+        .maybeSingle();
+      if (errorRevivir) {
+        console.error(`Pedido ${pedido.id}: no se pudo revivir con el pago ${idPago} — ${errorRevivir.message}`);
+        return false;
+      }
+      if (!vivo) return false;
+      console.log(`Pedido ${pedido.id}: estaba cancelado por vencimiento y llegó el pago ${idPago} -> ${vivo.estado}`);
+      if (vivo.estado === 'pagado') {
+        try {
+          await avisarPago({ admin, pedidoId: pedido.id });
+        } catch (errMails) {
+          console.error(`Pedido ${pedido.id}: error en los mails del pago`, errMails);
+        }
+      }
+      return true;
+    }
+
+    if (veredicto.revive) {
+      if (!(await revivirPedido())) {
+        console.log(`Pedido ${pedido.id}: cambió entre la lectura y la escritura; el pago ${idPago} no revivió el pedido.`);
+      }
+      return NextResponse.json({ recibido: true });
+    }
+
+    if (cuponVencido) {
+      const { data: vencido, error: errorVencido } = await admin
+        .from('pedidos')
+        .update({ estado: 'cancelado', cancelado_motivo: 'pago_vencido', actualizado_en: new Date().toISOString() })
+        .eq('id', pedido.id)
+        .eq('estado', 'pendiente')
+        .eq('mp_payment_id', idPago)
+        .select('id')
+        .maybeSingle();
+      if (errorVencido) {
+        console.error(`Pedido ${pedido.id}: el cupón ${idPago} venció pero no se pudo escribir — ${errorVencido.message}`);
+      } else if (vencido) {
+        console.log(`Pedido ${pedido.id}: el cupón ${idPago} venció sin pagarse -> cancelado (pago_vencido)`);
+      }
+      return NextResponse.json({ recibido: true });
+    }
+
     // Una sola escritura, con las guardas de validarPago repetidas en el
     // WHERE: si entre la lectura y acá el pedido avanzó o quedó pagado con
     // otro pago, no se pisa. Sin esta guarda, un aviso repetido sobre un pedido
@@ -272,6 +398,7 @@ export async function POST(request) {
       .update({
         mp_payment_id: idPago,
         estado: nuestroEstado,
+        ...datosCupon,
         actualizado_en: new Date().toISOString(),
       })
       .eq('id', pedido.id)
@@ -303,20 +430,27 @@ export async function POST(request) {
     } else {
       console.log(`Pedido ${pedido.id}: cambió entre la lectura y la escritura; el pago ${idPago} no se aplicó.`);
 
-      // Si un pago aprobado no se pudo escribir, puede ser porque el pedido se
-      // canceló justo ahora (la validación lo leyó 'pendiente' antes de que la
-      // cuenta se eliminara). Se vuelve a leer: si quedó 'cancelado', es un
-      // pago sobre un pedido cancelado.
+      // Si un pago aprobado no se pudo escribir, hay tres explicaciones, y se
+      // distinguen volviendo a leer el pedido:
+      //   · se canceló justo ahora porque la persona eliminó su cuenta: es un
+      //     pago sobre un pedido cancelado;
+      //   · el vencimiento lo canceló justo ahora: se revive con este pago;
+      //   · otro pago aprobado le ganó de mano (dos avisos a la vez): es un pago
+      //     doble.
       if (pago.status === 'approved') {
         const { data: actual, error: errorRelectura } = await admin
           .from('pedidos')
-          .select('estado')
+          .select('estado, cancelado_motivo, mp_payment_id')
           .eq('id', pedido.id)
           .maybeSingle();
         if (errorRelectura) {
           console.error(`Pedido ${pedido.id}: no se pudo volver a leer el estado — ${errorRelectura.message}`);
+        } else if (actual?.estado === 'cancelado' && actual.cancelado_motivo === 'pago_vencido') {
+          await revivirPedido();
         } else if (actual?.estado === 'cancelado') {
           await pagoSobrePedidoCancelado({ admin, pedidoId: pedido.id, pago });
+        } else if (actual?.mp_payment_id && String(actual.mp_payment_id) !== idPago && !ESTADOS_REEMPLAZABLES.includes(actual.estado)) {
+          await registrarPagoDoble({ admin, pedidoId: pedido.id, pago });
         }
       }
     }

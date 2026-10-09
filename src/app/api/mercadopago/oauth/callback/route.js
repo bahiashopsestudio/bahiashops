@@ -8,18 +8,24 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { MP_CLIENT_ID, MP_CLIENT_SECRET, MP_REDIRECT_URI } from '@/lib/mercadopago/config';
-import { getCuentaValida } from '@/lib/mercadopago/tokens';
-import { leerCuentaDeMp, cancelarPendientesDeTienda } from '@/lib/mercadopago/cuenta';
-import { enviarMailCuentaMp, avisarLinksSinVencer } from '@/lib/mailsCuentaMp';
+import { leerCuentaDeMp, contarPagosEnProceso } from '@/lib/mercadopago/cuenta';
+import { enviarMailCuentaMp } from '@/lib/mailsCuentaMp';
+import { COOKIE_ESTADO_MP, estadoMpValido } from '@/lib/mercadopago/estado';
 
 const PERFIL = '/vendedor/perfil';
+
+// Toda salida borra la cookie del "state": sirve una sola vez.
+function limpiarEstado(respuesta) {
+  respuesta.cookies.delete(COOKIE_ESTADO_MP);
+  return respuesta;
+}
 
 function alPerfil(request, params) {
   const url = new URL(PERFIL, request.url);
   for (const [clave, valor] of Object.entries(params)) {
     url.searchParams.set(clave, valor);
   }
-  return NextResponse.redirect(url);
+  return limpiarEstado(NextResponse.redirect(url));
 }
 
 function conError(request, motivo) {
@@ -34,6 +40,16 @@ export async function GET(request) {
     return conError(request, 'sin_codigo');
   }
 
+  // 0. ¿Esta conexión la empezó este navegador? El "state" que devuelve
+  // MercadoPago tiene que ser el de la cookie que se guardó al empezar. Sin esto,
+  // alguien podría armar un link con SU código y hacer que se conecte su cuenta
+  // a la tienda de otra persona. Va antes de canjear el código.
+  const guardado = request.cookies?.get(COOKIE_ESTADO_MP)?.value;
+  if (!estadoMpValido(searchParams.get('state'), guardado)) {
+    console.warn('Conexión de MercadoPago rechazada: el state no coincide o no hay cookie.');
+    return conError(request, 'state_invalido');
+  }
+
   // 1. ¿Quién es el vendedor que está conectando? (usa su sesión)
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -46,7 +62,7 @@ export async function GET(request) {
     url.searchParams.set('next', PERFIL);
     url.searchParams.set('motivo', 'sesion_mp');
     url.searchParams.set('modo', 'cuenta');
-    return NextResponse.redirect(url);
+    return limpiarEstado(NextResponse.redirect(url));
   }
 
   const { data: vendedor, error: errorVendedor } = await supabase
@@ -102,11 +118,10 @@ export async function GET(request) {
     process.env.SUPABASE_SERVICE_ROLE_KEY
   );
 
-  // La cuenta que había antes, si había. Hace falta ANTES de pisarla: si la
-  // tienda conecta una cuenta DISTINTA, sus pedidos sin pagar tienen links que
-  // cobran para la cuenta vieja, y para vencerlos hace falta el token de la
-  // vieja (que el guardado de abajo reemplaza). Si no se puede saber qué había,
-  // no se guarda nada: es mejor que reintente a pisar a ciegas.
+  // La cuenta que había antes, si había. Hace falta ANTES de pisarla, para saber
+  // si la tienda conectó la misma o una DISTINTA (y avisárselo por mail). Si no
+  // se puede saber qué había, no se guarda nada: es mejor que reintente a pisar
+  // a ciegas.
   const { data: previa, error: errorPrevia } = await admin
     .from('mercadopago_cuentas')
     .select('mp_user_id, mp_nickname')
@@ -123,15 +138,6 @@ export async function GET(request) {
     : '';
   const cuentaAnterior = previa ? { id: idAnterior || null, nickname: previa.mp_nickname || null } : null;
   const cambioDeCuenta = !!previa && idAnterior !== mpUserId;
-
-  let tokenViejo = null;
-  if (cambioDeCuenta) {
-    try {
-      ({ accessToken: tokenViejo } = await getCuentaValida(vendedor.id, admin));
-    } catch (err) {
-      console.warn('Cambio de cuenta de MP: sin token de la cuenta anterior de la tienda', vendedor.id, '|', err.message);
-    }
-  }
 
   // Cómo se llama la cuenta nueva (para el panel y el mail). A mejor esfuerzo:
   // sin el nombre se conecta igual. Nunca se guarda el mail de la cuenta.
@@ -194,27 +200,13 @@ export async function GET(request) {
     return conError(request, 'no_guardado');
   }
 
-  // 5. La conexión ya quedó hecha. Lo que sigue es consecuencia y aviso: nada
-  // de esto puede hacer fallar la conexión.
+  // 5. La conexión ya quedó hecha. Lo que sigue es aviso: nada de esto puede
+  // hacer fallar la conexión.
   //
-  // Si la cuenta cambió, los pedidos sin pagar que cobraban para la anterior se
-  // cancelan y se vencen sus links. Los pagos en proceso no se tocan.
-  let cancelados = 0;
-  let pagosEnProceso = 0;
-  if (cambioDeCuenta) {
-    try {
-      const resultado = await cancelarPendientesDeTienda({
-        admin, vendedorId: vendedor.id, motivo: 'cuenta_mp_cambiada', cuentaAConservar: mpUserId, tokenViejo,
-      });
-      cancelados = resultado.cancelados;
-      pagosEnProceso = resultado.en_proceso;
-      if (resultado.sin_vencer.length > 0) {
-        await avisarLinksSinVencer({ tiendaId: vendedor.id, tienda: vendedor.nombre_negocio, pedidos: resultado.sin_vencer });
-      }
-    } catch (err) {
-      console.error('Cambio de cuenta de MP: falló la limpieza de pedidos de la tienda', vendedor.id, '|', err?.message || err);
-    }
-  }
+  // Cambiar de cuenta no cancela ningún pedido: una venta existe solo cuando se
+  // paga. Los links de pago sin usar vencen solos a las 2 horas, y los pagos en
+  // efectivo en proceso se acreditan en la cuenta con la que se generaron.
+  const pagosEnProceso = cambioDeCuenta ? await contarPagosEnProceso(admin, vendedor.id) : 0;
 
   // El mail al vendedor, a la dirección de su cuenta: lo protege si alguien más
   // conectó una cuenta con su sesión.
@@ -224,12 +216,11 @@ export async function GET(request) {
     tienda: vendedor.nombre_negocio,
     cuenta: { id: mpUserId, nickname },
     anterior: cuentaAnterior && cuentaAnterior.id ? cuentaAnterior : null,
-    pedidosCancelados: cancelados,
     pagosEnProceso,
   });
 
   return alPerfil(request, {
     mp: 'exito',
-    ...(cambioDeCuenta ? { cancelados: String(cancelados) } : {}),
+    ...(cambioDeCuenta ? { cambio: '1' } : {}),
   });
 }

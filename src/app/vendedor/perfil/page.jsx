@@ -53,6 +53,7 @@ const MENSAJES_MP = {
   sin_vendedor: 'No encontramos tu cuenta de vendedor, así que no pudimos guardar la conexión. Si recién te sumaste, completá primero los datos de tu emprendimiento.',
   canje_rechazado: 'MercadoPago no aceptó la conexión. Suele pasar cuando la pantalla quedó abierta demasiado tiempo. Probá conectar de nuevo desde el principio.',
   no_guardado: 'Nos conectamos con MercadoPago pero no pudimos guardar la conexión de tu lado. Esperá un momento y probá de nuevo.',
+  state_invalido: 'No pudimos verificar que la conexión la empezaste vos desde este navegador. Puede pasar si la pantalla de MercadoPago quedó abierta mucho tiempo. Probá conectar de nuevo desde el principio.',
 };
 
 const MENSAJE_MP_GENERICO = 'No pudimos completar la conexión con MercadoPago. Probá de nuevo.';
@@ -102,6 +103,7 @@ export default function PerfilVendedorPage() {
   const [resultadoMp, setResultadoMp] = useState(null);
   // La cuenta de MercadoPago conectada: { id, nickname, conectado_en, dias_restantes }.
   const [cuentaMp, setCuentaMp] = useState(null);
+  const [antesDeConectar, setAntesDeConectar] = useState(false);
   const [confirmarDesconexion, setConfirmarDesconexion] = useState(false);
   const [desconectando, setDesconectando] = useState(false);
   const [errorDesconexion, setErrorDesconexion] = useState(null);
@@ -120,16 +122,14 @@ export default function PerfilVendedorPage() {
       const mp = params.get('mp');
       if (!mp) return;
 
-      // 'cancelados' viene solo cuando se cambió a OTRA cuenta de MercadoPago:
-      // cuántos pedidos sin pagar se cancelaron.
-      const cancelados = Number(params.get('cancelados'));
+      // 'cambio' viene solo cuando se conectó OTRA cuenta de MercadoPago.
       setResultadoMp(mp === 'exito'
-        ? { ok: true, cancelados: Number.isFinite(cancelados) && params.has('cancelados') ? cancelados : null }
+        ? { ok: true, cambio: params.get('cambio') === '1' }
         : { ok: false, motivo: params.get('motivo') });
 
       params.delete('mp');
       params.delete('motivo');
-      params.delete('cancelados');
+      params.delete('cambio');
       const query = params.toString();
       window.history.replaceState({}, '', window.location.pathname + (query ? '?' + query : ''));
     }
@@ -436,11 +436,7 @@ export default function PerfilVendedorPage() {
                 <p className="text-sm font-medium text-emerald-800 m-0">¡Listo! Conectaste tu cuenta de MercadoPago.</p>
                 <p className="text-[13px] text-emerald-700 font-light mt-1 mb-0 leading-relaxed">
                   Ya podés recibir el dinero de tus ventas en tu cuenta.
-                  {resultadoMp.cancelados !== null && resultadoMp.cancelados !== undefined && (
-                    resultadoMp.cancelados > 0
-                      ? ` Como cambiaste de cuenta, cancelamos ${resultadoMp.cancelados} ${resultadoMp.cancelados === 1 ? 'pedido que todavía no se había pagado' : 'pedidos que todavía no se habían pagado'}: cobraban en la cuenta anterior. Te mandamos un mail con el detalle.`
-                      : ' Como cambiaste de cuenta, te mandamos un mail con el detalle.'
-                  )}
+                  {resultadoMp.cambio && ' Como cambiaste de cuenta, te mandamos un mail con el detalle.'}
                 </p>
               </div>
             )}
@@ -475,6 +471,18 @@ export default function PerfilVendedorPage() {
                           Recibís el dinero de tus ventas en esa cuenta.
                         </p>
                       )}
+                      {cuentaMp && (
+                        <p className="text-[11px] text-[#0a0a0a]/30 font-light mt-1 mb-0">
+                          ¿No es la que querías?{' '}
+                          <button
+                            type="button"
+                            onClick={() => setAntesDeConectar(true)}
+                            className="text-[#0a0a0a]/50 underline underline-offset-2 hover:text-[#0a0a0a]/80 transition-colors cursor-pointer bg-transparent border-none p-0 text-[11px] font-light"
+                          >
+                            Cambiar de cuenta
+                          </button>
+                        </p>
+                      )}
                     </div>
                     <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full font-medium">
                       Activo
@@ -507,19 +515,68 @@ export default function PerfilVendedorPage() {
                   <p className="text-sm text-[#0a0a0a]/30 font-light mb-4 leading-relaxed">
                     Conectá tu cuenta de MercadoPago para recibir el dinero de tus ventas.
                   </p>
-                  <a
-                    href="/api/mercadopago/oauth/start"
-                    className="inline-block bg-[#009ee3] text-white no-underline hover:bg-[#008dd0] transition-colors"
+                  <button
+                    type="button"
+                    onClick={() => setAntesDeConectar(true)}
+                    className="inline-block bg-[#009ee3] text-white border-none cursor-pointer hover:bg-[#008dd0] transition-colors"
                     style={{ fontFamily: "'Inter', sans-serif", fontWeight: 500, fontSize: '14px', borderRadius: '4px', padding: '14px 28px' }}
                   >
                     Conectar con MercadoPago
-                  </a>
+                  </button>
                 </div>
               )}
             </div>
           </div>
         </div>
       </div>
+
+      {/* ═══ MODAL: ANTES DE CONECTAR (también al cambiar de cuenta) ═══ */}
+      {antesDeConectar && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[1000]"
+          onClick={() => setAntesDeConectar(false)}
+        >
+          <div
+            className="bg-white rounded-2xl w-full max-w-[440px] overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-6 py-4 border-b border-[#0a0a0a]/5">
+              <p className="m-0" style={{ fontFamily: 'Fraunces, serif', fontWeight: 500, color: '#0a0a0a' }}>
+                Antes de conectar
+              </p>
+            </div>
+
+            <div className="px-6 py-4">
+              <p className="text-sm text-[#0a0a0a]/60 font-light leading-relaxed m-0">
+                Se conecta la cuenta de MercadoPago con la que estés ingresado en este navegador.
+                Si tenés más de una, cerrá sesión en MercadoPago o abrí esta página en una ventana de incógnito.
+              </p>
+              {cuentaMp && (
+                <p className="text-sm text-[#0a0a0a]/60 font-light leading-relaxed mt-3 mb-0">
+                  Hoy tenés conectada <span className="text-[#0a0a0a]">{cuentaMp.nickname || 'una cuenta sin nombre'}</span> (N° {cuentaMp.id}).
+                  Si conectás otra, el dinero de tus ventas nuevas va a la cuenta nueva.
+                </p>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-[#0a0a0a]/5">
+              <button
+                type="button"
+                onClick={() => setAntesDeConectar(false)}
+                className="px-5 py-2.5 border border-[#0a0a0a]/10 rounded-full bg-white cursor-pointer text-sm text-[#0a0a0a]/60 font-light hover:border-[#0a0a0a]/30 transition-all"
+              >
+                Cancelar
+              </button>
+              <a
+                href="/api/mercadopago/oauth/start"
+                className="px-5 py-2.5 rounded-full bg-[#009ee3] text-white text-sm font-medium no-underline hover:bg-[#008dd0] transition-colors"
+              >
+                Conectar MercadoPago
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ═══ MODAL: CONFIRMAR DESCONEXIÓN DE MERCADOPAGO ═══ */}
       {confirmarDesconexion && (
@@ -541,7 +598,7 @@ export default function PerfilVendedorPage() {
               <p className="text-sm text-[#0a0a0a]/60 font-light leading-relaxed m-0">
                 Si desconectás tu cuenta vas a dejar de poder cobrar tus ventas a través de Bahía Shops.
                 Tus productos siguen publicados, pero nadie va a poder pagarlos por la plataforma.
-                Los pedidos que todavía no se pagaron se cancelan, porque su link de pago cobraba en esta cuenta.
+                Los links de pago que alguien tenía abiertos vencen solos a las 2 horas, y los pagos en efectivo en proceso se acreditan igual en esta cuenta.
               </p>
               <p className="text-sm text-[#0a0a0a]/60 font-light leading-relaxed mt-3 mb-0">
                 Para volver a cobrar vas a tener que vincular tu cuenta de MercadoPago de nuevo.

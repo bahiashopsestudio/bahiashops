@@ -7,8 +7,10 @@
 //
 // Partes 1 a 3: lo que usa "Eliminar mi cuenta" (buscar pagos y vencer una
 // preferencia). Parte 4: el vencimiento de los links de pago de los pedidos,
-// con los MISMOS campos y el mismo plazo que manda /api/pedidos/crear (salen de
-// src/lib/mercadopago/preferencias.js y src/lib/vencimientoPago.js).
+// con los MISMOS campos y los mismos plazos que manda /api/pedidos/crear (salen de
+// src/lib/mercadopago/preferencias.js y src/lib/vencimientoPago.js): el link vale
+// 2 horas y el cupón en efectivo 3 días. Que el cupón sobreviva al link se prueba
+// con scripts/probar-mp-efectivo.mjs.
 //
 // MP_TOKEN: el access token de una CUENTA DE PRUEBA vendedora (la que se crea
 // desde "Cuentas de prueba" en el panel de MercadoPago Developers). No uses el
@@ -31,7 +33,7 @@ if (!TOKEN) {
 }
 
 import { camposDeVencimiento, fechaAR } from '../src/lib/mercadopago/preferencias.js'
-import { PLAZO_PAGO_DIAS } from '../src/lib/vencimientoPago.js'
+import { PLAZO_LINK_HORAS, PLAZO_CUPON_DIAS } from '../src/lib/vencimientoPago.js'
 
 const API = 'https://api.mercadopago.com'
 const cabeceras = { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' }
@@ -105,8 +107,8 @@ console.log(link)
 // 4. Vencimiento de los links de pago de los pedidos
 //
 // Con los campos exactos que manda /api/pedidos/crear (camposDeVencimiento) y el
-// plazo real (PLAZO_PAGO_DIAS). Se prueba:
-//   A. crear una preferencia que vence en PLAZO_PAGO_DIAS días;
+// plazos reales (PLAZO_LINK_HORAS y PLAZO_CUPON_DIAS). Se prueba:
+//   A. crear una preferencia con el link a PLAZO_LINK_HORAS y el cupón a PLAZO_CUPON_DIAS;
 //   B. crear otra que vence en pocos minutos (para ver cómo se ve vencida);
 //   C. ponerle el vencimiento a una preferencia que ya existe sin fecha (es lo
 //      que hace la regularización de los pedidos viejos).
@@ -114,7 +116,7 @@ console.log(link)
 // = aceptó pero no devolvió el dato: crear/route.js lo trata como falla y cancela
 // el pedido, así que también hay que avisar.
 // ─────────────────────────────────────────────────────────────────────────────
-console.log(`\n── 4. Vencimiento de los links de pago (plazo real: ${PLAZO_PAGO_DIAS} días) ──`)
+console.log(`\n── 4. Vencimiento de los links de pago (link: ${PLAZO_LINK_HORAS} horas, cupón: ${PLAZO_CUPON_DIAS} días) ──`)
 
 const MS_DIA = 24 * 3600 * 1000
 const problemas = []
@@ -130,7 +132,7 @@ function mismaFecha(devuelta, mandadaMs) {
 }
 
 // Revisa una respuesta (POST o GET) contra lo que se mandó.
-function revisar(titulo, respuesta, venceEnMs) {
+function revisar(titulo, respuesta, venceEnMs, venceCuponMs = venceEnMs) {
   const d = respuesta.datos
   console.log(`  ${titulo}: HTTP ${respuesta.status}`)
   console.log('    devuelve:', JSON.stringify({
@@ -141,22 +143,23 @@ function revisar(titulo, respuesta, venceEnMs) {
   if (!respuesta.ok) return
   fila(`${titulo}: devuelve expires = true`, d?.expires === true)
   fila(`${titulo}: devuelve expiration_date_to igual a lo mandado`, mismaFecha(d?.expiration_date_to, venceEnMs), d?.expiration_date_to ? '' : 'SIN ECO')
-  fila(`${titulo}: devuelve date_of_expiration igual a lo mandado`, mismaFecha(d?.date_of_expiration, venceEnMs), d?.date_of_expiration ? '' : 'SIN ECO (mirá el ticket a mano, ver abajo)')
+  fila(`${titulo}: devuelve date_of_expiration igual a lo mandado`, mismaFecha(d?.date_of_expiration, venceCuponMs), d?.date_of_expiration ? '' : 'SIN ECO (mirá el ticket a mano, ver abajo)')
 }
 
 const itemPrueba = { title: 'Prueba de vencimiento (no pagar)', quantity: 1, unit_price: 100, currency_id: 'ARS' }
 
-// A. A PLAZO_PAGO_DIAS días.
-const venceA = Date.now() + PLAZO_PAGO_DIAS * MS_DIA
-const campos = camposDeVencimiento(venceA)
+// A. Link a PLAZO_LINK_HORAS, cupón a PLAZO_CUPON_DIAS.
+const venceA = Date.now() + PLAZO_LINK_HORAS * 3600 * 1000
+const venceCuponA = Date.now() + PLAZO_CUPON_DIAS * MS_DIA
+const campos = camposDeVencimiento(venceA, venceCuponA)
 console.log('  Campos que se mandan en A:', JSON.stringify(campos))
 const crearA = await mp('POST', '/checkout/preferences', {
   items: [itemPrueba], external_reference: `prueba-3dias-${Date.now()}`, ...campos,
 })
-revisar('A (3 días), al crear', crearA, venceA)
+revisar('A (link 2 h, cupón 3 días), al crear', crearA, venceA, venceCuponA)
 if (crearA.ok) {
   const leerA = await mp('GET', `/checkout/preferences/${crearA.datos.id}`)
-  revisar('A (3 días), releída', leerA, venceA)
+  revisar('A (link 2 h, cupón 3 días), releída', leerA, venceA, venceCuponA)
   console.log('  Link A (para generar un ticket en efectivo con un comprador de prueba):')
   console.log('   ', crearA.datos.sandbox_init_point || crearA.datos.init_point)
 }
@@ -164,9 +167,9 @@ if (crearA.ok) {
 // B. A pocos minutos.
 const venceB = Date.now() + 5 * 60 * 1000
 const crearB = await mp('POST', '/checkout/preferences', {
-  items: [itemPrueba], external_reference: `prueba-5min-${Date.now()}`, ...camposDeVencimiento(venceB),
+  items: [itemPrueba], external_reference: `prueba-5min-${Date.now()}`, ...camposDeVencimiento(venceB, venceCuponA),
 })
-revisar('B (5 minutos), al crear', crearB, venceB)
+revisar('B (5 minutos), al crear', crearB, venceB, venceCuponA)
 if (crearB.ok) {
   console.log(`  Link B (vence a las ${fechaAR(venceB)}; abrilo ANTES y DESPUÉS de esa hora):`)
   console.log('   ', crearB.datos.sandbox_init_point || crearB.datos.init_point)
@@ -180,11 +183,11 @@ if (!sinFecha.ok) {
   fila('C: crear la preferencia sin fecha (preparación)', false, JSON.stringify(sinFecha.datos))
 } else {
   fila('C: la preferencia sin fecha nace con expires = false', sinFecha.datos.expires !== true, `expires: ${sinFecha.datos.expires}`)
-  const venceC = Date.now() + PLAZO_PAGO_DIAS * MS_DIA
-  const ponerC = await mp('PUT', `/checkout/preferences/${sinFecha.datos.id}`, camposDeVencimiento(venceC))
-  revisar('C (PUT sobre una existente)', ponerC, venceC)
+  const venceC = Date.now() + PLAZO_LINK_HORAS * 3600 * 1000
+  const ponerC = await mp('PUT', `/checkout/preferences/${sinFecha.datos.id}`, camposDeVencimiento(venceC, venceCuponA))
+  revisar('C (PUT sobre una existente)', ponerC, venceC, venceCuponA)
   const leerC = await mp('GET', `/checkout/preferences/${sinFecha.datos.id}`)
-  revisar('C (PUT), releída', leerC, venceC)
+  revisar('C (PUT), releída', leerC, venceC, venceCuponA)
 }
 
 // El ticket en efectivo: no se puede generar por API. Si tenés un pago en
@@ -195,14 +198,14 @@ if (process.env.PAGO_EN_EFECTIVO) {
     status: pago.datos?.status, payment_type_id: pago.datos?.payment_type_id, payment_method_id: pago.datos?.payment_method_id,
     date_created: pago.datos?.date_created, date_of_expiration: pago.datos?.date_of_expiration,
   }))
-  const esperado = Date.parse(pago.datos?.date_created) + PLAZO_PAGO_DIAS * MS_DIA
-  fila('Ticket en efectivo: vence a los 3 días de generarse el link (o antes)',
-    Number.isFinite(Date.parse(pago.datos?.date_of_expiration)) && Date.parse(pago.datos.date_of_expiration) <= venceA + 60 * 1000,
-    `date_of_expiration: ${pago.datos?.date_of_expiration}; tope del link A: ${fechaAR(venceA)}; creado + 3 días: ${Number.isFinite(esperado) ? fechaAR(esperado) : 'n/d'}`)
+  const esperado = Date.parse(pago.datos?.date_created) + PLAZO_CUPON_DIAS * MS_DIA
+  fila('Ticket en efectivo: vence a los 3 días (MercadoPago lo redondea al final del día)',
+    Number.isFinite(Date.parse(pago.datos?.date_of_expiration)) && Date.parse(pago.datos.date_of_expiration) <= venceCuponA + MS_DIA,
+    `date_of_expiration: ${pago.datos?.date_of_expiration}; cupón pedido: ${fechaAR(venceCuponA)}; creado + 3 días: ${Number.isFinite(esperado) ? fechaAR(esperado) : 'n/d'}`)
 }
 
 console.log('\nLo que NO se puede ver desde acá (lo mirás vos):')
-console.log('  · En el link A, con un comprador de prueba, elegí un medio en efectivo (Rapipago / Pago Fácil) y mirá hasta cuándo dice que se puede pagar el ticket: tiene que ser a más tardar a los 3 días.')
+console.log('  · En el link A, con un comprador de prueba, elegí un medio en efectivo (Rapipago / Pago Fácil) y mirá hasta cuándo dice que se puede pagar el ticket: tiene que ser a más tardar a los 3 días (el final de ese día).')
 console.log('  · Si lo generás, copiá el id del pago (aparece en la URL o en tu cuenta de prueba) y volvé a correr con PAGO_EN_EFECTIVO=<id>.')
 console.log('  · El link B, pasada la hora, tiene que mostrar un error de MercadoPago (no dejar pagar).')
 

@@ -1,0 +1,9 @@
+Confirmá tu nuevo email
+
+Pediste cambiar el email de tu cuenta de {{ .Email }} a {{ .NewEmail }}. Para que el cambio quede hecho, confirmalo con el botón.
+
+Confirmar el cambio: {{ .SiteURL }}/auth/confirmar?token_hash={{ .TokenHash }}&type=email_change
+
+Si no pediste este cambio, no toques el botón y escribinos respondiendo a hola@bahiashops.com.ar.
+
+Bahía Shops · Bahía Blanca, Argentina.

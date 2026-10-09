@@ -25,6 +25,8 @@ export const TRANSICIONES = {
 
 // Los estados que sólo escribe el webhook. Están acá para poder dar un error
 // que explique por qué, en vez de un "transición inválida" seco.
+import { esPagoEnEfectivoPendiente } from './vencimientoPago.js'
+
 export const ESTADOS_DE_PAGO = ['pendiente', 'pagado', 'rechazado', 'cancelado']
 
 // El pago guardado en el pedido volvió como refunded o charged_back. También
@@ -116,6 +118,43 @@ export const ESTADOS_CON_PAGO = ['pagado', 'preparando', 'franja', 'por_salir', 
 
 export function pedidoTuvoPago(pedido) {
   return ESTADOS_CON_PAGO.includes(pedido?.estado)
+}
+
+// Lo que "Mis pedidos" le muestra a quien compró: las ventas (pedidos que tuvieron
+// un pago) y los pagos en efectivo en proceso, que son ventas en curso. Un
+// pedido que nunca se pagó (el link venció, o se rechazó) no es una compra: es
+// un carrito abandonado y no aparece. La única excepción es un cupón en efectivo
+// que venció sin pagarse: queda a la vista, para que quien lo generó sepa qué
+// pasó.
+export function esVentaVisible(pedido) {
+  if (pedidoTuvoPago(pedido)) return true
+  if (esPagoEnEfectivoPendiente(pedido)) return true
+  return pedido?.estado === 'cancelado' && pedido.cancelado_motivo === 'pago_vencido' && !!pedido.efectivo_vence_en
+}
+
+// En qué pestaña del panel de la tienda va un pedido: 'ventas' (Ventas nuevas),
+// 'preparacion' (En preparación) o 'historial'. Devuelve null si el pedido NO es
+// una venta de la tienda: entonces el servidor ni lo manda.
+//
+//   Ventas nuevas   pagado; y un pago en efectivo en proceso con el cupón
+//                   todavía vigente (solo la etiqueta, sin botones ni datos de
+//                   contacto)
+//   En preparación  preparando, franja, por_salir
+//   Historial       despachado, reembolsado
+//
+// Un cupón que venció sin pagarse NO es una venta: es un carrito abandonado, y
+// la tienda lo va a ver recién en la sección de carritos abandonados. Tampoco
+// lo son los pedidos pendientes sin pago, los rechazados ni los demás cancelados.
+export function pestanaDePedido(pedido, ahoraMs = Date.now()) {
+  const estado = pedido?.estado
+  if (estado === 'pagado') return 'ventas'
+  if (['preparando', 'franja', 'por_salir'].includes(estado)) return 'preparacion'
+  if (estado === 'despachado' || estado === ESTADO_REEMBOLSADO) return 'historial'
+  if (esPagoEnEfectivoPendiente(pedido)) {
+    const vence = Date.parse(pedido.efectivo_vence_en)
+    return Number.isFinite(vence) && vence > ahoraMs ? 'ventas' : null
+  }
+  return null
 }
 
 // Lo que se saca de un pedido antes de mandárselo a la tienda si no se pagó.

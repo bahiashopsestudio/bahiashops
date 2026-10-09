@@ -1,0 +1,9 @@
+Te damos la bienvenida a Bahía Shops
+
+Gracias por sumarte. Para terminar de crear tu cuenta, confirmá que este email es tuyo.
+
+Confirmar mi email: {{ .SiteURL }}/auth/confirmar?token_hash={{ .TokenHash }}&type=email&redirect_to={{ .RedirectTo }}
+
+Si no creaste una cuenta en Bahía Shops, ignorá este mail: sin la confirmación la cuenta no se activa.
+
+Bahía Shops · Bahía Blanca, Argentina.

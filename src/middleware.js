@@ -3,27 +3,8 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 
-// ──────────────────────────────────────────────
-// Cambiá esto a false cuando quieras abrir el sitio al público
-const COMING_SOON = false
-// ──────────────────────────────────────────────
-
-// Rutas que siempre quedan accesibles (sin login)
-const PUBLIC_PATHS = [
-  '/proximamente',
-  '/entrar',
-  '/bienvenida',
-  '/login',
-  '/registro',
-  '/auth',
-  '/api',
-  '/_next',
-  '/favicon',
-]
-
-function isPublicPath(pathname) {
-  return PUBLIC_PATHS.some((p) => pathname.startsWith(p))
-}
+// El middleware solo refresca la cookie de sesión de Supabase. No redirige a
+// nadie: cada página decide si necesita una sesión.
 
 // Cuánto esperamos a Supabase antes de dejar pasar el request sin sesión.
 const TIMEOUT_SESION_MS = 2000
@@ -101,36 +82,7 @@ export async function middleware(request) {
 
   // Refrescar sesión (importante: no usar getSession, usar getUser).
   // Con tope de tiempo: si Supabase no contesta, el request sigue sin sesión.
-  //
-  // Ojo si algún día COMING_SOON vuelve a true: un timeout deja user=null, así
-  // que alguien con sesión iniciada terminaría en /proximamente. Es aceptable
-  // como degradación, pero conviene tenerlo presente.
-  const {
-    data: { user },
-  } = await getUserConTope(supabase, request.nextUrl.pathname)
-
-  // ── COMING SOON MODE ──
-  if (COMING_SOON) {
-    const { pathname } = request.nextUrl
-
-    // Si ya está logueado, dejarlo pasar a todo el sitio
-    if (user) {
-      // Si un usuario logueado visita /proximamente, mandarlo al home
-      if (pathname === '/proximamente') {
-        const url = request.nextUrl.clone()
-        url.pathname = '/'
-        return NextResponse.redirect(url)
-      }
-      return supabaseResponse
-    }
-
-    // Si NO está logueado y la ruta no es pública, redirigir a /proximamente
-    if (!isPublicPath(pathname)) {
-      const url = request.nextUrl.clone()
-      url.pathname = '/proximamente'
-      return NextResponse.redirect(url)
-    }
-  }
+  await getUserConTope(supabase, request.nextUrl.pathname)
 
   return supabaseResponse
 }

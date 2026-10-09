@@ -8,14 +8,8 @@ import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
 import VolverAtras from '@/components/VolverAtras'
 import { etiquetaMetodo, tipoEntregaDe, textoCostoEnvio, seguimientoDe } from '@/lib/metodosEntrega'
-import { pedidoVencido, pagableHasta, pedidoTienePago } from '@/lib/vencimientoPago'
-
-// "7 de octubre a las 15:30", en la hora de quien mira.
-function textoFechaYHora(fecha) {
-  const dia = fecha.toLocaleDateString('es-AR', { day: 'numeric', month: 'long' })
-  const hora = fecha.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false })
-  return `${dia} a las ${hora}`
-}
+import { pedidoVencido, pagableHasta, esPagoEnEfectivoPendiente, fechaDeCupon } from '@/lib/vencimientoPago'
+import { esVentaVisible } from '@/lib/pedidos'
 
 // Lo que costó la entrega, al lado del método: "Envío a tu zona: $2.500",
 // "Gratis", "A coordinar". A quien compra no se le muestran zonas ni
@@ -78,10 +72,12 @@ function Seguimiento({ pedido }) {
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage']
 
 const ESTADOS = {
-  pendiente: { label: 'Pendiente de pago', color: 'bg-amber-50 text-amber-600' },
-  // No es un estado de la base: lo arma pedidoVencido (el link de pago venció
-  // y el pedido no se cobró).
-  vencido: { label: 'Vencido', color: 'bg-gray-100 text-gray-500' },
+  // Un pedido pendiente que se ve acá es siempre un pago en efectivo en proceso:
+  // los que nunca se pagaron no son compras (esVentaVisible).
+  pendiente: { label: 'Pago en efectivo pendiente', color: 'bg-amber-50 text-amber-600' },
+  // No es un estado de la base: lo arma pedidoVencido (el cupón venció y el
+  // pedido no se cobró).
+  vencido: { label: 'Venció el cupón de pago', color: 'bg-gray-100 text-gray-500' },
   pagado: { label: 'Pagado', color: 'bg-green-50 text-green-600' },
   preparando: { label: 'Preparando', color: 'bg-blue-50 text-blue-600' },
   franja: { label: 'Franja horaria asignada', color: 'bg-blue-50 text-blue-600' },
@@ -99,29 +95,25 @@ export default function MisPedidosPage() {
   // La hora a la que se cargaron los pedidos: de ella depende qué está vencido.
   // Va en el estado (y no se pide al dibujar) para que el render sea puro.
   const [ahora, setAhora] = useState(0)
-  // Los ids de los pedidos que se pueden pagar AHORA. Los decide el servidor
-  // (/api/pedidos/pagables): solo él sabe si la tienda sigue disponible y si
-  // sigue cobrando con la misma cuenta de MercadoPago.
-  const [pagables, setPagables] = useState([])
   // El pedido al que se le está abriendo el pago, y el error de cada uno.
   const [pagandoId, setPagandoId] = useState(null)
   const [erroresPago, setErroresPago] = useState({})
 
-  // Mientras la pantalla está abierta, la hora se actualiza sola: al vencer un
-  // pedido el botón "Pagar" desaparece y queda el texto de "Vencido".
+  // Mientras la pantalla está abierta, la hora se actualiza sola: al vencer el
+  // cupón el botón "Pagar ahora" desaparece y queda el texto de "Venció".
   useEffect(() => {
     const reloj = setInterval(() => setAhora(Date.now()), 15000)
     return () => clearInterval(reloj)
   }, [])
 
-  // Pide el link de pago al servidor (que comprueba que el pedido sea tuyo y
-  // siga vigente) y manda a MercadoPago. El link no se arma acá.
+  // Pide un link de pago NUEVO al servidor (que comprueba que el pedido sea tuyo
+  // y siga vigente) y manda a MercadoPago. El link no se arma acá.
   async function pagar(pedido) {
     if (pagandoId) return
     setPagandoId(pedido.id)
     setErroresPago((previos) => ({ ...previos, [pedido.id]: '' }))
     try {
-      const res = await fetch(`/api/pedidos/${pedido.id}/pagar`, { method: 'POST' })
+      const res = await fetch(`/api/pedidos/${pedido.id}/pagar-ahora`, { method: 'POST' })
       const cuerpo = await res.json().catch(() => null)
       if (res.ok && cuerpo?.url) {
         window.location.href = cuerpo.url
@@ -169,7 +161,7 @@ export default function MisPedidosPage() {
         .select(`
           id, estado, total, costo_envio, metodo_envio, zona_envio, creado_en,
           vendedor_nombre, franja_horaria, envio_empresa, envio_empresa_otra, envio_seguimiento,
-          vence_en, cancelado_motivo, mp_payment_id,
+          vence_en, efectivo_vence_en, cancelado_motivo, mp_payment_id,
           vendedor:vendedores(slug, direccion_visible),
           items:pedido_items(id, nombre, foto_url, cantidad, precio, variante)
         `)
@@ -183,20 +175,11 @@ export default function MisPedidosPage() {
         return
       }
 
+      // Solo las compras: los pedidos que nunca se pagaron (carritos
+      // abandonados) no aparecen.
       setAhora(Date.now())
-      setPedidos(data || [])
+      setPedidos((data || []).filter(esVentaVisible))
       setCargando(false)
-
-      // El botón "Pagar" solo aparece en los que el servidor dice. Si la
-      // consulta falla, simplemente no hay botones: el resto de la pantalla
-      // anda igual.
-      if ((data || []).some((p) => p.estado === 'pendiente')) {
-        try {
-          const res = await fetch('/api/pedidos/pagables')
-          const cuerpo = res.ok ? await res.json() : null
-          if (Array.isArray(cuerpo?.ids)) setPagables(cuerpo.ids)
-        } catch { /* sin botones */ }
-      }
     }
     cargar()
   }, [])
@@ -267,12 +250,11 @@ export default function MisPedidosPage() {
                 {pedidos.map((pedido) => {
                   const vencido = pedidoVencido(pedido, ahora)
                   const pagarHasta = pagableHasta(pedido, ahora)
-                  // El botón: pendiente, sin ningún pago, todavía dentro del
-                  // plazo (esto lo ve la pantalla, para que desaparezca solo al
-                  // vencer) y en la lista de pedidos que el servidor dice que se
-                  // pueden pagar (tienda disponible, misma cuenta de MercadoPago,
-                  // con link). El servidor vuelve a comprobar todo al apretarlo.
-                  const puedePagar = !vencido && !!pagarHasta && !pedidoTienePago(pedido) && pagables.includes(pedido.id)
+                  // El botón: un pago en efectivo en proceso y el cupón todavía
+                  // vigente (esto lo ve la pantalla, para que desaparezca solo
+                  // al vencer). El servidor comprueba todo de nuevo al
+                  // apretarlo: tienda disponible, misma cuenta de MercadoPago.
+                  const puedePagar = !vencido && !!pagarHasta && esPagoEnEfectivoPendiente(pedido)
                   const estado = vencido
                     ? ESTADOS.vencido
                     : (ESTADOS[pedido.estado] || { label: pedido.estado, color: 'bg-gray-50 text-gray-600' })
@@ -338,21 +320,17 @@ export default function MisPedidosPage() {
                       </div>
                       <Seguimiento pedido={pedido} />
 
-                      {/* El link de pago vence a los pocos días de crear el
-                          pedido (src/lib/vencimientoPago.js). */}
+                      {/* El cupón en efectivo vive 3 días (src/lib/vencimientoPago.js);
+                          al comprador se le muestra solo la fecha, en hora de
+                          Argentina. */}
                       {vencido && (
                         <p className="pt-2 mt-1 text-xs text-[#0a0a0a]/50 font-light leading-relaxed">
-                          El link de pago venció y el pedido no se cobró. Si todavía querés estos productos, hacé el pedido de nuevo.
+                          El cupón venció y el pedido no se cobró. Si todavía querés estos productos, hacé el pedido de nuevo.
                         </p>
                       )}
-                      {pedido.estado === 'cancelado' && pedido.cancelado_motivo === 'cuenta_mp_cambiada' && (
+                      {!vencido && pagarHasta && esPagoEnEfectivoPendiente(pedido) && (
                         <p className="pt-2 mt-1 text-xs text-[#0a0a0a]/50 font-light leading-relaxed">
-                          La tienda cambió su cuenta de cobro y este pedido se canceló sin cobrarse. Si todavía querés estos productos, hacé el pedido de nuevo.
-                        </p>
-                      )}
-                      {!vencido && pagarHasta && (puedePagar || pedidoTienePago(pedido)) && (
-                        <p className="pt-2 mt-1 text-xs text-[#0a0a0a]/50 font-light leading-relaxed">
-                          Podés pagarlo hasta el {textoFechaYHora(pagarHasta)}. Después el link vence.
+                          Vence el {fechaDeCupon(pagarHasta)}. Pagá el cupón en Rapipago o Pago Fácil, o pagá ahora con tarjeta o dinero en cuenta.
                         </p>
                       )}
                       {puedePagar && (
@@ -364,7 +342,7 @@ export default function MisPedidosPage() {
                             className="bg-[#0a0a0a] text-white border border-[#0a0a0a] hover:bg-transparent hover:text-[#0a0a0a] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                             style={{ fontFamily: "'Inter', sans-serif", fontWeight: 500, fontSize: '14px', borderRadius: '4px', padding: '11px 24px' }}
                           >
-                            {pagandoId === pedido.id ? 'Abriendo el pago…' : 'Pagar'}
+                            {pagandoId === pedido.id ? 'Abriendo el pago…' : 'Pagar ahora'}
                           </button>
                           {erroresPago[pedido.id] && (
                             <p className="mt-2 mb-0 text-xs text-[#dc2626] font-light leading-relaxed">{erroresPago[pedido.id]}</p>

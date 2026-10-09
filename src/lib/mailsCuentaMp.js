@@ -1,6 +1,5 @@
 // Los mails de la cuenta de MercadoPago de una tienda: al vendedor cada vez que
-// conecta, cambia o desconecta la cuenta con la que cobra, y uno interno para
-// avisar cuando quedan links de pago que no se pudieron vencer.
+// conecta, cambia o desconecta la cuenta con la que cobra.
 //
 // El mail al vendedor va a la dirección de su cuenta de Bahía Shops (la de la
 // sesión), no a un mail de contacto: es el aviso que lo protege si alguien más
@@ -9,10 +8,9 @@
 // deshace).
 
 import { SITIO_URL } from '@/lib/sitio'
-import { EMAIL_NOTIFICACIONES, REMITENTE_NO_REPLY } from '@/lib/contacto'
 import {
-  GRIS, BORDE, FUENTE_TEXTO, FUENTE_UI, TABLA,
-  escapar, plantilla, lineaAzul, tituloTexto, parrafo, tarjeta, boton, enviarPorResend,
+  GRIS, BORDE, FUENTE_TEXTO, TABLA,
+  escapar, plantilla, lineaAzul, tituloTexto, parrafo, boton, enviarPorResend,
 } from '@/lib/mailBase'
 
 // El texto de un error sin ninguna dirección de mail (lo que devuelve Resend o
@@ -35,9 +33,8 @@ const PIE_VENDEDOR = 'Si no fuiste vos, entrá a tu panel, desconectá la cuenta
 //   tienda            nombre de la tienda
 //   cuenta            { id, nickname } de la cuenta conectada ahora
 //   anterior          { id, nickname } de la cuenta que había (cambio o desconexión)
-//   pedidosCancelados cuántos pedidos sin pagar se cancelaron
-//   pagosEnProceso    cuántos pagos en proceso quedaron en la cuenta anterior
-export function armarMailCuentaMp({ tipo, tienda, cuenta = null, anterior = null, pedidosCancelados = 0, pagosEnProceso = 0 }) {
+//   pagosEnProceso    cuántos pagos en efectivo en proceso quedaron en la cuenta anterior
+export function armarMailCuentaMp({ tipo, tienda, cuenta = null, anterior = null, pagosEnProceso = 0 }) {
   const nombreTienda = String(tienda ?? '').trim() || 'tu tienda'
   const linkPanel = `${SITIO_URL}/vendedor/perfil`
 
@@ -57,24 +54,17 @@ export function armarMailCuentaMp({ tipo, tienda, cuenta = null, anterior = null
     asunto = 'Cambiaste la cuenta de MercadoPago de tu tienda'
     titulo = 'Cambiaste tu cuenta de MercadoPago'
     parrafos.push(`Pasaste de la cuenta ${describirCuenta(anterior)} a la cuenta ${describirCuenta(cuenta)} en ${nombreTienda}. Desde ahora el dinero de tus ventas nuevas va a la cuenta nueva.`)
-    parrafos.push(
-      pedidosCancelados > 0
-        ? `Cancelamos ${pedidosCancelados} ${pedidosCancelados === 1 ? 'pedido que todavía no se había pagado' : 'pedidos que todavía no se habían pagado'}, porque su link de pago cobraba en la cuenta anterior. Quien compró tiene que hacer el pedido de nuevo.`
-        : 'No había pedidos sin pagar, así que no hubo que cancelar nada.'
-    )
+    parrafos.push('No cancelamos ningún pedido. Los links de pago que alguien tenía abiertos vencen solos a las 2 horas, y un pago hecho en uno de ellos en ese rato se cobra en la cuenta anterior.')
     if (pagosEnProceso > 0) {
-      parrafos.push(`Hay ${pagosEnProceso} ${pagosEnProceso === 1 ? 'pago en proceso' : 'pagos en proceso'} (por ejemplo en efectivo) que se va a acreditar en la cuenta anterior, no en la nueva. No los cancelamos.`)
+      parrafos.push(`Hay ${pagosEnProceso} ${pagosEnProceso === 1 ? 'pago en efectivo en proceso' : 'pagos en efectivo en proceso'} que se va a acreditar en la cuenta anterior, no en la nueva.`)
     }
     parrafos.push('Las ventas que ya estaban pagadas siguen en la cuenta en la que se cobraron.')
   } else {
     asunto = 'Desconectaste MercadoPago de tu tienda'
     titulo = 'Desconectaste tu cuenta de MercadoPago'
     parrafos.push(`Desconectaste la cuenta ${describirCuenta(anterior)} de ${nombreTienda}. Hasta que vuelvas a conectar una, nadie puede pagarte por la plataforma.`)
-    if (pedidosCancelados > 0) {
-      parrafos.push(`Cancelamos ${pedidosCancelados} ${pedidosCancelados === 1 ? 'pedido que todavía no se había pagado' : 'pedidos que todavía no se habían pagado'}. Quien compró tiene que hacer el pedido de nuevo.`)
-    }
     if (pagosEnProceso > 0) {
-      parrafos.push(`Hay ${pagosEnProceso} ${pagosEnProceso === 1 ? 'pago en proceso' : 'pagos en proceso'} que se va a acreditar igual en esa cuenta.`)
+      parrafos.push(`Hay ${pagosEnProceso} ${pagosEnProceso === 1 ? 'pago en efectivo en proceso' : 'pagos en efectivo en proceso'} que se va a acreditar igual en esa cuenta.`)
     }
   }
 
@@ -116,52 +106,3 @@ export async function enviarMailCuentaMp({ para, ...datos }) {
     return { enviado: false, motivo: 'excepcion' }
   }
 }
-
-// ── Aviso interno: links que no se pudieron vencer ──
-//
-// Si al cambiar o desconectar la cuenta MercadoPago no deja vencer el link de
-// algún pedido (o no hay token de la cuenta anterior), ese link sigue cobrando
-// para la cuenta vieja hasta su fecha. Un pago ahí no lo puede ver el webhook.
-// Este mail es para que alguien lo sepa. No lleva datos de ninguna persona.
-export function armarMailLinksSinVencer({ tiendaId, tienda, pedidos }) {
-  const asunto = `Links de pago sin vencer · Tienda ${tiendaId}`
-  const titulo = 'Quedaron links de pago sin vencer'
-  const explicacion =
-    'Una tienda cambió o desconectó su cuenta de MercadoPago y se cancelaron sus pedidos sin pagar, ' +
-    'pero MercadoPago no dejó vencer el link de pago de los pedidos de abajo. Esos links siguen cobrando para la cuenta anterior ' +
-    'hasta su vencimiento (3 días desde que se creó cada pedido). Si alguien paga ahí, el aviso no se puede verificar y el pedido figura cancelado.'
-  const filas = (pedidos || []).map((id) => `<p style="margin:0;font-family:${FUENTE_UI};font-size:14px;">Pedido #${escapar(id)}</p>`).join('\n')
-  const cuerpo = [
-    tituloTexto(titulo),
-    parrafo(escapar(explicacion)),
-    tarjeta(`Tienda ${tiendaId}${tienda ? ' · ' + tienda : ''}`, filas || '<p style="margin:0;">(sin detalle)</p>'),
-  ].join('\n')
-  const texto = [titulo, explicacion, `Tienda ${tiendaId}${tienda ? ' · ' + tienda : ''}`, ...(pedidos || []).map((id) => `Pedido #${id}`)].join('\n\n')
-  return { asunto, html: plantilla({ asunto, cuerpo }), texto }
-}
-
-export async function avisarLinksSinVencer({ tiendaId, tienda, pedidos }) {
-  const etiqueta = `Aviso interno de links sin vencer (tienda ${tiendaId})`
-  try {
-    if (!pedidos || pedidos.length === 0) return { enviado: false, motivo: 'nada_que_avisar' }
-    if (!process.env.RESEND_API_KEY) {
-      console.error(`${etiqueta} no enviado: RESEND_API_KEY no configurada.`)
-      return { enviado: false, motivo: 'sin_configurar' }
-    }
-    const resultado = await enviarPorResend({
-      para: EMAIL_NOTIFICACIONES,
-      mail: armarMailLinksSinVencer({ tiendaId, tienda, pedidos }),
-      desde: REMITENTE_NO_REPLY,
-      responderA: EMAIL_NOTIFICACIONES,
-    })
-    if (!resultado.ok) {
-      console.error(`${etiqueta} falló: ${sinMails(resultado.motivo)}`)
-      return { enviado: false, motivo: 'resend_error' }
-    }
-    return { enviado: true }
-  } catch (err) {
-    console.error(`${etiqueta} falló —`, sinMails(err?.message || err))
-    return { enviado: false, motivo: 'excepcion' }
-  }
-}
-

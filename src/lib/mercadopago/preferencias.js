@@ -1,9 +1,8 @@
 // Lo que hace falta de las preferencias de pago de MercadoPago (los links de
-// pago): armar las fechas, ponerle vencimiento a una y vencerla.
+// pago): armar las fechas y vencerlas.
 //
-// Lo usan /api/pedidos/crear (las crea con vencimiento), la regularización de
-// pedidos viejos (/api/admin/pedidos/regularizar) y "Eliminar mi cuenta"
-// (src/lib/eliminarCuenta.js).
+// Lo usan /api/pedidos/crear y /api/pedidos/[id]/pagar-ahora (crean las
+// preferencias con vencimiento) y "Eliminar mi cuenta" (src/lib/eliminarCuenta.js).
 
 const TIEMPO_MAXIMO_MP_MS = 8000
 
@@ -13,39 +12,29 @@ export function fechaAR(ms) {
   return new Date(ms - 3 * 3600 * 1000).toISOString().replace('Z', '-03:00')
 }
 
-// Los cuatro datos con los que una preferencia vence en `venceEnMs`:
-//   expires, expiration_date_from y expiration_date_to: el link de pago.
-//   date_of_expiration: el ticket de los pagos en efectivo (Rapipago, Pago
-//     Fácil), que tiene su propio vencimiento. Si se paga después, MercadoPago
-//     devuelve el dinero a quien pagó.
+// Los cuatro datos de vencimiento de una preferencia. Son DOS plazos que no se
+// pisan (src/lib/vencimientoPago.js):
+//   expires, expiration_date_from y expiration_date_to: el LINK de pago, que
+//     vence en `venceLinkMs` (2 horas).
+//   date_of_expiration: el cupón de los pagos en efectivo (Rapipago, Pago
+//     Fácil), que vence en `venceCuponMs` (3 días) y sigue vivo aunque el link
+//     ya haya vencido. Si se paga después, MercadoPago devuelve el dinero a quien
+//     pagó.
 // "Desde" arranca un minuto antes de ahora, por si los relojes no coinciden.
 // Si MercadoPago cambia algo de estos campos, se cambia sólo acá.
-export function camposDeVencimiento(venceEnMs, ahoraMs = Date.now()) {
+export function camposDeVencimiento(venceLinkMs, venceCuponMs, ahoraMs = Date.now()) {
   return {
     expires: true,
     expiration_date_from: fechaAR(ahoraMs - 60 * 1000),
-    expiration_date_to: fechaAR(venceEnMs),
-    date_of_expiration: fechaAR(venceEnMs),
+    expiration_date_to: fechaAR(venceLinkMs),
+    date_of_expiration: fechaAR(venceCuponMs),
   }
 }
 
-// Le pone vencimiento a una preferencia que ya existe. Mejor esfuerzo: nunca
-// lanza. Devuelve true si MercadoPago la aceptó.
-export async function ponerVencimientoPreferencia(token, preferenciaId, venceEnMs, etiqueta, contexto = 'Vencimiento de pedidos') {
-  try {
-    const res = await fetch(`https://api.mercadopago.com/checkout/preferences/${encodeURIComponent(preferenciaId)}`, {
-      method: 'PUT',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(camposDeVencimiento(venceEnMs)),
-      signal: AbortSignal.timeout(TIEMPO_MAXIMO_MP_MS),
-    })
-    if (res.ok) return true
-    console.warn(`${contexto}: MercadoPago no aceptó el vencimiento de la preferencia de ${etiqueta} (respondió ${res.status}).`)
-    return false
-  } catch (err) {
-    console.warn(`${contexto}: no se pudo poner el vencimiento a la preferencia de ${etiqueta} — ${err?.message || err}`)
-    return false
-  }
+// Para un link nuevo de un pedido que ya tiene un cupón en efectivo: sin medios
+// en efectivo, así no se puede generar un segundo cupón por el mismo pedido.
+export const SIN_MEDIOS_EN_EFECTIVO = {
+  excluded_payment_types: [{ id: 'ticket' }, { id: 'atm' }],
 }
 
 // Vence el link de pago de un pedido. Mejor esfuerzo: nunca lanza.

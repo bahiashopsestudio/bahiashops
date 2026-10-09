@@ -662,6 +662,80 @@ export async function avisarPagoSinResolver({ pagoId, accion, cobrador, enVivo }
   }
 }
 
+// ── Pago doble ───────────────────────────────────────────────────────────────
+//
+// Un pedido que ya tiene un pago aprobado recibió OTRO pago aprobado (por
+// ejemplo, un cupón en efectivo que se pagó después de pagar con tarjeta). El
+// pedido NO se modifica: alguien tiene que devolver el segundo pago a mano desde
+// MercadoPago. Este mail interno lleva el pedido y los dos ids de pago, y nada de
+// ninguna persona.
+
+export function armarMailPagoDoble({ pedidoId, tienda, monto, pagoGuardado, pagoNuevo }) {
+  const asunto = `Pago doble · Pedido #${pedidoId}`
+  const titulo = 'Un pedido recibió dos pagos'
+  const explicacion =
+    'Este pedido ya estaba pagado y llegó otro pago aprobado por el mismo pedido. El pedido no se modificó y el segundo pago quedó en la cuenta de ' +
+    'MercadoPago de la tienda. Hay que devolver el segundo pago a mano desde MercadoPago (el que figura como "Pago nuevo").'
+  const datos = [
+    ['Pedido', `#${pedidoId}`],
+    ['Tienda', tienda || 'Sin nombre'],
+    ['Monto', pesos(monto)],
+    ['Pago registrado en el pedido', String(pagoGuardado || 'sin dato')],
+    ['Pago nuevo (a devolver)', String(pagoNuevo)],
+  ]
+
+  const cuerpo = [
+    tituloTexto(titulo),
+    parrafo(escapar(explicacion)),
+    tarjeta('Datos de los pagos', `<table ${TABLA} width="100%">${datos.map(([etiqueta, valor]) => filaMonto(escapar(etiqueta), escapar(valor))).join('\n')}</table>`),
+  ].join('\n')
+
+  const texto = [titulo, explicacion, ['Datos de los pagos', ...datos.map(([e, v]) => `${e}: ${v}`)].join('\n')].join('\n\n')
+  return { asunto, html: plantilla({ asunto, cuerpo }), texto }
+}
+
+// Manda el aviso interno. Nunca lanza. Devuelve { enviado, motivo? }: quien lo
+// llama (el webhook) lo usa para soltar el registro del pago doble si el mail no
+// salió, así el próximo aviso de MercadoPago lo reintenta.
+export async function avisarPagoDoble({ admin, pedidoId, pagoNuevo }) {
+  const etiqueta = `Aviso interno de pago doble (pedido ${pedidoId}, pago ${pagoNuevo?.id})`
+  try {
+    if (!process.env.RESEND_API_KEY) {
+      console.error(`${etiqueta} no enviado — RESEND_API_KEY no configurada.`)
+      return { enviado: false, motivo: 'sin_configurar' }
+    }
+    const { data: pedido, error } = await admin
+      .from('pedidos')
+      .select('id, mp_payment_id, vendedor_nombre, vendedor:vendedores ( nombre_negocio )')
+      .eq('id', pedidoId)
+      .maybeSingle()
+    if (error || !pedido) {
+      console.error(`${etiqueta}: no se pudo leer el pedido —`, error?.message)
+      return { enviado: false, motivo: 'pedido_no_encontrado' }
+    }
+    const resultado = await enviarPorResend({
+      para: EMAIL_NOTIFICACIONES,
+      mail: armarMailPagoDoble({
+        pedidoId: pedido.id,
+        tienda: pedido.vendedor_nombre || pedido.vendedor?.nombre_negocio,
+        monto: pagoNuevo.transaction_amount,
+        pagoGuardado: pedido.mp_payment_id,
+        pagoNuevo: pagoNuevo.id,
+      }),
+      desde: REMITENTE_NO_REPLY,
+      responderA: EMAIL_NOTIFICACIONES,
+    })
+    if (!resultado.ok) {
+      console.error(`${etiqueta} falló — ${resultado.motivo}`)
+      return { enviado: false, motivo: 'resend_error' }
+    }
+    return { enviado: true }
+  } catch (err) {
+    console.error(`${etiqueta} falló —`, err)
+    return { enviado: false, motivo: 'excepcion' }
+  }
+}
+
 // Avisa al comprador que su pedido salió. Nunca lanza: el pedido ya quedó
 // despachado y no queremos deshacerlo porque falle un mail. Devuelve
 // { enviado, motivo } para que quien llama pueda avisar en pantalla.
