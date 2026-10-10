@@ -6,7 +6,7 @@
 //   npm run probar:pestanas
 
 import { readFileSync } from 'node:fs'
-import { pestanaDePedido, validarAvance, TRANSICIONES } from '../src/lib/pedidos.js'
+import { pestanaDePedido, pestanaEnElPanel, validarAvance, TRANSICIONES } from '../src/lib/pedidos.js'
 
 let fallas = 0
 const ok = (c, m) => { if (!c) { fallas++; console.log('  ✗ FALLA:', m) } else console.log('  ✓', m) }
@@ -50,6 +50,24 @@ ok(conBoton.length > 0 && !conBoton.includes('pendiente'), `ningún botón para 
 ok((pantalla.match(/onAvanzar\(\)/g) || []).length === 1 && /\{accion && \(\n\s*<button type="button" onClick=\{\(e\) => \{ e\.stopPropagation\(\); onAvanzar\(\); \}\}/.test(pantalla), 'el único botón de avanzar se dibuja solo si el estado tiene acción')
 ok(!('pendiente' in TRANSICIONES), 'el servidor tampoco tiene un paso siguiente para pendiente')
 ok(validarAvance({ pedido: { vendedor_id: 7, estado: 'pendiente' }, vendedorId: 7, destino: 'preparando' }).motivo === 'sin_avance', 'avanzar un pendiente a mano: lo rechaza')
+
+console.log('\n6. El pedido tal como le llega a la pantalla (sin mp_payment_id, con la pestaña del servidor)')
+// El caso del pedido #34: el servidor lo clasificaba bien, pero la pantalla
+// volvía a calcular con pestanaDePedido sin mp_payment_id y lo descartaba.
+const comoLlega = (pedido) => { const { mp_payment_id, ...resto } = pedido; return { ...resto, pestana: pestanaDePedido(pedido, ahora) } }
+const efectivo = p({ mp_payment_id: '501', efectivo_vence_en: iso(ahora + HORA) })
+ok(pestanaEnElPanel(comoLlega(efectivo), ahora) === 'ventas', 'pago en efectivo pendiente con el cupón vigente: Ventas nuevas')
+ok(!('mp_payment_id' in comoLlega(efectivo)), 'mp_payment_id no viaja')
+ok(pestanaEnElPanel(comoLlega(efectivo), ahora + 2 * HORA) === null, 'el cupón vence con el panel abierto: sale de la lista')
+ok(pestanaEnElPanel(comoLlega(p({ estado: 'pagado' })), ahora) === 'ventas', 'pagado')
+ok(pestanaEnElPanel(comoLlega(p({ estado: 'franja' })), ahora) === 'preparacion', 'franja')
+ok(pestanaEnElPanel(comoLlega(p({ estado: 'despachado' })), ahora) === 'historial', 'despachado')
+ok(pestanaEnElPanel({ estado: 'pagado' }, ahora) === null, 'sin pestaña del servidor: no se muestra')
+ok(pestanaEnElPanel({ estado: 'pagado', pestana: 'inventada' }, ahora) === null, 'una pestaña desconocida: no se muestra')
+ok(pestanaEnElPanel(null, ahora) === null, 'sin pedido: null')
+ok(!/pestanaDePedido\(/.test(pantalla), 'la pantalla no usa pestanaDePedido (le falta mp_payment_id)')
+const ruta = readFileSync(new URL('../src/app/api/vendedor/pedidos/route.js', import.meta.url), 'utf8')
+ok(/pestana: pestanaDePedido\(venta, ahoraMs\)/.test(ruta), 'la ruta manda la pestaña calculada con el pedido completo')
 
 console.log(fallas === 0 ? '\nTODO OK' : `\n${fallas} FALLAS`)
 process.exit(fallas ? 1 : 0)

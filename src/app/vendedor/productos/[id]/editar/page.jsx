@@ -222,7 +222,9 @@ export default function EditarProductoPage() {
             .from('producto_variantes')
             .select('propiedad_1_valor')
             .eq('producto_id', prod.id);
-          if (vars) setValores(vars.map(v => v.propiedad_1_valor));
+          // Sin repetidos: un producto que ya tiene talles duplicados en la base
+          // (ver migración 028) no los vuelve a guardar.
+          if (vars) setValores([...new Set(vars.map(v => v.propiedad_1_valor))]);
         }
 
         setCargandoPagina(false);
@@ -456,6 +458,32 @@ export default function EditarProductoPage() {
         }
       }
 
+      // Fotos y variantes se reemplazan ANTES de pasar el producto a revisión:
+      // la lectura pública de producto_variantes solo ve las de productos
+      // 'activo', y en Postgres una fila que no se puede leer tampoco se puede
+      // borrar. Con el producto ya en 'en_revision', el borrado no borraba nada
+      // (sin dar error) y cada edición sumaba otra tanda de talles.
+      const { error: errBorrarMedia } = await supabase.from('producto_media').delete().eq('producto_id', id);
+      if (errBorrarMedia) throw new Error('No se pudieron reemplazar las fotos: ' + errBorrarMedia.message);
+
+      const mediaItems = urlsFinales.map((url, index) => ({
+        producto_id: Number(id), url, tipo: 'foto', orden: index, es_principal: index === 0,
+      }));
+
+      const { error: errMedia } = await supabase.from('producto_media').insert(mediaItems);
+      if (errMedia) throw new Error('Hubo un error con las fotos: ' + errMedia.message);
+
+      const { error: errBorrarVar } = await supabase.from('producto_variantes').delete().eq('producto_id', id);
+      if (errBorrarVar) throw new Error('No se pudieron reemplazar los talles: ' + errBorrarVar.message);
+
+      if (tieneNombre && tieneValores) {
+        const variantesItems = valores.map(valor => ({
+          producto_id: Number(id), propiedad_1_valor: valor,
+        }));
+        const { error: errVar } = await supabase.from('producto_variantes').insert(variantesItems);
+        if (errVar) throw new Error('Hubo un error con las variantes: ' + errVar.message);
+      }
+
       const { error: errUpdate } = await supabase
         .from('productos')
         .update({
@@ -480,25 +508,6 @@ export default function EditarProductoPage() {
         .eq('id', id);
 
       if (errUpdate) throw new Error('Error al actualizar: ' + errUpdate.message);
-
-      await supabase.from('producto_media').delete().eq('producto_id', id);
-
-      const mediaItems = urlsFinales.map((url, index) => ({
-        producto_id: Number(id), url, tipo: 'foto', orden: index, es_principal: index === 0,
-      }));
-
-      const { error: errMedia } = await supabase.from('producto_media').insert(mediaItems);
-      if (errMedia) throw new Error('Producto actualizado pero hubo un error con las fotos: ' + errMedia.message);
-
-      await supabase.from('producto_variantes').delete().eq('producto_id', id);
-
-      if (tieneNombre && tieneValores) {
-        const variantesItems = valores.map(valor => ({
-          producto_id: Number(id), propiedad_1_valor: valor,
-        }));
-        const { error: errVar } = await supabase.from('producto_variantes').insert(variantesItems);
-        if (errVar) throw new Error('Producto actualizado pero hubo un error con las variantes: ' + errVar.message);
-      }
 
       // Guardar sellos del producto
       await supabase.from('producto_sellos').delete().eq('producto_id', id);

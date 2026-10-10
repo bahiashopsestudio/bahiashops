@@ -12,11 +12,12 @@ import {
   grupoEntrega, etiquetaMetodo, zonaDe, EMPRESAS_ENVIO, validarSeguimiento, seguimientoDe,
 } from '@/lib/metodosEntrega';
 import { calleNumeroDepto, ciudadProvinciaCodigo } from '@/lib/direcciones';
-import { pestanaDePedido } from '@/lib/pedidos';
+import { pestanaEnElPanel } from '@/lib/pedidos';
 
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage'];
 
-// Las pestañas del panel. Qué pedido va en cada una lo decide pestanaDePedido
+// Las pestañas del panel. Qué pedido va en cada una lo decide pestanaDePedido en el
+// servidor (manda `pestana` en cada pedido) y acá pestanaEnElPanel
 // (src/lib/pedidos.js); el servidor ya manda solo las ventas. El contador se
 // muestra en las dos primeras.
 const PESTANAS = [
@@ -256,7 +257,7 @@ export default function VendedorPedidosPage() {
         const delLink = (datos.pedidos || []).find((p) => p.id === pedidoDelLink);
         if (pedidoDelLink && delLink) {
           // Se abre en la pestaña donde está ese pedido.
-          setPestana(pestanaDePedido(delLink) || 'ventas');
+          setPestana(pestanaEnElPanel(delLink, Date.now()) || 'ventas');
           setAbierto(pedidoDelLink);
           aScrollear.current = pedidoDelLink;
         }
@@ -415,10 +416,10 @@ export default function VendedorPedidosPage() {
   }
 
   // Cada pedido en su pestaña. Un pago en efectivo cuyo cupón venció con el panel
-  // abierto sale de la lista (pestanaDePedido devuelve null).
+  // abierto sale de la lista (pestanaEnElPanel devuelve null).
   const porPestana = { ventas: [], preparacion: [], historial: [] };
   for (const p of pedidos) {
-    const clave = pestanaDePedido(p, ahora);
+    const clave = pestanaEnElPanel(p, ahora);
     if (clave) porPestana[clave].push(p);
   }
   const totalPedidos = porPestana.ventas.length + porPestana.preparacion.length + porPestana.historial.length;

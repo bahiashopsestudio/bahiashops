@@ -135,12 +135,18 @@ export async function GET() {
   // pedido se pagó. pedidoParaLaTienda es la última barrera: aunque algo de
   // arriba cambie, un pedido sin pagar sale con esos campos en null. El
   // comprador_id no sale de acá: sólo se usó para buscar el apodo.
-  const respuesta = ventas.map(({ comprador_id, mp_payment_id, ...pedido }) => ({
-    // mp_payment_id se usa solo para decidir qué es una venta: no viaja.
-    ...pedidoParaLaTienda({ ...pedido, ...(contactos.get(pedido.id) || {}) }),
-    comprador_apodo: apodos.get(comprador_id) || null,
-    comprador_eliminado: eliminados.has(comprador_id),
-  }));
+  const respuesta = ventas.map((venta) => {
+    // mp_payment_id se usa solo para decidir qué es una venta: no viaja. Por
+    // eso la pestaña se calcula acá, con el pedido completo (la pantalla no
+    // puede: le falta mp_payment_id; ver pestanaEnElPanel).
+    const { comprador_id, mp_payment_id, ...pedido } = venta;
+    return {
+      ...pedidoParaLaTienda({ ...pedido, ...(contactos.get(pedido.id) || {}) }),
+      pestana: pestanaDePedido(venta, ahoraMs),
+      comprador_apodo: apodos.get(comprador_id) || null,
+      comprador_eliminado: eliminados.has(comprador_id),
+    };
+  });
 
   return NextResponse.json({
     vendedor: { id: vendedor.id, nombre_negocio: vendedor.nombre_negocio },

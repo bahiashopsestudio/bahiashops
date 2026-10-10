@@ -157,6 +157,20 @@ export function pestanaDePedido(pedido, ahoraMs = Date.now()) {
   return null
 }
 
+// La misma regla, del lado de la pantalla. Lo que le llega a la tienda no trae
+// mp_payment_id (no viaja), así que no se puede volver a pasar por
+// pestanaDePedido: el servidor manda la pestaña ya calculada (`pestana`) y acá
+// solo se revisa que un cupón no haya vencido con el panel abierto.
+export function pestanaEnElPanel(pedido, ahoraMs = Date.now()) {
+  const pestana = pedido?.pestana
+  if (!['ventas', 'preparacion', 'historial'].includes(pestana)) return null
+  if (pedido.estado === 'pendiente') {
+    const vence = Date.parse(pedido.efectivo_vence_en)
+    return Number.isFinite(vence) && vence > ahoraMs ? pestana : null
+  }
+  return pestana
+}
+
 // Lo que se saca de un pedido antes de mandárselo a la tienda si no se pagó.
 // comprador_id nunca viaja (ya lo saca la ruta): sale el apodo, aparte.
 const CAMPOS_DE_CONTACTO = ['comprador_nombre', 'comprador_apellido', 'comprador_telefono', 'direccion_copia', 'direccion']
