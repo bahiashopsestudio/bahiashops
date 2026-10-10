@@ -18,12 +18,14 @@ const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','ho
 
 // Las pestañas del panel. Qué pedido va en cada una lo decide pestanaDePedido en el
 // servidor (manda `pestana` en cada pedido) y acá pestanaEnElPanel
-// (src/lib/pedidos.js); el servidor ya manda solo las ventas. El contador se
-// muestra en las dos primeras.
+// (src/lib/pedidos.js); el servidor manda las ventas y los carritos
+// abandonados (esCarritoAbandonado). El contador se muestra en todas menos el
+// historial. `pro`: el badge decorativo, no limita nada.
 const PESTANAS = [
   { clave: 'ventas', label: 'Ventas nuevas', contador: true, vacio: 'No tenés ventas nuevas por ahora.' },
   { clave: 'preparacion', label: 'En preparación', contador: true, vacio: 'No tenés pedidos en preparación.' },
   { clave: 'historial', label: 'Historial', contador: false, vacio: 'Todavía no hay pedidos terminados.' },
+  { clave: 'carritos', label: 'Carritos abandonados', contador: true, pro: true, vacio: 'No tenés carritos abandonados.' },
 ];
 
 const ESTADOS = {
@@ -40,8 +42,8 @@ const ESTADOS = {
   reembolsado: { label: 'Cancelado · dinero devuelto', color: 'text-red-600', bg: 'bg-red-50', orden: -1 },
 };
 
-// El estado a mostrar. La ruta /api/vendedor/pedidos solo manda ventas, así que
-// los estados de abajo son los únicos que llegan.
+// El estado a mostrar en una venta. Los estados de abajo son los únicos que
+// llegan en las ventas (los carritos abandonados van en CarritoCard, sin estado).
 function estadoDe(p) {
   return ESTADOS[p.estado] || { label: p.estado, color: 'text-[#0a0a0a]/40', bg: 'bg-[#0a0a0a]/5' };
 }
@@ -213,6 +215,8 @@ export default function VendedorPedidosPage() {
   // pago en efectivo (si el cupón sigue vigente). Va en el estado para que el
   // render sea puro.
   const [ahora, setAhora] = useState(0);
+  // Los carritos a los que se les está mandando el recordatorio ahora mismo.
+  const [enviandoRecordatorio, setEnviandoRecordatorio] = useState({});
 
   useEffect(() => {
     if (menuOpen) { document.body.style.overflow = 'hidden' } else { document.body.style.overflow = '' }
@@ -385,6 +389,30 @@ export default function VendedorPedidosPage() {
     setAvanzando(null);
   }
 
+  // "Recordarle": el mail lo manda el servidor, una sola vez por pedido. Si sale
+  // bien, el carrito queda marcado y el botón no vuelve.
+  async function enviarRecordatorio(pedidoId) {
+    setEnviandoRecordatorio((prev) => ({ ...prev, [pedidoId]: true }));
+    try {
+      const res = await fetch('/api/vendedor/pedidos/recordar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pedidoId }),
+      });
+      const datos = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(datos.error || 'No se pudo enviar el recordatorio.');
+      } else {
+        const enviadoEn = datos.recordatorio_enviado_en || new Date().toISOString();
+        setPedidos((prev) => prev.map((p) => (p.id === pedidoId ? { ...p, recordatorio_enviado_en: enviadoEn } : p)));
+      }
+    } catch (err) {
+      console.error('Error de red al mandar el recordatorio', err);
+      alert('No pudimos conectarnos. Revisá tu conexión y probá de nuevo.');
+    }
+    setEnviandoRecordatorio((prev) => ({ ...prev, [pedidoId]: false }));
+  }
+
   const menuCats = MENU_CATEGORIAS.map(s => categorias.find(c => c.slug === s)).filter(Boolean);
 
   if (cargando) {
@@ -417,12 +445,15 @@ export default function VendedorPedidosPage() {
 
   // Cada pedido en su pestaña. Un pago en efectivo cuyo cupón venció con el panel
   // abierto sale de la lista (pestanaEnElPanel devuelve null).
-  const porPestana = { ventas: [], preparacion: [], historial: [] };
+  const porPestana = { ventas: [], preparacion: [], historial: [], carritos: [] };
   for (const p of pedidos) {
     const clave = pestanaEnElPanel(p, ahora);
     if (clave) porPestana[clave].push(p);
   }
+  // Los carritos abandonados no son pedidos: no suman al total, pero si hay
+  // alguno las pestañas se muestran igual.
   const totalPedidos = porPestana.ventas.length + porPestana.preparacion.length + porPestana.historial.length;
+  const hayAlgo = totalPedidos + porPestana.carritos.length > 0;
   const actual = PESTANAS.find((t) => t.clave === pestana) || PESTANAS[0];
 
   return (
@@ -442,7 +473,7 @@ export default function VendedorPedidosPage() {
               {totalPedidos} {totalPedidos === 1 ? 'pedido' : 'pedidos'} en total
             </p>
 
-            {totalPedidos === 0 ? (
+            {!hayAlgo ? (
               <div className="border border-dashed border-[#0a0a0a]/10 rounded-2xl px-8 py-12 text-center">
                 <p className="text-3xl m-0 mb-2">📦</p>
                 <p className="text-sm text-[#0a0a0a]/30 font-light m-0">Todavía no recibiste pedidos. ¡Van a llegar!</p>
@@ -464,6 +495,9 @@ export default function VendedorPedidosPage() {
                             : 'border-transparent text-[#0a0a0a]/45 font-light hover:text-[#0a0a0a]/70'
                         }`}>
                         {t.label}
+                        {t.pro && (
+                          <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">Pro</span>
+                        )}
                         {t.contador && cantidad > 0 && (
                           <span className="ml-1.5 text-[10px] font-medium bg-[#0a0a0a]/[0.06] text-[#0a0a0a]/60 rounded-full px-[7px] py-0.5">
                             {cantidad}
@@ -476,6 +510,11 @@ export default function VendedorPedidosPage() {
 
                 {porPestana[actual.clave].length === 0 ? (
                   <p className="text-sm text-[#0a0a0a]/30 font-light m-0 py-6">{actual.vacio}</p>
+                ) : actual.clave === 'carritos' ? (
+                  porPestana.carritos.map(p => (
+                    <CarritoCard key={p.id} pedido={p} enviando={!!enviandoRecordatorio[p.id]}
+                      onRecordar={() => enviarRecordatorio(p.id)} />
+                  ))
                 ) : (
                   porPestana[actual.clave].map(p => (
                     <PedidoCard key={p.id} pedido={p} abierto={abierto === p.id}
@@ -572,6 +611,59 @@ export default function VendedorPedidosPage() {
         </div>
       </div>
     </>
+  );
+}
+
+// Un carrito abandonado: quién (solo el apodo: no se pagó, así que no hay datos
+// de contacto), qué había elegido y cuándo. Sin estados ni pasos: lo único que
+// se puede hacer es mandarle el recordatorio, una vez. Con la cuenta eliminada
+// no hay a quién mandárselo.
+function CarritoCard({ pedido, enviando, onRecordar }) {
+  const p = pedido;
+  const items = p.items || [];
+
+  return (
+    <div id={`pedido-${p.id}`} className="scroll-mt-24 border border-[#0a0a0a]/5 rounded-2xl px-5 py-4 mb-3">
+      <div className="flex items-center gap-3">
+        <span className="flex-1 min-w-0 text-sm text-[#0a0a0a] inline-flex items-center gap-2">
+          {p.comprador_eliminado ? (
+            <span aria-hidden="true" className="inline-block shrink-0 rounded-full" style={{ width: '28px', height: '28px', backgroundColor: '#e8e5df' }} />
+          ) : (
+            <AvatarApodo apodo={p.comprador_apodo} tamano={28} />
+          )}
+          <strong className="truncate">{p.comprador_eliminado ? 'Cuenta eliminada' : (p.comprador_apodo || 'Comprador')}</strong>
+        </span>
+        <span className="shrink-0 text-[11px] text-[#0a0a0a]/25 font-light">{tiempoRelativo(p.creado_en)}</span>
+      </div>
+
+      <div className="mt-3 pt-3 border-t border-[#0a0a0a]/5">
+        {items.length === 0 ? (
+          <p className="m-0 text-sm text-[#0a0a0a]/20 font-light">Este carrito no tiene productos registrados.</p>
+        ) : items.map(it => (
+          <div key={it.id} className="flex justify-between gap-3 py-1 text-sm">
+            <span className="text-[#0a0a0a]/60 font-light">{it.cantidad} × {it.nombre}{it.variante ? ` · ${it.variante}` : ''}</span>
+            <span className="text-[#0a0a0a] shrink-0">${fmt(it.precio * it.cantidad)}</span>
+          </div>
+        ))}
+      </div>
+
+      {!p.comprador_eliminado && (
+        <div className="mt-3 pt-3 border-t border-[#0a0a0a]/5">
+          {p.recordatorio_enviado_en ? (
+            <p className="m-0 text-sm text-emerald-700 font-light">
+              Recordatorio enviado ✓ <span className="text-[#0a0a0a]/30">· {tiempoRelativo(p.recordatorio_enviado_en)}</span>
+            </p>
+          ) : (
+            <button type="button" onClick={onRecordar} disabled={enviando}
+              className={`px-5 py-2 text-sm border-none rounded-full text-white font-medium transition-colors ${
+                enviando ? 'bg-[#0a0a0a]/20 cursor-not-allowed' : 'bg-[#0a0a0a] hover:bg-[#0a0a0a]/80 cursor-pointer'
+              }`}>
+              {enviando ? 'Enviando...' : 'Recordarle'}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

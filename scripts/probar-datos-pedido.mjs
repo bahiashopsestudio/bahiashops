@@ -48,9 +48,10 @@ const pedidos = estados.map((estado, i) => ({
 // ve, pero sin datos.
 const DIA = 24 * 3600 * 1000
 pedidos.push({ ...pedidos[0], id: 200, estado: 'pendiente', mp_payment_id: '501', efectivo_vence_en: new Date(Date.now() + 2 * DIA).toISOString(), comprador_id: 'u-0' })
-// Un cupón que venció sin pagarse NO es una venta: es un carrito abandonado. No
-// viaja, ni mientras la base todavía lo tiene pendiente (hay un margen de unas
-// horas antes de cancelarlo) ni una vez cancelado por vencido.
+// Un cupón que venció sin pagarse NO es una venta: es un carrito abandonado.
+// Viaja solo a la pestaña de carritos, sin datos de contacto, tanto mientras la
+// base todavía lo tiene pendiente (hay un margen de unas horas antes de
+// cancelarlo) como una vez cancelado por vencido.
 pedidos.push({ ...pedidos[0], id: 201, estado: 'pendiente', mp_payment_id: '502', efectivo_vence_en: new Date(Date.now() - 3600 * 1000).toISOString(), comprador_id: 'u-0' })
 pedidos.push({ ...pedidos[0], id: 202, estado: 'cancelado', cancelado_motivo: 'pago_vencido', mp_payment_id: '503', efectivo_vence_en: new Date(Date.now() - 2 * DIA).toISOString(), comprador_id: 'u-0' })
 // Un pedido de otra tienda: no tiene que aparecer.
@@ -116,16 +117,29 @@ async function llamar() {
 console.log('1. La respuesta, pedido por pedido')
 const r = await llamar()
 ok(r.status === 200 && Array.isArray(r.body.pedidos), 'responde 200 con la lista')
-// Una venta existe solo cuando se paga: de los demás, solo viaja el pago en efectivo en proceso.
+// Una venta existe solo cuando se paga: de los demás, solo viaja como venta el
+// pago en efectivo en proceso. Los cupones vencidos van como carritos
+// abandonados (pestana 'carritos').
 const VISIBLES_SIN_PAGO = [200]
+const CARRITOS = [201, 202]
 const NO_VENTAS = ['pendiente', 'rechazado', 'cancelado', 'estado_inventado']
-ok(r.body.pedidos.length === 6 + VISIBLES_SIN_PAGO.length, 'trae solo las ventas de la tienda: los 6 estados pagados y el pago en efectivo en proceso')
+const ventas = r.body.pedidos.filter((p) => p.pestana !== 'carritos')
+ok(ventas.length === 6 + VISIBLES_SIN_PAGO.length, 'como ventas viajan solo los 6 estados pagados y el pago en efectivo en proceso')
 for (const estado of NO_VENTAS) {
-  ok(!r.body.pedidos.some((p) => p.estado === estado && p.id !== 200), `${estado}: sin pago no es una venta, ni siquiera viaja`)
+  ok(!ventas.some((p) => p.estado === estado && p.id !== 200), `${estado}: sin pago no es una venta`)
 }
 ok(!JSON.stringify(r.body).includes('mp_payment_id'), 'el id del pago de MercadoPago no viaja')
-ok(!r.body.pedidos.some((p) => p.id === 201), 'un cupón vencido que la base todavía tiene pendiente NO viaja')
-ok(!r.body.pedidos.some((p) => p.id === 202), 'un cupón vencido ya cancelado por vencido NO viaja')
+ok(JSON.stringify(r.body.pedidos.filter((p) => p.pestana === 'carritos').map((p) => p.id).sort()) === JSON.stringify(CARRITOS),
+  'los dos cupones vencidos (pendiente y ya cancelado) viajan como carritos abandonados, y nada más')
+ok(!r.body.pedidos.some((p) => ['pendiente', 'cancelado'].includes(p.estado) && p.vence_en === null && !p.efectivo_vence_en),
+  'un pendiente o cancelado sin vencimiento ni cupón no es un carrito abandonado: no viaja')
+for (const id of CARRITOS) {
+  const c = r.body.pedidos.find((p) => p.id === id)
+  const filtrados = SECRETOS.filter((s) => JSON.stringify(c).includes(s))
+  ok(c && filtrados.length === 0 && c.datos_de_contacto === 'ocultos' && c.comprador_nombre === null && c.direccion === null,
+    `carrito ${id}: ningún dato de contacto${filtrados.length ? ' (se filtró: ' + filtrados.join(', ') + ')' : ''}`)
+  ok(c && !!c.comprador_apodo && !('comprador_id' in c), `carrito ${id}: viaja el apodo, no el comprador_id`)
+}
 ok(r.body.pedidos.some((p) => p.id === 200), 'el cupón vigente sí viaja')
 ok(!r.body.pedidos.some((p) => p.id === 999), 'el pedido de otra tienda no aparece')
 

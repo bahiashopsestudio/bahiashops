@@ -19,6 +19,7 @@
     "probar:pagar-ahora": "node scripts/probar-pagar-ahora.mjs",
     "probar:carrito": "node scripts/probar-carrito.mjs",
     "probar:pestanas": "node scripts/probar-pestanas.mjs",
+    "probar:carritos": "node scripts/probar-carritos.mjs",
     "probar:cupon": "node scripts/probar-cupon.mjs",
     "probar:lead-gastronomia": "node scripts/probar-lead-gastronomia.mjs",
     "probar:contacto": "node scripts/probar-contacto.mjs",

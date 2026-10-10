@@ -14,7 +14,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getServiceRoleClient } from '@/lib/supabase/admin';
-import { pedidoTuvoPago, pedidoParaLaTienda, pestanaDePedido } from '@/lib/pedidos';
+import { pedidoTuvoPago, pedidoParaLaTienda, pestanaDePedido, esCarritoAbandonado } from '@/lib/pedidos';
 
 export async function GET() {
   const supabase = await createClient();
@@ -61,6 +61,7 @@ export async function GET() {
       envio_empresa, envio_empresa_otra, envio_seguimiento,
       comision_plataforma, turno_preferido, franja_horaria, creado_en, actualizado_en,
       vence_en, efectivo_vence_en, cancelado_motivo, mp_payment_id,
+      recordatorio_enviado_en,
       comprador_id,
       items:pedido_items ( id, nombre, variante, cantidad, precio, foto_url )
     `)
@@ -75,10 +76,16 @@ export async function GET() {
   // Una venta existe solo cuando se paga. La tienda ve las ventas y los pagos en
   // efectivo en proceso con el cupón vigente (ventas en curso); un pedido que
   // nunca se pagó, o un cupón que venció sin pagarse, es un carrito abandonado y
-  // no es una venta: no viaja. El filtro va acá, en el servidor
-  // (pestanaDePedido en src/lib/pedidos.js dice qué pestaña le toca a cada uno).
+  // no es una venta: va aparte, a la pestaña de carritos abandonados, solo con
+  // el apodo. El filtro va acá, en el servidor (pestanaDePedido y
+  // esCarritoAbandonado en src/lib/pedidos.js dicen qué es cada uno).
   const ahoraMs = Date.now();
-  const ventas = (pedidos || []).filter((p) => pestanaDePedido(p, ahoraMs) !== null);
+  const ventas = [];
+  const carritos = [];
+  for (const p of pedidos || []) {
+    if (pestanaDePedido(p, ahoraMs) !== null) ventas.push(p);
+    else if (esCarritoAbandonado(p, ahoraMs)) carritos.push(p);
+  }
 
   // Los datos de contacto, SOLO de los pedidos que se pagaron (una segunda
   // lectura, por la lista de ids): los de un pedido sin pagar ni se leen.
@@ -108,7 +115,7 @@ export async function GET() {
   // la lista de ids y no embebido, para no depender de que exista una
   // relación declarada entre pedidos.comprador_id y usuarios. Si falla, la
   // pantalla muestra "Comprador": no es motivo para no mostrar los pedidos.
-  const idsCompradores = [...new Set(ventas.map((p) => p.comprador_id).filter(Boolean))];
+  const idsCompradores = [...new Set([...ventas, ...carritos].map((p) => p.comprador_id).filter(Boolean))];
   const apodos = new Map();
   // Las cuentas eliminadas: en sus pedidos la persona figura como "Cuenta
   // eliminada" (sus datos ya no existen, ni en el pedido).
@@ -148,8 +155,20 @@ export async function GET() {
     };
   });
 
+  // Los carritos abandonados: nunca se pagaron, así que sus datos de contacto
+  // ni se leyeron (pedidoParaLaTienda los deja en null igual). Solo el apodo.
+  const carritosRespuesta = carritos.map((carrito) => {
+    const { comprador_id, mp_payment_id, ...pedido } = carrito;
+    return {
+      ...pedidoParaLaTienda(pedido),
+      pestana: 'carritos',
+      comprador_apodo: apodos.get(comprador_id) || null,
+      comprador_eliminado: eliminados.has(comprador_id),
+    };
+  });
+
   return NextResponse.json({
     vendedor: { id: vendedor.id, nombre_negocio: vendedor.nombre_negocio },
-    pedidos: respuesta,
+    pedidos: [...respuesta, ...carritosRespuesta],
   });
 }

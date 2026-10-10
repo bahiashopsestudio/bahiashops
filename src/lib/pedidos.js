@@ -25,7 +25,7 @@ export const TRANSICIONES = {
 
 // Los estados que sólo escribe el webhook. Están acá para poder dar un error
 // que explique por qué, en vez de un "transición inválida" seco.
-import { esPagoEnEfectivoPendiente } from './vencimientoPago.js'
+import { esPagoEnEfectivoPendiente, pedidoVencido } from './vencimientoPago.js'
 
 export const ESTADOS_DE_PAGO = ['pendiente', 'pagado', 'rechazado', 'cancelado']
 
@@ -163,12 +163,27 @@ export function pestanaDePedido(pedido, ahoraMs = Date.now()) {
 // solo se revisa que un cupón no haya vencido con el panel abierto.
 export function pestanaEnElPanel(pedido, ahoraMs = Date.now()) {
   const pestana = pedido?.pestana
-  if (!['ventas', 'preparacion', 'historial'].includes(pestana)) return null
+  if (!['ventas', 'preparacion', 'historial', 'carritos'].includes(pestana)) return null
+  // Para carritos no hay chequeo de vencimiento de cupón.
+  if (pestana === 'carritos') return 'carritos'
   if (pedido.estado === 'pendiente') {
     const vence = Date.parse(pedido.efectivo_vence_en)
     return Number.isFinite(vence) && vence > ahoraMs ? pestana : null
   }
   return pestana
+}
+
+// ¿Es un carrito abandonado? Un pedido que no es una venta (pestanaDePedido da
+// null) y que venció sin pagarse (pedidoVencido en vencimientoPago.js): un
+// pendiente con el link vencido y sin ningún pago, un cupón en efectivo vencido,
+// o uno ya cancelado por pago_vencido. NO lo son: un pendiente con el link
+// todavía vivo (la persona puede estar pagando en este momento), uno con un pago
+// en proceso sin cupón (una tarjeta que se está acreditando), los rechazados y
+// los cancelados por otro motivo.
+export function esCarritoAbandonado(pedido, ahoraMs = Date.now()) {
+  if (!pedido) return false
+  if (pestanaDePedido(pedido, ahoraMs) !== null) return false
+  return pedidoVencido(pedido, ahoraMs)
 }
 
 // Lo que se saca de un pedido antes de mandárselo a la tienda si no se pagó.
