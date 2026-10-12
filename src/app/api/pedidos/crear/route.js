@@ -11,6 +11,7 @@ import { zonasPara } from '@/lib/zonaEnvio';
 import { codigoPostalValido, normalizarCodigoPostal } from '@/lib/direcciones';
 import { normalizarTelefonoAR } from '@/lib/telefono';
 import { datosContactoComprador } from '@/lib/contactoComprador';
+import { vendedorVendible, mensajeNoVendible, CAMPOS_VENDIBLE, MOTIVOS_NO_VENDIBLE, MENSAJE_NO_RECIBE_PEDIDOS } from '@/lib/vendedorVendible';
 
 export async function POST(request) {
   // 1. ¿Quién está comprando? (necesitamos su sesión)
@@ -70,24 +71,46 @@ export async function POST(request) {
   const { data: vendedor, error: errorVendedor } = await admin
     .from('vendedores')
     .select(
-      'id, nombre_negocio, bloqueado, estado_validacion, ' +
+      `${CAMPOS_VENDIBLE}, nombre_negocio, ` +
       // Para recalcular el envío del lado del servidor.
       'latitud, longitud, metodos_entrega_default, costos_envio_zona'
     )
     .eq('id', vendedorId)
     .maybeSingle();
 
-  if (errorVendedor) {
+  const { data: cuentaMp, error: errorCuentaMp } = await admin
+    .from('mercadopago_cuentas')
+    .select('vendedor_id')
+    .eq('vendedor_id', vendedorId)
+    .maybeSingle();
+
+  if (errorVendedor || errorCuentaMp) {
     return NextResponse.json(
       { error: 'No se pudo verificar el pedido.' },
       { status: 500 }
     );
   }
 
-  // Tienda inexistente, bloqueada o despublicada: los tres son lo mismo acá.
-  if (!vendedor || vendedor.bloqueado || vendedor.estado_validacion !== 'aprobado') {
+  // ¿La tienda puede vender? (src/lib/vendedorVendible.js). Inexistente,
+  // bloqueada o despublicada son lo mismo acá: "no disponible". Pausada o
+  // cerrada, igual que en la ficha: "no está recibiendo pedidos". Las dos
+  // salen como NO_DISPONIBLE para que el checkout muestre la pantalla de
+  // productos que ya no se pueden comprar.
+  const vendible = vendedorVendible(vendedor, cuentaMp);
+  if (!vendible.vendible && vendible.motivo === MOTIVOS_NO_VENDIBLE.SIN_MP) {
     return NextResponse.json(
-      { ...NO_DISPONIBLE, productos_no_disponibles: items.map((i) => Number(i.productoId)) },
+      { error: mensajeNoVendible(vendible.motivo) },
+      { status: 400 }
+    );
+  }
+  if (!vendible.vendible) {
+    const noRecibe = [MOTIVOS_NO_VENDIBLE.PAUSADA, MOTIVOS_NO_VENDIBLE.CERRADA].includes(vendible.motivo);
+    return NextResponse.json(
+      {
+        ...NO_DISPONIBLE,
+        ...(noRecibe ? { error: mensajeNoVendible(vendible.motivo) } : {}),
+        productos_no_disponibles: items.map((i) => Number(i.productoId)),
+      },
       { status: 409 }
     );
   }
@@ -417,6 +440,14 @@ export async function POST(request) {
       return NextResponse.json(
         { error: 'Esta cuenta fue eliminada.', codigo: 'cuenta_cerrada' },
         { status: 403 }
+      );
+    }
+    // Y pedidos a una tienda que se pausó (o cerró) entre la verificación de
+    // arriba y este INSERT (migración 030).
+    if (String(errorPedido.message || '').includes(MENSAJE_NO_RECIBE_PEDIDOS)) {
+      return NextResponse.json(
+        { ...NO_DISPONIBLE, error: MENSAJE_NO_RECIBE_PEDIDOS, productos_no_disponibles: items.map((i) => Number(i.productoId)) },
+        { status: 409 }
       );
     }
     return NextResponse.json(

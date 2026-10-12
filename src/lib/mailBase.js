@@ -96,11 +96,14 @@ ${contenido}
 
 // Un <a> dentro de una celda: el color de fondo va en la celda, que es lo que
 // respeta Outlook.
-export function boton(texto, href, { blanco = false } = {}) {
-  const fondo = blanco ? '#ffffff' : TEXTO
+// Negro por defecto; `blanco` para el secundario y `azul` (el acento) para el
+// que invita a volver.
+export function boton(texto, href, { blanco = false, azul = false } = {}) {
+  const fondo = blanco ? '#ffffff' : azul ? ACENTO : TEXTO
   const color = blanco ? TEXTO : '#ffffff'
+  const borde = azul ? ACENTO : TEXTO
   return `<table ${TABLA} width="100%">
-<tr><td align="center" bgcolor="${fondo}" style="background-color:${fondo};border:1px solid ${TEXTO};border-radius:4px;">
+<tr><td align="center" bgcolor="${fondo}" style="background-color:${fondo};border:1px solid ${borde};border-radius:4px;">
 <a href="${escapar(href)}" target="_blank" style="display:block;padding:14px 20px;font-family:${FUENTE_UI};font-size:14px;font-weight:600;line-height:1.2;color:${color};text-decoration:none;border-radius:4px;">${escapar(texto)}</a>
 </td></tr>
 </table>`

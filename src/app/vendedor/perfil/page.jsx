@@ -9,6 +9,7 @@ import Navbar from '@/components/Navbar';
 import MenuTakeover from '@/components/MenuTakeover';
 import VolverAtras from '@/components/VolverAtras';
 import EstadoValidacion from '@/components/EstadoValidacion';
+import { usePausaTienda, SeccionPausar, TarjetaPausada } from '@/components/PausaTienda';
 import { entregaConfigurada, correoSinPrecios } from '@/lib/metodosEntrega';
 
 
@@ -113,6 +114,9 @@ export default function PerfilVendedorPage() {
   const [pendientesMp, setPendientesMp] = useState('cargando');
   // Cuántos se cancelaron al desconectar (para el aviso de después).
   const [canceladosAlDesconectar, setCanceladosAlDesconectar] = useState(0);
+  // La pausa de la tienda (/api/vendedor/pausa).
+  const pausaTienda = usePausaTienda();
+  const pausa = pausaTienda.pausa;
 
   useEffect(() => {
     if (menuOpen) { document.body.style.overflow = 'hidden' } else { document.body.style.overflow = '' }
@@ -175,6 +179,8 @@ export default function PerfilVendedorPage() {
           }
         }
         setEstadoValidacion(data.estado_validacion || 'aprobado');
+        // Si falla, el panel sale igual, sin la sección de pausa.
+        await pausaTienda.cargar();
         setSlugTienda(data.slug || null);
         setBloqueado(data.bloqueado === true);
         setSinUbicacion(data.latitud === null);
@@ -363,13 +369,27 @@ export default function PerfilVendedorPage() {
             </p>
 
             {/* ═══ ESTADO DE LA TIENDA ═══ */}
+            {/* En pausa, la tarjeta de la pausa reemplaza al cartel de
+                "publicada". Si además está bloqueada, va el cartel del bloqueo
+                y la pausa abajo (la puede reactivar igual). */}
             <div className="mb-6">
-              <EstadoValidacion
-                estado={estadoValidacion}
-                notas={notasValidacion}
-                slug={slugTienda}
-                bloqueado={bloqueado}
-              />
+              {(!pausa?.pausada || bloqueado) && (
+                <EstadoValidacion
+                  estado={estadoValidacion}
+                  notas={notasValidacion}
+                  slug={slugTienda}
+                  bloqueado={bloqueado}
+                />
+              )}
+              {pausa?.pausada && (
+                <div className={bloqueado ? 'mt-4' : ''}>
+                  <TarjetaPausada
+                    pausa={pausa}
+                    onReactivar={pausaTienda.reactivar}
+                    onGuardarMensaje={pausaTienda.guardarMensaje}
+                  />
+                </div>
+              )}
               {errorNotas && (
                 <p className="m-0 mt-2 text-xs text-[#0a0a0a]/40 font-light">
                   No pudimos cargar el detalle de lo que hay que ajustar. Recargá la página para verlo.
@@ -576,6 +596,11 @@ export default function PerfilVendedorPage() {
                 </div>
               )}
             </div>
+
+            {/* ═══ PAUSAR LA TIENDA ═══ */}
+            {pausa && !pausa.pausada && (
+              <SeccionPausar pausa={pausa} onPausar={pausaTienda.pausar} reactivada={pausaTienda.reactivada} />
+            )}
           </div>
         </div>
       </div>

@@ -27,6 +27,7 @@ const { armarMailVenta, armarMailCompra, armarMailDespacho, armarMailPagoTardio 
   await import('../src/lib/mailsPedidos.js')
 const { armarMailCuentaEliminada } = await import('../src/lib/mailsCuenta.js')
 const { armarMailCuentaCambiada, armarMailCuentaMp } = await import('../src/lib/mailsCuentaMp.js')
+const { armarMailPausa } = await import('../src/lib/mailsPausa.js')
 
 const base = {
   pedidoId: 1042,
@@ -149,6 +150,11 @@ mails['cuenta-mp-vendedor-desconexion-con-cancelados'] = armarMailCuentaMp({ tip
 mails['cuenta-mp-vendedor-conexion'] = armarMailCuentaMp({ tipo: 'primera', tienda: 'Cerámica del Puerto', cuenta: cuentaMp })
 mails['cuenta-mp-vendedor-cambio'] = armarMailCuentaMp({ tipo: 'cambio', tienda: 'Cerámica del Puerto', cuenta: cuentaMp, cancelados: 0 })
 mails['cuenta-mp-vendedor-cambio-con-cancelados'] = armarMailCuentaMp({ tipo: 'cambio', tienda: 'Cerámica del Puerto', cuenta: cuentaMp, cancelados: 1 })
+
+// Pausar la tienda: con y sin mensaje para el público.
+mails['tienda-pausada'] = armarMailPausa({ tienda: 'Cerámica del Puerto', mensaje: 'Estamos de vacaciones, volvemos el 15 de febrero.' })
+mails['tienda-pausada-sin-mensaje'] = armarMailPausa({ tienda: 'Cerámica del Puerto' })
+mails['tienda-pausada-escapado'] = armarMailPausa({ tienda: '<b>Lo de "Pepa" & Co</b>', mensaje: '<script>volvemos</script>' })
 
 const carpeta = new URL('vista-mails/', raiz)
 await mkdir(carpeta, { recursive: true })

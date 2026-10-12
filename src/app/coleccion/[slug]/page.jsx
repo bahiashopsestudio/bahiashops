@@ -31,7 +31,7 @@ export default async function ColeccionPage({ params }) {
       orden,
       producto:productos (
         id, nombre, precio, precio_anterior, estado,
-        vendedor:vendedores ( nombre_negocio, estado_validacion, bloqueado ),
+        vendedor:vendedores ( nombre_negocio, estado_validacion, bloqueado, pausada_en, cerrada_en ),
         media:producto_media ( url, es_principal, orden )
       )
     `)

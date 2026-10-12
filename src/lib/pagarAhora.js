@@ -12,7 +12,7 @@
 
 import { pedidoTienePago, pagableHasta, vencimientoDeLinkNuevo } from '@/lib/vencimientoPago'
 import { camposDeVencimiento, SIN_MEDIOS_EN_EFECTIVO } from '@/lib/mercadopago/preferencias'
-import { ESTADO_PUBLICADO } from '@/lib/vendedoresPublicos'
+import { vendedorVendible, MOTIVOS_NO_VENDIBLE } from '@/lib/vendedorVendible'
 
 function rechazo(status, codigo, error) {
   return { ok: false, status, codigo, error }
@@ -29,7 +29,7 @@ function idOVacio(valor) {
 //
 //   pedido    { comprador_id, estado, cancelado_motivo, mp_payment_id,
 //               efectivo_vence_en, mp_user_id_cobro }  o null
-//   vendedor  { bloqueado, estado_validacion } de la tienda del pedido, o null
+//   vendedor  { bloqueado, estado_validacion, pausada_en, cerrada_en } de la tienda del pedido, o null
 //   cuentaMp  { mp_user_id } de la cuenta de MercadoPago conectada HOY, o null
 //   usuarioId quien lo pide (sale de la sesión, nunca del cuerpo)
 //
@@ -57,19 +57,24 @@ export function evaluarPagarAhora({ pedido, vendedor, cuentaMp, usuarioId, ahora
     return rechazo(410, 'VENCIDO', 'El cupón venció y el pedido no se cobró. Si todavía querés estos productos, hacé el pedido de nuevo.')
   }
 
-  // La misma regla que /api/pedidos/crear y /api/envio/cotizar: tienda
-  // inexistente, bloqueada o sin aprobar es "no disponible".
-  if (!vendedor || vendedor.bloqueado || vendedor.estado_validacion !== ESTADO_PUBLICADO) {
+  // La misma regla que /api/pedidos/crear y /api/envio/cotizar
+  // (vendedorVendible): tienda inexistente, bloqueada, sin aprobar, cerrada o
+  // pausada no arma links nuevos. El cupón que ya se generó sigue valiendo.
+  const cuentaActual = idOVacio(cuentaMp?.mp_user_id)
+  const vendible = vendedorVendible(vendedor, cuentaActual ? cuentaMp : null)
+  if (!vendible.vendible && [MOTIVOS_NO_VENDIBLE.PAUSADA, MOTIVOS_NO_VENDIBLE.CERRADA].includes(vendible.motivo)) {
+    return rechazo(409, 'TIENDA_NO_DISPONIBLE', 'Esta tienda no está recibiendo pedidos. Si querés, pagá el cupón que ya generaste.')
+  }
+  if (!vendible.vendible && vendible.motivo === MOTIVOS_NO_VENDIBLE.SIN_MP) {
+    return rechazo(409, 'TIENDA_SIN_MP', 'La tienda no tiene MercadoPago conectado por ahora, así que no se puede pagar este pedido.')
+  }
+  if (!vendible.vendible) {
     return rechazo(409, 'TIENDA_NO_DISPONIBLE', 'Esta tienda no está disponible por ahora, así que no se puede pagar este pedido.')
   }
 
   // El cupón cobra para la cuenta con la que se creó el pedido. Un link nuevo
   // cobra para la cuenta que la tienda tiene hoy: si cambió, un pago ahí y el
   // cupón terminarían en cuentas distintas.
-  const cuentaActual = idOVacio(cuentaMp?.mp_user_id)
-  if (!cuentaActual) {
-    return rechazo(409, 'TIENDA_SIN_MP', 'La tienda no tiene MercadoPago conectado por ahora, así que no se puede pagar este pedido.')
-  }
   const cuentaDelPedido = idOVacio(pedido.mp_user_id_cobro)
   if (cuentaDelPedido && cuentaDelPedido !== cuentaActual) {
     return rechazo(409, 'CUENTA_CAMBIADA', 'La tienda cambió su cuenta de cobro. Pagá el cupón que ya generaste.')

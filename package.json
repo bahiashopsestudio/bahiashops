@@ -34,6 +34,8 @@
     "probar:mp-efectivo": "node scripts/probar-mp-efectivo.mjs",
     "probar:cuenta-mp": "node scripts/probar-cambio-cuenta.mjs",
     "probar:cambio-mp": "node scripts/probar-cambio-mp.mjs",
+    "probar:030": "node scripts/probar-030.mjs",
+    "probar:pausa": "node scripts/probar-pausa.mjs",
     "probar:datos-pedido": "node scripts/probar-datos-pedido.mjs",
     "probar:cuenta": "node scripts/probar-eliminar-cuenta.mjs"
   },

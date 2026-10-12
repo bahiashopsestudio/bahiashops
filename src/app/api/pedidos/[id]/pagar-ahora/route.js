@@ -19,6 +19,7 @@ import { getCuentaValida } from '@/lib/mercadopago/tokens';
 import { vencerPreferencia } from '@/lib/mercadopago/preferencias';
 import { evaluarPagarAhora, armarPreferenciaNueva } from '@/lib/pagarAhora';
 import { urlParaMercadoPago } from '@/lib/sitio';
+import { CAMPOS_VENDIBLE } from '@/lib/vendedorVendible';
 
 const ERROR_GENERICO = 'No pudimos abrir el pago. Probá de nuevo en un rato.';
 
@@ -53,7 +54,7 @@ export async function POST(request, { params }) {
   if (pedido && String(pedido.comprador_id) === String(user.id)) {
     const { data, error: errorVendedor } = await admin
       .from('vendedores')
-      .select('id, bloqueado, estado_validacion')
+      .select(CAMPOS_VENDIBLE)
       .eq('id', pedido.vendedor_id)
       .maybeSingle();
     const { data: cuenta, error: errorCuenta } = await admin

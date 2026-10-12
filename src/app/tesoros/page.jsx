@@ -200,7 +200,7 @@ export default function TesorosPage() {
             id, destacado, color_fondo, quote, quote_autor, orden,
             producto:productos (
               id, nombre, precio, estado,
-              vendedor:vendedores ( nombre_negocio, barrio_id, estado_validacion, bloqueado ),
+              vendedor:vendedores ( nombre_negocio, barrio_id, estado_validacion, bloqueado, pausada_en, cerrada_en ),
               media:producto_media ( url, es_principal, orden )
             )
           `)

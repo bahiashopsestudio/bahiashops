@@ -23,6 +23,7 @@ import { getServiceRoleClient } from '@/lib/supabase/admin';
 import { metodosConfigurados, zonaDe, precioDeZona } from '@/lib/metodosEntrega';
 import { zonasPara } from '@/lib/zonaEnvio';
 import { codigoPostalValido } from '@/lib/direcciones';
+import { vendedorVendible, mensajeNoVendible, CAMPOS_VENDIBLE } from '@/lib/vendedorVendible';
 
 function rechazo(status, error) {
   return NextResponse.json({ error }, { status });
@@ -50,15 +51,23 @@ export async function POST(request) {
 
   const { data: vendedor, error: errorVendedor } = await admin
     .from('vendedores')
-    .select('id, latitud, longitud, bloqueado, estado_validacion, metodos_entrega_default, costos_envio_zona')
+    .select(`${CAMPOS_VENDIBLE}, latitud, longitud, metodos_entrega_default, costos_envio_zona`)
     .eq('id', vendedorId)
     .maybeSingle();
-  if (errorVendedor) {
-    console.error('Cotizar: no se pudo leer la tienda', vendedorId, errorVendedor.message);
+  const { data: cuentaMp, error: errorCuentaMp } = await admin
+    .from('mercadopago_cuentas')
+    .select('vendedor_id')
+    .eq('vendedor_id', vendedorId)
+    .maybeSingle();
+  if (errorVendedor || errorCuentaMp) {
+    console.error('Cotizar: no se pudo leer la tienda', vendedorId, (errorVendedor || errorCuentaMp).message);
     return rechazo(500, 'No pudimos calcular el envío.');
   }
-  if (!vendedor || vendedor.bloqueado || vendedor.estado_validacion !== 'aprobado') {
-    return rechazo(404, 'Esta tienda no está disponible.');
+  // Si no puede vender (pausada, cerrada, sin MercadoPago…), no tiene sentido
+  // cotizar: la compra igual se rechazaría.
+  const vendible = vendedorVendible(vendedor, cuentaMp);
+  if (!vendible.vendible) {
+    return rechazo(404, mensajeNoVendible(vendible.motivo));
   }
 
   const metodos = metodosConfigurados(vendedor).filter((m) => m === 'envio_tienda' || m === 'correo');

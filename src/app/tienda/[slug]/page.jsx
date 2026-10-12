@@ -1,13 +1,14 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { getServiceRoleClient, verificarAdmin } from '@/lib/supabase/admin'
-import { soloVendedoresPublicados } from '@/lib/vendedoresPublicos'
+import { soloVendedoresConFicha, tiendaPausada } from '@/lib/vendedoresPublicos'
 import TiendaContent from './TiendaContent'
+import TiendaPausada from './TiendaPausada'
 
 const CAMPOS = `
   id, nombre_negocio, slug, descripcion_corta, descripcion_larga,
   logo_url, portada_url, instagram, direccion_visible, direccion,
-  horarios_texto_libre, estado_validacion, bloqueado,
+  horarios_texto_libre, estado_validacion, bloqueado, pausada_en, mensaje_pausa,
   barrio:barrios(nombre),
   categoria:categorias(nombre, slug)
 `
@@ -16,10 +17,10 @@ const CAMPOS = `
 export async function generateMetadata({ params }) {
   const { slug } = await params
   const supabase = await createClient()
-  const { data } = await soloVendedoresPublicados(
+  const { data } = await soloVendedoresConFicha(
     supabase
       .from('vendedores')
-      .select('nombre_negocio, descripcion_corta')
+      .select('nombre_negocio, descripcion_corta, pausada_en')
       .eq('slug', slug)
   ).maybeSingle()
 
@@ -28,6 +29,15 @@ export async function generateMetadata({ params }) {
   if (!data) {
     return {
       title: 'Tienda no encontrada — Bahía Shops',
+      robots: { index: false, follow: false },
+    }
+  }
+
+  // Una tienda pausada muestra su ficha con el cartel, pero no se indexa: no
+  // vende, y puede quedar así para siempre (cierre definitivo).
+  if (tiendaPausada(data)) {
+    return {
+      title: `${data.nombre_negocio} — Bahía Shops`,
       robots: { index: false, follow: false },
     }
   }
@@ -48,9 +58,10 @@ export default async function TiendaPage({ params, searchParams }) {
   const { preview } = await searchParams
   const supabase = await createClient()
 
-  // Vista normal: sólo tiendas publicadas y no bloqueadas. Para el visitante
-  // las dos situaciones son la misma: el 404 de siempre, sin decir cuál es.
-  const { data: publicada } = await soloVendedoresPublicados(
+  // Vista normal: sólo tiendas publicadas, no bloqueadas y no cerradas. Para
+  // el visitante esas situaciones son la misma: el 404 de siempre, sin decir
+  // cuál es. Una tienda PAUSADA sí tiene ficha: la del cartel, sin productos.
+  const { data: publicada } = await soloVendedoresConFicha(
     supabase
       .from('vendedores')
       .select(CAMPOS)
@@ -84,6 +95,19 @@ export default async function TiendaPage({ params, searchParams }) {
   }
 
   if (!vendedor) notFound()
+
+  // En pausa: nombre, logo y el mensaje que dejó. Ni productos, ni horarios,
+  // ni dirección, ni nada más (la base igual no devolvería sus productos).
+  if (tiendaPausada(vendedor) && !esPrevisualizacion) {
+    return (
+      <TiendaPausada
+        nombre={vendedor.nombre_negocio}
+        logoUrl={vendedor.logo_url}
+        portadaUrl={vendedor.portada_url}
+        mensaje={vendedor.mensaje_pausa}
+      />
+    )
+  }
 
   const clienteProductos = esPrevisualizacion ? getServiceRoleClient() : supabase
   const { data: productos } = await clienteProductos
