@@ -61,34 +61,22 @@ function FormularioContacto({
 ${mensaje.trim()}` : mensaje.trim()
 
     try {
-      // La cuenta se vuelve a leer al enviar: el mensaje sale a nombre de quien
-      // tiene la sesión AHORA (o de nadie), nunca de una sesión anterior.
-      const { usuarioId } = await sesionParaContacto(supabase)
-
-      // Guardar en Supabase
-      const { error: dbError } = await supabase
-        .from('mensajes_contacto')
-        .insert({
+      // Lo guarda el servidor (el navegador ya no puede escribir en
+      // mensajes_contacto, migración 032), y es el servidor el que decide a
+      // nombre de qué cuenta sale: la de la sesión AHORA (o ninguna), nunca
+      // una anterior ni la que diga el navegador. Si el aviso por mail falla,
+      // el mensaje igual queda guardado.
+      const res = await fetch('/api/contacto', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           email: email.trim(),
           mensaje: cuerpo,
-          usuario_id: usuarioId,
-        })
-
-      if (dbError) throw dbError
-
-      // Enviar notificación por email
-      try {
-        await fetch('/api/contacto', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: email.trim(),
-            mensaje: cuerpo,
-          }),
-        })
-      } catch {
-        // Si falla el email, no pasa nada — el mensaje ya está guardado en la DB
-        console.log('No se pudo enviar la notificación por email, pero el mensaje quedó guardado.')
+        }),
+      })
+      if (!res.ok) {
+        const datos = await res.json().catch(() => ({}))
+        throw new Error(datos.error || 'No se pudo enviar el mensaje.')
       }
 
       setEnviado(true)

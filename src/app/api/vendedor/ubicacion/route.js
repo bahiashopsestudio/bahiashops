@@ -8,9 +8,10 @@
 // Con "No" solo llega el centro del círculo: la calle y el número con que se
 // buscó en el mapa se quedan en el navegador. Igual se vuelve a redondear
 // (por si llega un punto que no está en la grilla) y el barrio sale del
-// centro: lo que se guarda es exactamente lo que se ve. Las columnas
-// zona_calle, zona_entre y zona_y ya no se escriben. La base vuelve a
-// redondear como segunda barrera (disparador redondear_zona).
+// centro: lo que se guarda es exactamente lo que se ve. Con "No", la
+// dirección se guarda vacía. Desde la migración 032 esta ruta es la única
+// barrera: se fue el disparador redondear_zona de la base (vendedores está
+// cerrada para el navegador, y las entrecalles zona_* ya no existen).
 //
 // La tienda sale de la sesión, nunca de un parámetro. Escribe con
 // service_role, que saltea el disparador de la 006: por eso acá se reabre a
@@ -135,8 +136,6 @@ export async function POST(request) {
 
   const campos = {
     direccion_visible: direccionVisible,
-    // Mientras exista, recibe_publico acompaña a la elección nueva.
-    recibe_publico: direccionVisible,
     localidad_id: localidadId,
     direccion,
     barrio_id: barrioId,

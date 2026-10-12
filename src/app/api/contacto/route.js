@@ -1,30 +1,60 @@
-// Recibe un mensaje del formulario de contacto y manda una notificación
-// por email a tu casilla usando Resend.
+// El formulario de contacto («Contactanos», ModalContacto.jsx): guarda el
+// mensaje y avisa a nuestra casilla por mail.
+//
+// Desde la migración 032 el navegador no puede escribir en mensajes_contacto:
+// el mensaje se guarda acá, con service_role. La cuenta a nombre de la que sale
+// (usuario_id) la decide el servidor con la sesión de ESTE pedido, nunca el
+// navegador: así no se puede mandar un mensaje a nombre de otra persona, y si
+// la sesión se cerró con el formulario abierto, sale sin cuenta.
+//
+// El mail es aviso: si falla, el mensaje igual quedó guardado y la respuesta es
+// ok (como antes, cuando lo guardaba el navegador).
 
 import { NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
+import { getServiceRoleClient } from '@/lib/supabase/admin';
 import { EMAIL_NOTIFICACIONES, REMITENTE_NO_REPLY } from '@/lib/contacto';
-
-// Lo que escribe la persona va adentro del HTML del mail: sin escapar, podría
-// meter etiquetas o links propios en nuestra casilla.
-function escaparHtml(texto) {
-  return String(texto)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
+import { escapar } from '@/lib/mailBase';
+import { validarContacto } from '@/lib/formulariosPublicos';
 
 export async function POST(request) {
-  const { email, mensaje } = await request.json();
-
-  if (!email || !mensaje) {
-    return NextResponse.json(
-      { error: 'Faltan datos.' },
-      { status: 400 }
-    );
+  let cuerpo;
+  try {
+    cuerpo = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'No pudimos leer el mensaje.' }, { status: 400 });
   }
 
+  const validado = validarContacto(cuerpo);
+  if (!validado.ok) {
+    return NextResponse.json({ error: validado.error }, { status: 400 });
+  }
+  const { email, mensaje } = validado;
+
+  // La cuenta, de la sesión de este pedido (o ninguna).
+  let usuarioId = null;
+  try {
+    const supabase = await createClient();
+    const { data } = await supabase.auth.getUser();
+    usuarioId = data?.user?.id || null;
+  } catch {
+    usuarioId = null;
+  }
+
+  const admin = getServiceRoleClient();
+  const { error: errorGuardar } = await admin
+    .from('mensajes_contacto')
+    .insert({ email, mensaje, usuario_id: usuarioId });
+  if (errorGuardar) {
+    console.error('Contacto: no se pudo guardar el mensaje —', errorGuardar.message);
+    return NextResponse.json({ error: 'No se pudo enviar el mensaje.' }, { status: 500 });
+  }
+
+  // El aviso a nuestra casilla. Lo que escribe la persona va escapado: sin
+  // escapar podría meter etiquetas o links propios en el mail. El email ya
+  // pasó la validación (una sola línea, sin espacios), así que no puede colar
+  // encabezados en el asunto.
+  let avisado = false;
   try {
     const respuesta = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -40,29 +70,20 @@ export async function POST(request) {
         html: `
           <div style="font-family: sans-serif; max-width: 500px;">
             <h2 style="color: #4164fe;">Nuevo mensaje de contacto</h2>
-            <p><strong>De:</strong> ${escaparHtml(email)}</p>
+            <p><strong>De:</strong> ${escapar(email)}</p>
             <hr style="border: none; border-top: 1px solid #eee; margin: 16px 0;" />
-            <p style="white-space: pre-wrap;">${escaparHtml(mensaje)}</p>
+            <p style="white-space: pre-wrap;">${escapar(mensaje)}</p>
           </div>
         `,
       }),
     });
-
+    avisado = respuesta.ok;
     if (!respuesta.ok) {
-      const error = await respuesta.json();
-      console.error('Error de Resend:', error);
-      return NextResponse.json(
-        { error: 'No se pudo enviar el email.' },
-        { status: 500 }
-      );
+      console.error('Contacto: Resend no aceptó el aviso —', respuesta.status);
     }
-
-    return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error('Error enviando email de contacto:', err);
-    return NextResponse.json(
-      { error: 'Error interno.' },
-      { status: 500 }
-    );
+    console.error('Contacto: no se pudo mandar el aviso —', err?.message || err);
   }
+
+  return NextResponse.json({ ok: true, avisado });
 }

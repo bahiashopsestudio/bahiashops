@@ -70,7 +70,9 @@ console.log('\n5. El componente usa estas funciones (no un valor leído una sola
 const fuente = readFileSync(new URL('../src/components/ModalContacto.jsx', import.meta.url), 'utf8')
 ok(/if \(!abierto\) return null\s*\n\s*return <FormularioContacto/.test(fuente), 'cerrado no se dibuja y el formulario se monta de nuevo en cada apertura (arranca vacío)')
 ok(/onAuthStateChange/.test(fuente) && /SIGNED_OUT/.test(fuente), 'escucha el cierre de sesión con el formulario abierto')
-ok(/usuario_id: usuarioId/.test(fuente) && /const \{ usuarioId \} = await sesionParaContacto\(supabase\)/.test(fuente), 'al enviar vuelve a leer la sesión')
+// Desde la migración 032 el mensaje lo guarda /api/contacto, y la cuenta la
+// decide el servidor con la sesión de ese pedido: el navegador ya no la manda.
+ok(!/usuario_id/.test(fuente) && !/from\('mensajes_contacto'\)/.test(fuente) && /fetch\('\/api\/contacto'/.test(fuente), 'al enviar no manda ninguna cuenta: la decide el servidor con la sesión de ese momento')
 ok(!/useState\(null\)/.test(fuente) && !/setUserId/.test(fuente), 'ya no guarda la cuenta en un estado leído una sola vez')
 
 console.log(fallas === 0 ? '\nTODO OK' : `\n${fallas} FALLAS`)

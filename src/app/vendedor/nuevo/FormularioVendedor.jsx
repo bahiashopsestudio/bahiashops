@@ -77,13 +77,9 @@ export default function FormularioVendedor({ userId }) {
     }
     setEnviandoLead(true)
     try {
-      await supabase.from('leads_gastronomia').insert({
-        nombre: leadNombre.trim(),
-        whatsapp: leadWhatsapp ? '+549' + leadWhatsapp.replace(/\D/g, '') : null,
-        que_hace: leadQueHace.trim(),
-        email: leadEmail.trim() || null,
-      })
-      await fetch('/api/lead-gastronomia', {
+      // Lo guarda el servidor y avisa por mail (el navegador ya no puede
+      // escribir en leads_gastronomia, migración 032).
+      const res = await fetch('/api/leads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -93,6 +89,10 @@ export default function FormularioVendedor({ userId }) {
           email: leadEmail.trim() || null,
         }),
       })
+      if (!res.ok) {
+        const datos = await res.json().catch(() => ({}))
+        throw new Error(datos.error || 'No se pudo guardar.')
+      }
       setLeadEnviado(true)
     } catch (err) {
       console.error('Error enviando lead:', err)

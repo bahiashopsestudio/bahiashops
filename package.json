@@ -38,6 +38,7 @@
     "probar:pausa": "node scripts/probar-pausa.mjs",
     "probar:031": "node scripts/probar-031.mjs",
     "probar:eliminar-tienda": "node scripts/probar-eliminar-tienda.mjs",
+    "probar:032": "node scripts/probar-032.mjs",
     "probar:datos-pedido": "node scripts/probar-datos-pedido.mjs",
     "probar:cuenta": "node scripts/probar-eliminar-cuenta.mjs"
   },
