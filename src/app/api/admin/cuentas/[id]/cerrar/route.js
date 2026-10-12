@@ -2,7 +2,9 @@
 //
 // Es EL MISMO proceso que usa la persona, con las mismas verificaciones: no
 // hay atajo. Lo único distinto es que no pide la confirmación escrita ni manda
-// el mail a la persona (la confirmación es el modal del admin).
+// el mail a la persona (la confirmación es el modal del admin). Si la cuenta
+// tiene una tienda pausada, se cierra (o se borra) con ella y sus archivos se
+// borran de Storage, igual que cuando la elimina la persona.
 //
 // Un admin no puede eliminar su propia cuenta, ni la de otro admin (la base lo
 // rechaza: primero hay que quitarle el permiso).
@@ -33,12 +35,13 @@ export async function POST(request, { params }) {
     if (resultado.status === 409) {
       return NextResponse.json(resumenDeEvaluacion(resultado.evaluacion), { status: 409 });
     }
-    if (resultado.status === 503) {
-      return NextResponse.json({ error: 'MercadoPago no respondió como se esperaba. No se eliminó nada.' }, { status: 503 });
-    }
     return NextResponse.json({ error: 'No se pudo eliminar la cuenta.' }, { status: 500 });
   }
 
   console.log(`Eliminar cuenta (admin ${admin_user.id}): ${id} -> ${resultado.resultado}`);
-  return NextResponse.json({ ok: true, resultado: resultado.resultado });
+  return NextResponse.json({
+    ok: true,
+    resultado: resultado.resultado,
+    tienda: resultado.tienda ? { id: resultado.tienda.id, accion: resultado.tienda.accion } : null,
+  });
 }

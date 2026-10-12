@@ -39,13 +39,7 @@ export async function GET(request) {
   const evaluacion = await evaluarCuenta(admin, id);
 
   if (!evaluacion.ok) {
-    const sinMp = evaluacion.error === 'mp_no_responde';
-    return NextResponse.json(
-      { error: sinMp
-          ? 'MercadoPago no respondió como se esperaba. No se puede confirmar que no haya pagos pendientes.'
-          : 'No se pudo revisar la cuenta. Probá de nuevo.' },
-      { status: sinMp ? 503 : 500 }
-    );
+    return NextResponse.json({ error: 'No se pudo revisar la cuenta. Probá de nuevo.' }, { status: 500 });
   }
 
   return NextResponse.json({

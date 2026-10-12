@@ -15,13 +15,17 @@ function sinMails(texto) {
   return String(texto ?? '').replace(/[^\s"'<>(),;]+@[^\s"'<>(),;]+/g, '[mail]')
 }
 
-export function armarMailCuentaEliminada({ nombre } = {}) {
+// tienda: el nombre de la tienda que tenía (se cerró o se borró con la
+// cuenta), o null. Se lee ANTES de eliminar: después ya no está.
+export function armarMailCuentaEliminada({ nombre, tienda = null } = {}) {
   const asunto = 'Eliminamos tu cuenta de Bahía Shops'
   const quien = String(nombre ?? '').trim()
   const saludo = quien ? `Hola ${quien}:` : 'Hola:'
+  const nombreTienda = String(tienda ?? '').trim()
 
   const parrafos = [
     `${saludo} como pediste, eliminamos tu cuenta y tus datos de Bahía Shops.`,
+    ...(nombreTienda ? [`Tu tienda ${nombreTienda} fue cerrada permanentemente.`] : []),
     'Si tenías compras, siguen en el registro de ventas de cada tienda, sin tus datos. Lo que pagaste queda en tu cuenta de MercadoPago, como siempre.',
     'Si no fuiste vos quien lo pidió, respondé este mail.',
   ]
@@ -42,7 +46,7 @@ export function armarMailCuentaEliminada({ nombre } = {}) {
 // Devuelve cuántos salieron y cuántos no. Cada falla se registra con el id del
 // usuario y NUNCA con la dirección: la cuenta ya no existe y el log no es lugar
 // para guardarla.
-export async function enviarMailCuentaEliminada({ emails, nombre, usuarioId = 'sin id' }) {
+export async function enviarMailCuentaEliminada({ emails, nombre, tienda = null, usuarioId = 'sin id' }) {
   const direcciones = [...new Set((emails || []).map((e) => String(e ?? '').trim().toLowerCase()).filter(Boolean))]
   const resultado = { enviados: 0, fallidos: 0 }
   const etiqueta = `Mail de cuenta eliminada (usuario ${usuarioId})`
@@ -58,7 +62,7 @@ export async function enviarMailCuentaEliminada({ emails, nombre, usuarioId = 's
 
   let mail
   try {
-    mail = armarMailCuentaEliminada({ nombre })
+    mail = armarMailCuentaEliminada({ nombre, tienda })
   } catch (err) {
     console.error(`${etiqueta} no enviado: no se pudo armar —`, sinMails(err?.message || err))
     return { enviados: 0, fallidos: direcciones.length }

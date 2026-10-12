@@ -126,6 +126,8 @@ mails['despacho-correo-otra'] = armarMailDespacho({
 mails['cuenta-eliminada'] = armarMailCuentaEliminada({ nombre: 'Lucía' })
 mails['cuenta-eliminada-sin-nombre'] = armarMailCuentaEliminada({ nombre: null })
 mails['cuenta-eliminada-escapado'] = armarMailCuentaEliminada({ nombre: '<b>Ana</b> & "Co"' })
+mails['cuenta-eliminada-con-tienda'] = armarMailCuentaEliminada({ nombre: 'Rosa', tienda: 'Ludoméstica' })
+mails['cuenta-eliminada-con-tienda-escapado'] = armarMailCuentaEliminada({ nombre: 'Rosa', tienda: '<b>Lo de "Pepa" & Co</b>' })
 
 // Aviso interno de un pago sobre un pedido cancelado (a notificaciones@).
 mails['interno-pago-tardio'] = armarMailPagoTardio({

@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
-import ModalContacto from '@/components/ModalContacto'
 import { cerrarSesion } from '@/lib/datosDelNavegador'
 
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage']
@@ -94,16 +93,26 @@ function LinkVolver({ children = 'Volver a mi perfil' }) {
 }
 
 // Una sección por impedimento, con el texto de cada uno.
-function SeccionMotivo({ motivo, datos, onContacto }) {
-  if (motivo === 'TIENDA') {
+function SeccionMotivo({ motivo, datos }) {
+  if (motivo === 'TIENDA_ACTIVA') {
     return (
       <div style={{ marginBottom: '24px' }}>
         <Caja>
-          Tenés una tienda en Bahía Shops: <strong style={negrita}>{datos.tienda?.nombre}</strong>. Para eliminar tu cuenta, primero hay que darla de baja.
+          Tu tienda{datos.tienda?.nombre ? <> <strong style={negrita}>{datos.tienda.nombre}</strong></> : null} está activa. Antes de eliminar tu cuenta, pausala desde tu perfil.
         </Caja>
-        <Parrafo>Así tus clientes no se quedan con compras sin respuesta y tu MercadoPago se desconecta bien.</Parrafo>
-        {/* Abre el formulario de contacto de siempre, con el mensaje ya escrito. */}
-        <BotonNegro onClick={onContacto}>Escribirnos para darla de baja</BotonNegro>
+        <Parrafo>Con la tienda en pausa, al eliminar tu cuenta la tienda se cierra para siempre.</Parrafo>
+        <BotonNegro href="/vendedor/perfil">Ir a pausar mi tienda</BotonNegro>
+      </div>
+    )
+  }
+  if (motivo === 'VENTA_EN_CURSO') {
+    return (
+      <div style={{ marginBottom: '24px' }}>
+        <Caja>
+          Tu tienda tiene ventas en curso. Esperá a que se completen para poder eliminar tu cuenta.
+        </Caja>
+        <Parrafo>Cuando entregues las que quedan, vas a poder eliminarla.</Parrafo>
+        <BotonNegro href="/vendedor/pedidos">Ver mis ventas</BotonNegro>
       </div>
     )
   }
@@ -150,7 +159,8 @@ function SeccionMotivo({ motivo, datos, onContacto }) {
 }
 
 const TITULO_MOTIVO = {
-  TIENDA: () => 'Primero, tu emprendimiento',
+  TIENDA_ACTIVA: () => 'Primero, tu emprendimiento',
+  VENTA_EN_CURSO: () => 'Tu tienda tiene ventas en curso',
   PEDIDO_ACTIVO: (d) => (d.pedidos.length === 1 ? 'Tenés una compra en camino' : 'Tenés compras en camino'),
   PAGO_EN_CURSO: () => 'Tenés un pago en proceso',
   ES_ADMIN: () => 'Esta es una cuenta de administración',
@@ -162,7 +172,7 @@ export default function EliminarCuentaPage() {
   const supabase = createClient()
   const router = useRouter()
 
-  // 'cargando' | 'puede' | 'bloqueado' | 'mp' | 'error' | 'listo'
+  // 'cargando' | 'puede' | 'bloqueado' | 'error' | 'listo'
   const [pantalla, setPantalla] = useState('cargando')
   const [datos, setDatos] = useState(null)
   const [texto, setTexto] = useState('')
@@ -170,7 +180,6 @@ export default function EliminarCuentaPage() {
   const [errorEnvio, setErrorEnvio] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
   const [categorias, setCategorias] = useState([])
-  const [contactoAbierto, setContactoAbierto] = useState(false)
 
   useEffect(() => {
     if (menuOpen) { document.body.style.overflow = 'hidden' } else { document.body.style.overflow = '' }
@@ -179,7 +188,6 @@ export default function EliminarCuentaPage() {
 
   // Muestra la pantalla que corresponde a lo que dijo el servidor.
   function mostrarSegunRespuesta(status, cuerpo) {
-    if (status === 503) { setPantalla('mp'); return }
     if (status === 401) { router.replace(`/entrar?next=${encodeURIComponent(RUTA)}`); return }
     if ((status === 200 || status === 409) && cuerpo && Array.isArray(cuerpo.motivos)) {
       setDatos(cuerpo)
@@ -246,7 +254,7 @@ export default function EliminarCuentaPage() {
         return
       }
 
-      if (res.status === 409 || res.status === 503 || res.status === 401) {
+      if (res.status === 409 || res.status === 401) {
         mostrarSegunRespuesta(res.status, cuerpo)
       } else {
         setErrorEnvio('No pudimos eliminar tu cuenta. No se borró nada: probá de nuevo en unos minutos.')
@@ -293,6 +301,14 @@ export default function EliminarCuentaPage() {
                     <li>Tus favoritos</li>
                   </ul>
                 </Tarjeta>
+
+                {datos.tienda?.estado === 'pausada' && (
+                  <Tarjeta etiqueta="QUÉ PASA CON TU TIENDA">
+                    <p style={{ margin: 0, fontFamily: 'Poppins, sans-serif', fontWeight: 300, fontSize: '15px', lineHeight: 1.6, color: NEGRO }}>
+                      Tu tienda{datos.tienda.nombre ? <> <strong style={negrita}>{datos.tienda.nombre}</strong></> : null} será cerrada permanentemente y dejará de verse.
+                    </p>
+                  </Tarjeta>
+                )}
 
                 {datos.tiene_pedidos && (
                   <Tarjeta etiqueta="QUÉ PASA CON TUS COMPRAS">
@@ -357,26 +373,12 @@ export default function EliminarCuentaPage() {
                   <LineaSuperior>ELIMINAR MI CUENTA</LineaSuperior>
                   <Titulo>{titulo}</Titulo>
                   <div style={{ marginTop: '20px' }}>
-                    {motivos.map((m) => <SeccionMotivo key={m} motivo={m} datos={datos} onContacto={() => setContactoAbierto(true)} />)}
+                    {motivos.map((m) => <SeccionMotivo key={m} motivo={m} datos={datos} />)}
                   </div>
                   <LinkVolver />
                 </>
               )
             })()}
-
-            {/* C. MercadoPago no responde */}
-            {pantalla === 'mp' && (
-              <>
-                <LineaSuperior>ELIMINAR MI CUENTA</LineaSuperior>
-                <Titulo>No pudimos revisar tus pagos</Titulo>
-                <Caja fondo="#fbe9e7" color={ROJO}>
-                  MercadoPago no nos respondió a tiempo, y antes de eliminar tu cuenta necesitamos confirmar que no tenés ningún pago pendiente.
-                </Caja>
-                <Parrafo>No se borró nada. Probá de nuevo en unos minutos.</Parrafo>
-                <BotonNegro onClick={reintentar}>Probar de nuevo</BotonNegro>
-                <LinkVolver />
-              </>
-            )}
 
             {/* Un error nuestro (no pedido en el diseño: no se puede mostrar el formulario sin haber revisado) */}
             {pantalla === 'error' && (
@@ -408,16 +410,6 @@ export default function EliminarCuentaPage() {
           </div>
         </div>
       </div>
-
-      {/* El mensaje llega precargado; la persona lo puede editar antes de mandarlo. */}
-      <ModalContacto
-        abierto={contactoAbierto}
-        onClose={() => setContactoAbierto(false)}
-        titulo="Dar de baja mi tienda"
-        subtitulo="Revisá el mensaje y mandalo."
-        mensajeInicial={`Hola, quiero dar de baja mi tienda ${datos?.tienda?.nombre || ''} para poder eliminar mi cuenta.`}
-        contexto="Baja de tienda — eliminar cuenta"
-      />
     </>
   )
 }

@@ -3,8 +3,9 @@
 // Buscar una cuenta por mail y eliminarla (pensado para las cuentas de prueba).
 //
 // Es el mismo proceso que usa la persona desde su perfil, con las mismas
-// verificaciones: si hay una tienda, un pedido en camino o un pago en proceso,
-// no se puede. La confirmación es el modal; no se le manda mail a la persona.
+// verificaciones: si hay una tienda activa, una venta de su tienda sin
+// entregar, un pedido en camino o un pago en proceso, no se puede. Una tienda
+// pausada se cierra (o se borra) con la cuenta. La confirmación es el modal; no se le manda mail a la persona.
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
@@ -14,7 +15,8 @@ import Navbar from '@/components/Navbar'
 const ROJO = '#b3261e'
 
 const TEXTO_MOTIVO = {
-  TIENDA: (n) => `Tiene ${n.tiendas || 1} ${n.tiendas === 1 || !n.tiendas ? 'tienda' : 'tiendas'}: hay que darla de baja primero.`,
+  TIENDA_ACTIVA: () => 'Tiene una tienda activa: la persona tiene que pausarla primero.',
+  VENTA_EN_CURSO: (n) => `Su tienda pausada tiene ${n.ventas_tienda_en_curso || 'alguna'} ${n.ventas_tienda_en_curso === 1 ? 'venta' : 'ventas'} sin entregar.`,
   PEDIDO_ACTIVO: (n) => `${n.pedidos_activos} ${n.pedidos_activos === 1 ? 'pedido en camino' : 'pedidos en camino'}.`,
   PAGO_EN_CURSO: (n) => `${n.pagos_en_curso} ${n.pagos_en_curso === 1 ? 'pago en proceso' : 'pagos en proceso'} en MercadoPago.`,
   ES_ADMIN: () => 'Es una cuenta de administración: primero hay que quitarle el permiso.',
@@ -124,11 +126,14 @@ export default function AdminCuentasPage() {
         setConfirmando(false)
         setResultado(null)
         setEmail('')
-        setAviso(data.resultado === 'borrada'
+        const tienda = data.tienda
+          ? (data.tienda.accion === 'cerrada' ? ' Su tienda quedó cerrada (tenía pedidos).' : ' Su tienda se borró.')
+          : ''
+        setAviso((data.resultado === 'borrada'
           ? 'Cuenta eliminada: se borró por completo.'
           : data.resultado === 'ya_cerrada'
             ? 'Esa cuenta ya estaba eliminada.'
-            : 'Cuenta eliminada: quedó anónima porque tenía pedidos.')
+            : 'Cuenta eliminada: quedó anónima porque tenía pedidos (o una tienda cerrada).') + tienda)
       } else if (res.status === 409) {
         // Algo cambió desde la búsqueda: se vuelve a mostrar el resultado.
         setConfirmando(false)

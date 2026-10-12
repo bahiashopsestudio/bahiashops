@@ -7,7 +7,9 @@
 //
 // La identidad sale de la sesión, nunca del body: no hay forma de eliminar la
 // cuenta de otra persona por acá. La lógica vive en lib/eliminarCuenta.js y la
-// base hace el trabajo en una sola transacción (migración 016).
+// base hace el trabajo en una sola transacción (migraciones 016 y 031). Si la
+// persona tiene una tienda pausada, la base la cierra (o la borra) con la
+// cuenta, y lib/eliminarCuenta.js borra sus archivos de Storage.
 
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
@@ -54,7 +56,6 @@ async function cerrarSesionSinTrabar(supabase, usuarioId) {
 }
 
 const SIN_SESION = () => NextResponse.json({ error: 'Iniciá sesión.' }, { status: 401 });
-const MP_NO_RESPONDE = () => NextResponse.json({ error: 'mp_no_responde' }, { status: 503 });
 const ERROR_INESPERADO = () => NextResponse.json({ error: 'No pudimos revisar tu cuenta. Probá de nuevo en unos minutos.' }, { status: 500 });
 
 export async function GET() {
@@ -64,9 +65,7 @@ export async function GET() {
 
   const evaluacion = await evaluarCuenta(getServiceRoleClient(), user.id);
 
-  if (!evaluacion.ok) {
-    return evaluacion.error === 'mp_no_responde' ? MP_NO_RESPONDE() : ERROR_INESPERADO();
-  }
+  if (!evaluacion.ok) return ERROR_INESPERADO();
 
   return NextResponse.json(resumenDeEvaluacion(evaluacion));
 }
@@ -93,10 +92,15 @@ export async function POST(request) {
   // de la cookie. Es el respaldo para el mail final: después de eliminar ya no
   // hay de dónde sacarlos.
   const emailDeLaSesion = typeof user.email === 'string' ? user.email.trim() : '';
+  // Lo mismo con el nombre de su tienda: si la tiene, al cerrarla se borra.
   let nombreAntes = null;
+  let tiendaAntes = null;
   try {
     const { data: perfil } = await admin.from('usuarios').select('nombre').eq('id', user.id).maybeSingle();
     nombreAntes = (perfil?.nombre || '').trim() || null;
+    const { data: tienda } = await admin
+      .from('vendedores').select('nombre_negocio').eq('usuario_id', user.id).is('cerrada_en', null).maybeSingle();
+    tiendaAntes = (tienda?.nombre_negocio || '').trim() || null;
   } catch (err) {
     console.warn(`Eliminar cuenta ${user.id}: no se pudo leer el nombre antes de eliminar —`, err?.message || err);
   }
@@ -104,7 +108,6 @@ export async function POST(request) {
   const resultado = await eliminarCuenta(admin, user.id);
 
   if (!resultado.ok) {
-    if (resultado.status === 503) return MP_NO_RESPONDE();
     if (resultado.status === 409) {
       // Algo cambió entre el precheck y el botón: se devuelven los motivos nuevos.
       return NextResponse.json(resumenDeEvaluacion(resultado.evaluacion), { status: 409 });
@@ -125,6 +128,8 @@ export async function POST(request) {
       await enviarMailCuentaEliminada({
         emails: [...(resultado.emails || []), emailDeLaSesion],
         nombre: resultado.nombre || nombreAntes,
+        // Solo si de verdad se cerró (o borró) una tienda con la cuenta.
+        tienda: resultado.tienda ? (resultado.tienda.nombre || tiendaAntes) : null,
         usuarioId: user.id,
       });
     } catch (err) {

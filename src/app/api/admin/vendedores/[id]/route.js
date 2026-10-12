@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServiceRoleClient, verificarAdmin } from '@/lib/supabase/admin';
+import { limpiarStorageTienda } from '@/lib/storageTienda';
 import {
   mailAprobado,
   mailNecesitaCambios,
@@ -211,4 +212,52 @@ export async function PUT(request, { params }) {
     vendedor: { ...data, bloqueo_actual: bloqueoActual },
     aviso,
   });
+}
+
+// Borrar una tienda de prueba, con sus pedidos, sus productos y sus archivos
+// de Storage. NO toca la cuenta de la dueña. Es para limpiar pruebas: a una
+// tienda real se la cierra eliminando la cuenta (y antes pausándola).
+//
+// La base lo hace en una transacción (privado.borrar_tienda_de_prueba,
+// migración 031). Storage va después: si falla, queda en el log.
+export async function DELETE(request, { params }) {
+  const admin_user = await verificarAdmin();
+  if (!admin_user) {
+    return NextResponse.json({ error: 'No autorizado.' }, { status: 403 });
+  }
+
+  const { id } = await params;
+  const vendedorId = Number(id);
+  if (!Number.isInteger(vendedorId) || vendedorId <= 0) {
+    return NextResponse.json({ error: 'La tienda no es válida.' }, { status: 400 });
+  }
+
+  const admin = getServiceRoleClient();
+
+  const { data: existe, error: errorLectura } = await admin
+    .from('vendedores')
+    .select('id')
+    .eq('id', vendedorId)
+    .maybeSingle();
+  if (errorLectura) {
+    console.error('Borrar tienda de prueba: no se pudo leer la tienda', vendedorId, errorLectura.message);
+    return NextResponse.json({ error: 'No se pudo borrar la tienda.' }, { status: 500 });
+  }
+  if (!existe) {
+    return NextResponse.json({ error: 'No existe esa tienda.' }, { status: 404 });
+  }
+
+  const { data, error } = await admin.rpc('rpc_borrar_tienda_de_prueba', { p_vendedor_id: vendedorId });
+  if (error || !data || typeof data !== 'object') {
+    console.error('Borrar tienda de prueba: la transacción falló', vendedorId, error?.message || 'respuesta vacía');
+    return NextResponse.json({ error: 'No se pudo borrar la tienda.' }, { status: 500 });
+  }
+  if (data.ok === false) {
+    return NextResponse.json({ error: 'No existe esa tienda.' }, { status: 404 });
+  }
+
+  await limpiarStorageTienda(admin, { id: vendedorId, accion: 'borrada' });
+
+  console.log(`Borrar tienda de prueba (admin ${admin_user.id}): tienda ${vendedorId} "${data.nombre}", ${data.pedidos_borrados} pedido(s) borrado(s).`);
+  return NextResponse.json({ ok: true, id: vendedorId, nombre: data.nombre, pedidos_borrados: data.pedidos_borrados });
 }

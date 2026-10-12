@@ -92,6 +92,9 @@ export default function MisPedidosPage() {
   const supabase = createClient()
   const router = useRouter()
   const [pedidos, setPedidos] = useState([])
+  // Los ids de las tiendas cerradas a las que les compró (la fila de una tienda
+  // cerrada no se puede leer: desde acá llega igual que una bloqueada).
+  const [tiendasCerradas, setTiendasCerradas] = useState(() => new Set())
   // La hora a la que se cargaron los pedidos: de ella depende qué está vencido.
   // Va en el estado (y no se pide al dibujar) para que el render sea puro.
   const [ahora, setAhora] = useState(0)
@@ -155,13 +158,16 @@ export default function MisPedidosPage() {
       // sigue viendo igual.
       //
       // De 'vendedores' sólo se pide el slug, y sólo para el enlace: si la
-      // tienda ya no está publicada, el nombre se muestra sin enlace.
+      // tienda ya no está publicada, el nombre se muestra sin enlace. Una
+      // tienda cerrada (la dueña eliminó su cuenta) se muestra como "Tienda
+      // cerrada": eso lo dice mis_tiendas_cerradas (migración 031), porque RLS
+      // la oculta igual que a una bloqueada y desde acá no se distinguen.
       const { data, error } = await supabase
         .from('pedidos')
         .select(`
           id, estado, total, costo_envio, metodo_envio, zona_envio, creado_en,
           vendedor_nombre, franja_horaria, envio_empresa, envio_empresa_otra, envio_seguimiento,
-          vence_en, efectivo_vence_en, cancelado_motivo, mp_payment_id,
+          vence_en, efectivo_vence_en, cancelado_motivo, mp_payment_id, vendedor_id,
           vendedor:vendedores(slug, direccion_visible),
           items:pedido_items(id, nombre, foto_url, cantidad, precio, variante)
         `)
@@ -174,6 +180,11 @@ export default function MisPedidosPage() {
         setCargando(false)
         return
       }
+
+      // Si falla, se muestran con el nombre guardado en el pedido.
+      const { data: cerradas, error: errorCerradas } = await supabase.rpc('mis_tiendas_cerradas')
+      if (errorCerradas) console.error('No se pudieron leer las tiendas cerradas', errorCerradas)
+      setTiendasCerradas(new Set(Array.isArray(cerradas) ? cerradas.map(Number) : []))
 
       // Solo las compras: los pedidos que nunca se pagaron (carritos
       // abandonados) no aparecen.
@@ -261,6 +272,7 @@ export default function MisPedidosPage() {
                   // Sin franja (pedidos anteriores a la migración 009) queda
                   // la etiqueta genérica.
                   const textoEstado = etiquetaEstado(pedido, estado)
+                  const tiendaCerrada = tiendasCerradas.has(Number(pedido.vendedor_id))
                   return (
                     <div key={pedido.id} className="rounded-2xl border border-[#0a0a0a]/5 p-5 mb-4">
                       {/* Header */}
@@ -270,7 +282,9 @@ export default function MisPedidosPage() {
                             {/* El nombre sale de la copia guardada en el
                                 pedido. El enlace, sólo si la tienda sigue
                                 publicada. */}
-                            {pedido.vendedor?.slug ? (
+                            {tiendaCerrada ? (
+                              <span className="text-sm font-medium text-[#0a0a0a]/40">Tienda cerrada</span>
+                            ) : pedido.vendedor?.slug ? (
                               <Link
                                 href={`/tienda/${pedido.vendedor.slug}`}
                                 className="text-sm font-medium text-[#0a0a0a] hover:text-[#0a0a0a]/50 transition"
