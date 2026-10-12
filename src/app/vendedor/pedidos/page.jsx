@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import Navbar from '@/components/Navbar';
 import MenuTakeover from '@/components/MenuTakeover';
 import VolverAtras from '@/components/VolverAtras';
@@ -217,6 +218,11 @@ export default function VendedorPedidosPage() {
   const [ahora, setAhora] = useState(0);
   // Los carritos a los que se les está mandando el recordatorio ahora mismo.
   const [enviandoRecordatorio, setEnviandoRecordatorio] = useState({});
+  // Si la tienda tiene MercadoPago conectado (lo dice el servidor). Sin cuenta,
+  // "Recordarle" muestra un cartel en vez de mandar el mail. null = no se sabe:
+  // se deja intentar y decide el servidor.
+  const [mpConectado, setMpConectado] = useState(null);
+  const [sinMpModal, setSinMpModal] = useState(false);
 
   useEffect(() => {
     if (menuOpen) { document.body.style.overflow = 'hidden' } else { document.body.style.overflow = '' }
@@ -252,6 +258,7 @@ export default function VendedorPedidosPage() {
 
         setNombreNegocio(datos.vendedor?.nombre_negocio || '');
         setPedidos(datos.pedidos || []);
+        setMpConectado(typeof datos.mp_conectado === 'boolean' ? datos.mp_conectado : null);
         setAhora(Date.now());
 
         // El link del mail de venta trae ?pedido=N: si ese pedido está en la
@@ -391,7 +398,13 @@ export default function VendedorPedidosPage() {
 
   // "Recordarle": el mail lo manda el servidor, una sola vez por pedido. Si sale
   // bien, el carrito queda marcado y el botón no vuelve.
+  // Sin MercadoPago conectado, quien compró llegaría a una tienda donde no puede
+  // pagar: en vez del mail, el cartel para ir a conectar la cuenta.
   async function enviarRecordatorio(pedidoId) {
+    if (mpConectado === false) {
+      setSinMpModal(true);
+      return;
+    }
     setEnviandoRecordatorio((prev) => ({ ...prev, [pedidoId]: true }));
     try {
       const res = await fetch('/api/vendedor/pedidos/recordar', {
@@ -400,7 +413,11 @@ export default function VendedorPedidosPage() {
         body: JSON.stringify({ pedidoId }),
       });
       const datos = await res.json().catch(() => ({}));
-      if (!res.ok) {
+      if (res.status === 400 && datos.codigo === 'SIN_MP') {
+        // Se desconectó con el panel abierto: el servidor lo frenó.
+        setMpConectado(false);
+        setSinMpModal(true);
+      } else if (!res.ok) {
         alert(datos.error || 'No se pudo enviar el recordatorio.');
       } else {
         const enviadoEn = datos.recordatorio_enviado_en || new Date().toISOString();
@@ -560,6 +577,37 @@ export default function VendedorPedidosPage() {
                       className="flex-1 py-3 border-none rounded-full bg-violet-600 text-white cursor-pointer text-sm font-medium hover:bg-violet-700 transition-colors">
                       Avisar por WhatsApp
                     </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Mismo estilo que los carteles de MercadoPago de Mi negocio (perfil). */}
+            {sinMpModal && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[1000]"
+                onClick={() => setSinMpModal(false)}>
+                <div role="dialog" aria-modal="true" aria-labelledby="sin-mp-titulo"
+                  className="bg-white rounded-2xl w-full max-w-[440px] overflow-hidden"
+                  onClick={(e) => e.stopPropagation()}>
+                  <div className="px-6 py-4 border-b border-[#0a0a0a]/5">
+                    <p id="sin-mp-titulo" className="m-0" style={{ fontFamily: 'Fraunces, serif', fontWeight: 500, color: '#0a0a0a' }}>
+                      Conectá MercadoPago
+                    </p>
+                  </div>
+                  <div className="px-6 py-4">
+                    <p className="text-sm text-[#0a0a0a]/60 font-light leading-relaxed m-0">
+                      No tenés ninguna cuenta de MercadoPago conectada. Conectá tu cuenta de MercadoPago para poder recordarle al comprador que haga su compra.
+                    </p>
+                  </div>
+                  <div className="flex justify-end gap-3 px-6 py-4 border-t border-[#0a0a0a]/5">
+                    <button type="button" onClick={() => setSinMpModal(false)}
+                      className="px-5 py-2.5 border border-[#0a0a0a]/10 rounded-full bg-white cursor-pointer text-sm text-[#0a0a0a]/60 font-light hover:border-[#0a0a0a]/30 transition-all">
+                      Cancelar
+                    </button>
+                    <Link href="/vendedor/perfil"
+                      className="px-5 py-2.5 rounded-full bg-[#009ee3] text-white text-sm font-medium no-underline hover:bg-[#008dd0] transition-colors">
+                      Conectar MercadoPago
+                    </Link>
                   </div>
                 </div>
               </div>

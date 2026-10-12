@@ -26,7 +26,9 @@ ok(!esCarritoAbandonado(p({ mp_payment_id: '501', efectivo_vence_en: iso(ahora +
 ok(!esCarritoAbandonado(p({ vence_en: iso(ahora + HORA) }), ahora), 'pendiente con el link todavía vivo (puede estar pagando)')
 ok(!esCarritoAbandonado(p({ mp_payment_id: '502' }), ahora), 'pendiente con un pago en proceso sin cupón (tarjeta acreditándose)')
 ok(!esCarritoAbandonado(p({ estado: 'rechazado' }), ahora), 'rechazado')
-for (const motivo of [null, 'cuenta_eliminada', 'tienda_cerrada', 'cuenta_mp_cambiada']) ok(!esCarritoAbandonado(p({ estado: 'cancelado', cancelado_motivo: motivo }), ahora), `cancelado (${motivo})`)
+ok(esCarritoAbandonado(p({ estado: 'cancelado', cancelado_motivo: 'cuenta_mp_cambiada' }), ahora), 'cancelado porque la tienda cambió o desconectó MercadoPago (cuenta_mp_cambiada)')
+ok(esCarritoAbandonado(p({ estado: 'cancelado', cancelado_motivo: 'cuenta_mp_cambiada', vence_en: iso(ahora + HORA) }), ahora), 'cuenta_mp_cambiada aunque el link todavía no hubiera vencido')
+for (const motivo of [null, 'cuenta_eliminada', 'tienda_cerrada']) ok(!esCarritoAbandonado(p({ estado: 'cancelado', cancelado_motivo: motivo }), ahora), `cancelado (${motivo})`)
 ok(!esCarritoAbandonado(null, ahora) && !esCarritoAbandonado(undefined, ahora), 'sin pedido: false')
 
 console.log('\n3. En el panel')

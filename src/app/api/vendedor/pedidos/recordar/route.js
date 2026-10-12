@@ -73,6 +73,25 @@ export async function POST(request) {
     return NextResponse.json({ error: 'El recordatorio ya se envió.' }, { status: 409 });
   }
 
+  // Sin una cuenta de MercadoPago conectada, quien compró llegaría a una tienda
+  // donde no puede pagar. La pantalla ya lo frena con un cartel; esto es la red
+  // de seguridad (por ejemplo, si desconectó con el panel de pedidos abierto).
+  const { data: cuentaMp, error: errorCuentaMp } = await admin
+    .from('mercadopago_cuentas')
+    .select('vendedor_id')
+    .eq('vendedor_id', vendedor.id)
+    .maybeSingle();
+  if (errorCuentaMp) {
+    console.error(`Recordatorio pedido ${pedidoId}: no se pudo leer la cuenta de MercadoPago — ${errorCuentaMp.message}`);
+    return NextResponse.json({ error: NO_SE_PUDO }, { status: 500 });
+  }
+  if (!cuentaMp) {
+    return NextResponse.json(
+      { error: 'Conectá tu cuenta de MercadoPago para poder recordarle.', codigo: 'SIN_MP' },
+      { status: 400 }
+    );
+  }
+
   // Una cuenta cerrada queda con un mail .invalid: a esa no se le manda nada.
   const { data: comprador } = await admin
     .from('usuarios')

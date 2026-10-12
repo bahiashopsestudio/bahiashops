@@ -176,13 +176,18 @@ export function pestanaEnElPanel(pedido, ahoraMs = Date.now()) {
 // ¿Es un carrito abandonado? Un pedido que no es una venta (pestanaDePedido da
 // null) y que venció sin pagarse (pedidoVencido en vencimientoPago.js): un
 // pendiente con el link vencido y sin ningún pago, un cupón en efectivo vencido,
-// o uno ya cancelado por pago_vencido. NO lo son: un pendiente con el link
-// todavía vivo (la persona puede estar pagando en este momento), uno con un pago
-// en proceso sin cupón (una tarjeta que se está acreditando), los rechazados y
-// los cancelados por otro motivo.
+// o uno ya cancelado por pago_vencido. También uno cancelado porque la tienda
+// cambió o desconectó su cuenta de MercadoPago (cuenta_mp_cambiada): quien
+// compró no llegó a pagar, y la tienda puede recordárselo. NO lo son: un
+// pendiente con el link todavía vivo (la persona puede estar pagando en este
+// momento), uno con un pago en proceso sin cupón (una tarjeta que se está
+// acreditando), los rechazados y los cancelados por otro motivo.
 export function esCarritoAbandonado(pedido, ahoraMs = Date.now()) {
   if (!pedido) return false
   if (pestanaDePedido(pedido, ahoraMs) !== null) return false
+  // Va acá y no en pedidoVencido: ese no es un vencimiento, y pedidoVencido lo
+  // usan también el cambio de cuenta y el vencimiento de los pedidos.
+  if (pedido.estado === 'cancelado' && pedido.cancelado_motivo === 'cuenta_mp_cambiada') return true
   return pedidoVencido(pedido, ahoraMs)
 }
 

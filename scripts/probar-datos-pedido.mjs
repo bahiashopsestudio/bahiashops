@@ -201,5 +201,45 @@ console.log('\n4. Si falla la lectura de contacto, no se muestra una lista a med
   ok(mal.status === 500, 'responde 500')
 }
 
+console.log('\n5. Si la tienda tiene MercadoPago conectado (para "Recordarle")')
+{
+  datos.mercadopago_cuentas = [{ vendedor_id: TIENDA, access_token: 'NO_DEBE_SALIR' }]
+  let con = await llamar()
+  ok(con.status === 200 && con.body.mp_conectado === true, 'con la fila en mercadopago_cuentas: mp_conectado = true')
+  ok(!JSON.stringify(con.body).includes('NO_DEBE_SALIR'), 'sin ningún token en la respuesta')
+  datos.mercadopago_cuentas = [{ vendedor_id: 99 }]
+  con = await llamar()
+  ok(con.status === 200 && con.body.mp_conectado === false, 'sin fila de esta tienda (aunque otra tenga): mp_conectado = false')
+  ok(con.body.pedidos.some((p) => p.pestana === 'carritos'), 'y los carritos llegan igual')
+  delete datos.mercadopago_cuentas
+}
+
+console.log('\n6. La ruta de recordar también lo verifica')
+{
+  const { POST } = await import('../src/app/api/vendedor/pedidos/recordar/route.js')
+  const recordar = (pedidoId) => { globalThis.__falso = falso(); return POST({ json: async () => ({ pedidoId }) }) }
+  datos.mercadopago_cuentas = [{ vendedor_id: 99 }]
+  let rr = await recordar(202)
+  ok(rr.status === 400 && rr.body.codigo === 'SIN_MP' && rr.body.error === 'Conectá tu cuenta de MercadoPago para poder recordarle.', 'sin MercadoPago: 400 con "Conectá tu cuenta de MercadoPago para poder recordarle." y no manda nada')
+  datos.mercadopago_cuentas = [{ vendedor_id: TIENDA }]
+  rr = await recordar(202)
+  // Pasa la verificación y sigue: acá frena porque en la base de mentira quien
+  // compró no tiene mail.
+  ok(rr.status === 409 && rr.body.codigo !== 'SIN_MP' && /contactar/.test(rr.body.error), 'con MercadoPago: pasa la verificación y sigue como siempre')
+  rr = await recordar(104)
+  ok(rr.status === 409 && /no es un carrito/.test(rr.body.error), 'un pedido que no es carrito sigue dando su propio error')
+  delete datos.mercadopago_cuentas
+}
+
+console.log('\n7. El cartel del panel')
+{
+  const { readFileSync } = await import('node:fs')
+  const pantalla = readFileSync(new URL('../src/app/vendedor/pedidos/page.jsx', import.meta.url), 'utf8')
+  ok(pantalla.includes('No tenés ninguna cuenta de MercadoPago conectada. Conectá tu cuenta de MercadoPago para poder recordarle al comprador que haga su compra.'), 'el cartel dice el texto pedido')
+  ok(/<Link href="\/vendedor\/perfil"[\s\S]{0,200}Conectar MercadoPago/.test(pantalla), 'con un botón a /vendedor/perfil')
+  ok(/if \(mpConectado === false\) \{\s*setSinMpModal\(true\);\s*return;/.test(pantalla), 'sin MercadoPago, "Recordarle" abre el cartel y no llama a la ruta')
+  ok(/datos\.codigo === 'SIN_MP'/.test(pantalla), 'y si el servidor lo frena (SIN_MP), también lo muestra')
+}
+
 console.log(fallas === 0 ? '\nTODO OK' : `\n${fallas} FALLAS`)
 process.exit(fallas ? 1 : 0)

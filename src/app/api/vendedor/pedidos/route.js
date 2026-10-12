@@ -167,8 +167,24 @@ export async function GET() {
     };
   });
 
+  // ¿La tienda tiene una cuenta de MercadoPago conectada? Sin cuenta nadie puede
+  // pagarle, así que "Recordarle" un carrito no sirve: la pantalla muestra un
+  // cartel en vez de mandar el mail (la ruta de recordar lo vuelve a verificar).
+  // Se mira la fila de mercadopago_cuentas y no vendedores.mercadopago_conectado:
+  // la fila (los tokens) es lo que de verdad permite cobrar. Si la lectura
+  // falla, va null y la pantalla deja intentar: decide la ruta de recordar.
+  const { data: cuentaMp, error: errorCuentaMp } = await admin
+    .from('mercadopago_cuentas')
+    .select('vendedor_id')
+    .eq('vendedor_id', vendedor.id)
+    .maybeSingle();
+  if (errorCuentaMp) {
+    console.error('No se pudo leer la cuenta de MercadoPago de la tienda', vendedor.id, errorCuentaMp.message);
+  }
+
   return NextResponse.json({
     vendedor: { id: vendedor.id, nombre_negocio: vendedor.nombre_negocio },
+    mp_conectado: errorCuentaMp ? null : !!cuentaMp,
     pedidos: [...respuesta, ...carritosRespuesta],
   });
 }
