@@ -26,6 +26,7 @@ register('data:text/javascript,' + encodeURIComponent(alias))
 const { armarMailVenta, armarMailCompra, armarMailDespacho, armarMailPagoTardio } =
   await import('../src/lib/mailsPedidos.js')
 const { armarMailCuentaEliminada } = await import('../src/lib/mailsCuenta.js')
+const { armarMailCuentaCambiada, armarMailCuentaMp } = await import('../src/lib/mailsCuentaMp.js')
 
 const base = {
   pedidoId: 1042,
@@ -129,6 +130,25 @@ mails['cuenta-eliminada-escapado'] = armarMailCuentaEliminada({ nombre: '<b>Ana<
 mails['interno-pago-tardio'] = armarMailPagoTardio({
   pedidoId: 1042, tienda: '<b>Lo de "Pepa" & Co</b>', monto: 22800, pagoId: 123456789, estado: 'approved',
 })
+
+// Cambio de cuenta de MercadoPago: a quien compró (pedido cancelado) y al vendedor.
+mails['cuenta-mp-cancelado-comprador'] = armarMailCuentaCambiada({
+  pedidoId: 1042, tienda: 'Cerámica del Puerto', slugTienda: 'ceramica-del-puerto', apodo: 'Nutria Curiosa',
+  items: base.items, costoEnvio: 2500, total: 25300,
+})
+mails['cuenta-mp-cancelado-comprador-sin-items'] = armarMailCuentaCambiada({
+  pedidoId: 1043, tienda: 'Cerámica del Puerto', slugTienda: 'ceramica-del-puerto', apodo: null, items: [], total: 9800,
+})
+mails['cuenta-mp-cancelado-comprador-escapado'] = armarMailCuentaCambiada({
+  pedidoId: 1044, tienda: '<b>Lo de "Pepa" & Co</b>', slugTienda: 'lo-de-pepa', apodo: 'Zorro <script>',
+  items: [{ nombre: 'Mate "imperial" <XL>', variante: 'Rojo & negro', cantidad: 1, precio: 14500 }], total: 14500,
+})
+const cuentaMp = { id: '161947825', nickname: 'CERAMICADELPUERTO' }
+mails['cuenta-mp-vendedor-desconexion'] = armarMailCuentaMp({ tipo: 'desconexion', tienda: 'Cerámica del Puerto', cancelados: 0 })
+mails['cuenta-mp-vendedor-desconexion-con-cancelados'] = armarMailCuentaMp({ tipo: 'desconexion', tienda: 'Cerámica del Puerto', cancelados: 3 })
+mails['cuenta-mp-vendedor-conexion'] = armarMailCuentaMp({ tipo: 'primera', tienda: 'Cerámica del Puerto', cuenta: cuentaMp })
+mails['cuenta-mp-vendedor-cambio'] = armarMailCuentaMp({ tipo: 'cambio', tienda: 'Cerámica del Puerto', cuenta: cuentaMp, cancelados: 0 })
+mails['cuenta-mp-vendedor-cambio-con-cancelados'] = armarMailCuentaMp({ tipo: 'cambio', tienda: 'Cerámica del Puerto', cuenta: cuentaMp, cancelados: 1 })
 
 const carpeta = new URL('vista-mails/', raiz)
 await mkdir(carpeta, { recursive: true })

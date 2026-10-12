@@ -8,7 +8,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { MP_CLIENT_ID, MP_CLIENT_SECRET, MP_REDIRECT_URI } from '@/lib/mercadopago/config';
-import { leerCuentaDeMp, contarPagosEnProceso } from '@/lib/mercadopago/cuenta';
+import { leerCuentaDeMp, cancelarPendientesPorCuentaMp } from '@/lib/mercadopago/cuenta';
 import { enviarMailCuentaMp } from '@/lib/mailsCuentaMp';
 import { COOKIE_ESTADO_MP, estadoMpValido } from '@/lib/mercadopago/estado';
 
@@ -67,7 +67,7 @@ export async function GET(request) {
 
   const { data: vendedor, error: errorVendedor } = await supabase
     .from('vendedores')
-    .select('id, nombre_negocio')
+    .select('id, nombre_negocio, slug')
     .eq('usuario_id', user.id)
     .maybeSingle();
 
@@ -124,7 +124,7 @@ export async function GET(request) {
   // a ciegas.
   const { data: previa, error: errorPrevia } = await admin
     .from('mercadopago_cuentas')
-    .select('mp_user_id, mp_nickname')
+    .select('mp_user_id, mp_nickname, access_token')
     .eq('vendedor_id', vendedor.id)
     .maybeSingle();
 
@@ -200,13 +200,29 @@ export async function GET(request) {
     return conError(request, 'no_guardado');
   }
 
-  // 5. La conexión ya quedó hecha. Lo que sigue es aviso: nada de esto puede
-  // hacer fallar la conexión.
+  // 5. La conexión ya quedó hecha. Nada de lo que sigue puede hacerla fallar.
   //
-  // Cambiar de cuenta no cancela ningún pedido: una venta existe solo cuando se
-  // paga. Los links de pago sin usar vencen solos a las 2 horas, y los pagos en
-  // efectivo en proceso se acreditan en la cuenta con la que se generaron.
-  const pagosEnProceso = cambioDeCuenta ? await contarPagosEnProceso(admin, vendedor.id) : 0;
+  // Si la cuenta es OTRA, los pedidos pendientes de la cuenta anterior se
+  // cancelan: sus links y cupones cobran para una cuenta cuyo token ya no está
+  // guardado, y ningún pago ahí se podría confirmar. Acá no hay cartel para
+  // preguntar (es la vuelta de MercadoPago): el aviso estuvo en "Antes de
+  // conectar", y el vendedor recibe el mail. El token de la cuenta anterior
+  // sigue valiendo en MercadoPago aunque ya no esté guardado: con él se vencen
+  // los links. Al volver a conectar la MISMA cuenta no se toca nada.
+  //
+  // También en la primera conexión: un pendiente que haya quedado de una
+  // cuenta desconectada antes de este cambio cobra para una cuenta que ya no
+  // está (sin token para vencerlo).
+  let cancelados = 0;
+  if (!previa || cambioDeCuenta) {
+    const resultado = await cancelarPendientesPorCuentaMp({
+      admin,
+      vendedor,
+      tokenViejo: cambioDeCuenta ? previa.access_token || null : null,
+      conservar: mpUserId,
+    });
+    cancelados = resultado.cancelados;
+  }
 
   // El mail al vendedor, a la dirección de su cuenta: lo protege si alguien más
   // conectó una cuenta con su sesión.
@@ -216,11 +232,12 @@ export async function GET(request) {
     tienda: vendedor.nombre_negocio,
     cuenta: { id: mpUserId, nickname },
     anterior: cuentaAnterior && cuentaAnterior.id ? cuentaAnterior : null,
-    pagosEnProceso,
+    cancelados,
   });
 
   return alPerfil(request, {
     mp: 'exito',
     ...(cambioDeCuenta ? { cambio: '1' } : {}),
+    ...(cancelados > 0 ? { cancelados: String(cancelados) } : {}),
   });
 }

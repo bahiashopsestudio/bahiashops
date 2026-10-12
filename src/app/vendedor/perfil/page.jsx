@@ -108,6 +108,11 @@ export default function PerfilVendedorPage() {
   const [desconectando, setDesconectando] = useState(false);
   const [errorDesconexion, setErrorDesconexion] = useState(null);
   const [avisoDesconectado, setAvisoDesconectado] = useState(false);
+  // Cuántos pedidos pendientes se cancelarían al desconectar o cambiar la cuenta:
+  // 'cargando', un número, o null si no se pudo saber (el cartel avisa sin el número).
+  const [pendientesMp, setPendientesMp] = useState('cargando');
+  // Cuántos se cancelaron al desconectar (para el aviso de después).
+  const [canceladosAlDesconectar, setCanceladosAlDesconectar] = useState(0);
 
   useEffect(() => {
     if (menuOpen) { document.body.style.overflow = 'hidden' } else { document.body.style.overflow = '' }
@@ -123,13 +128,16 @@ export default function PerfilVendedorPage() {
       if (!mp) return;
 
       // 'cambio' viene solo cuando se conectó OTRA cuenta de MercadoPago.
+      // 'cancelados' viene cuando se cancelaron pedidos pendientes de la cuenta anterior.
+      const cancelados = Number(params.get('cancelados'));
       setResultadoMp(mp === 'exito'
-        ? { ok: true, cambio: params.get('cambio') === '1' }
+        ? { ok: true, cambio: params.get('cambio') === '1', cancelados: Number.isInteger(cancelados) && cancelados > 0 ? cancelados : 0 }
         : { ok: false, motivo: params.get('motivo') });
 
       params.delete('mp');
       params.delete('motivo');
       params.delete('cambio');
+      params.delete('cancelados');
       const query = params.toString();
       window.history.replaceState({}, '', window.location.pathname + (query ? '?' + query : ''));
     }
@@ -251,6 +259,32 @@ export default function PerfilVendedorPage() {
     }
   }
 
+  // Vuelve a pedir la cuenta justo antes de mostrar un cartel: la cantidad de
+  // pedidos pendientes cambia mientras el panel está abierto.
+  async function revisarPendientes() {
+    setPendientesMp('cargando');
+    try {
+      const res = await fetch('/api/mercadopago/cuenta');
+      const cuenta = res.ok ? await res.json() : null;
+      if (cuenta?.conectada) setCuentaMp(cuenta);
+      setPendientesMp(Number.isInteger(cuenta?.pendientes) ? cuenta.pendientes : null);
+    } catch (err) {
+      console.error('No se pudieron contar los pedidos pendientes:', err);
+      setPendientesMp(null);
+    }
+  }
+
+  function abrirDesconexion() {
+    setErrorDesconexion(null);
+    setConfirmarDesconexion(true);
+    revisarPendientes();
+  }
+
+  function abrirAntesDeConectar() {
+    setAntesDeConectar(true);
+    if (mpConectado) revisarPendientes();
+  }
+
   async function desconectarMercadoPago() {
     setDesconectando(true);
     setErrorDesconexion(null);
@@ -264,7 +298,9 @@ export default function PerfilVendedorPage() {
       }
 
       setMpConectado(false);
+      setCuentaMp(null);
       setConfirmarDesconexion(false);
+      setCanceladosAlDesconectar(Number(datos.pedidosCancelados) || 0);
       setAvisoDesconectado(true);
     } catch {
       setErrorDesconexion('No pudimos conectarnos con el servidor. Revisá tu conexión y probá de nuevo.');
@@ -438,6 +474,13 @@ export default function PerfilVendedorPage() {
                   Ya podés recibir el dinero de tus ventas en tu cuenta.
                   {resultadoMp.cambio && ' Como cambiaste de cuenta, te mandamos un mail con el detalle.'}
                 </p>
+                {resultadoMp.cancelados > 0 && (
+                  <p className="text-[13px] text-emerald-700 font-light mt-1 mb-0 leading-relaxed">
+                    {resultadoMp.cancelados === 1
+                      ? 'Se canceló 1 pedido pendiente de pago de la cuenta anterior y le avisamos a quien compró.'
+                      : `Se cancelaron ${resultadoMp.cancelados} pedidos pendientes de pago de la cuenta anterior y les avisamos a los compradores.`}
+                  </p>
+                )}
               </div>
             )}
 
@@ -476,7 +519,7 @@ export default function PerfilVendedorPage() {
                           ¿No es la que querías?{' '}
                           <button
                             type="button"
-                            onClick={() => setAntesDeConectar(true)}
+                            onClick={abrirAntesDeConectar}
                             className="text-[#0a0a0a]/50 underline underline-offset-2 hover:text-[#0a0a0a]/80 transition-colors cursor-pointer bg-transparent border-none p-0 text-[11px] font-light"
                           >
                             Cambiar de cuenta
@@ -490,7 +533,7 @@ export default function PerfilVendedorPage() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => { setErrorDesconexion(null); setConfirmarDesconexion(true); }}
+                    onClick={abrirDesconexion}
                     className="mt-3 text-[11px] text-[#0a0a0a]/30 font-light underline underline-offset-2 hover:text-[#0a0a0a]/60 transition-colors cursor-pointer bg-transparent border-none p-0"
                   >
                     Desconectar cuenta
@@ -508,8 +551,15 @@ export default function PerfilVendedorPage() {
                         Desconectamos tu cuenta de MercadoPago.
                       </p>
                       <p className="text-[11px] text-[#0a0a0a]/40 font-light mt-1 mb-0 leading-relaxed">
-                        Hasta que la vuelvas a conectar no vas a poder cobrar ventas por la plataforma. Tus productos siguen publicados.
+                        Tus productos siguen publicados pero nadie va a poder pagarlos hasta que vincules una cuenta de nuevo.
                       </p>
+                      {canceladosAlDesconectar > 0 && (
+                        <p className="text-[11px] text-[#0a0a0a]/40 font-light mt-1 mb-0 leading-relaxed">
+                          {canceladosAlDesconectar === 1
+                            ? 'Se canceló 1 pedido pendiente de pago y le avisamos a quien compró.'
+                            : `Se cancelaron ${canceladosAlDesconectar} pedidos pendientes de pago y les avisamos a los compradores.`}
+                        </p>
+                      )}
                     </div>
                   )}
                   <p className="text-sm text-[#0a0a0a]/30 font-light mb-4 leading-relaxed">
@@ -517,7 +567,7 @@ export default function PerfilVendedorPage() {
                   </p>
                   <button
                     type="button"
-                    onClick={() => setAntesDeConectar(true)}
+                    onClick={abrirAntesDeConectar}
                     className="inline-block bg-[#009ee3] text-white border-none cursor-pointer hover:bg-[#008dd0] transition-colors"
                     style={{ fontFamily: "'Inter', sans-serif", fontWeight: 500, fontSize: '14px', borderRadius: '4px', padding: '14px 28px' }}
                   >
@@ -555,6 +605,15 @@ export default function PerfilVendedorPage() {
                 <p className="text-sm text-[#0a0a0a]/60 font-light leading-relaxed mt-3 mb-0">
                   Hoy tenés conectada <span className="text-[#0a0a0a]">{cuentaMp.nickname || 'una cuenta sin nombre'}</span> (N° {cuentaMp.id}).
                   Si conectás otra, el dinero de tus ventas nuevas va a la cuenta nueva.
+                </p>
+              )}
+              {mpConectado && cuentaMp && pendientesMp !== 'cargando' && pendientesMp !== 0 && (
+                <p className="text-sm text-[#0a0a0a]/60 font-light leading-relaxed mt-3 mb-0">
+                  {pendientesMp === null
+                    ? 'Si conectás otra cuenta, los pedidos pendientes de pago se van a cancelar y los compradores van a recibir un aviso de que su pedido ya no se puede pagar.'
+                    : pendientesMp === 1
+                      ? 'Si conectás otra cuenta, tu pedido pendiente de pago se va a cancelar y quien compró va a recibir un aviso de que su pedido ya no se puede pagar.'
+                      : `Si conectás otra cuenta, tus ${pendientesMp} pedidos pendientes de pago se van a cancelar y los compradores van a recibir un aviso de que su pedido ya no se puede pagar.`}
                 </p>
               )}
             </div>
@@ -595,14 +654,33 @@ export default function PerfilVendedorPage() {
             </div>
 
             <div className="px-6 py-4">
-              <p className="text-sm text-[#0a0a0a]/60 font-light leading-relaxed m-0">
-                Si desconectás tu cuenta vas a dejar de poder cobrar tus ventas a través de Bahía Shops.
-                Tus productos siguen publicados, pero nadie va a poder pagarlos por la plataforma.
-                Los links de pago que alguien tenía abiertos vencen solos a las 2 horas, y los pagos en efectivo en proceso se acreditan igual en esta cuenta.
-              </p>
-              <p className="text-sm text-[#0a0a0a]/60 font-light leading-relaxed mt-3 mb-0">
-                Para volver a cobrar vas a tener que vincular tu cuenta de MercadoPago de nuevo.
-              </p>
+              {pendientesMp === 'cargando' ? (
+                <p className="text-sm text-[#0a0a0a]/40 font-light leading-relaxed m-0">
+                  Revisando tus pedidos pendientes…
+                </p>
+              ) : pendientesMp === 0 ? (
+                <p className="text-sm text-[#0a0a0a]/60 font-light leading-relaxed m-0">
+                  Tus productos siguen publicados pero nadie va a poder pagarlos hasta que vincules una cuenta de nuevo.
+                </p>
+              ) : (
+                <>
+                  <p className="text-sm text-[#0a0a0a]/60 font-light leading-relaxed m-0">
+                    {pendientesMp === null
+                      ? 'Si tenés pedidos pendientes de pago y desconectás ahora:'
+                      : `Tenés ${pendientesMp === 1 ? '1 pedido pendiente' : `${pendientesMp} pedidos pendientes`} de pago. Si desconectás ahora:`}
+                  </p>
+                  <ul className="text-sm text-[#0a0a0a]/60 font-light leading-relaxed mt-2 mb-0 pl-5 list-disc">
+                    <li>
+                      {pendientesMp === 1
+                        ? 'Ese pedido se va a cancelar y quien compró va a recibir un aviso de que su pedido ya no se puede pagar.'
+                        : 'Esos pedidos se van a cancelar y los compradores van a recibir un aviso de que su pedido ya no se puede pagar.'}
+                    </li>
+                    <li className="mt-1">
+                      Tus productos siguen publicados pero nadie va a poder pagarlos hasta que vincules una cuenta de nuevo.
+                    </li>
+                  </ul>
+                </>
+              )}
 
               {errorDesconexion && (
                 <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
@@ -623,12 +701,12 @@ export default function PerfilVendedorPage() {
               <button
                 type="button"
                 onClick={desconectarMercadoPago}
-                disabled={desconectando}
+                disabled={desconectando || pendientesMp === 'cargando'}
                 className={`px-5 py-2.5 border-none rounded-full text-white text-sm font-medium transition-colors ${
-                  desconectando ? 'bg-[#0a0a0a]/30 cursor-not-allowed' : 'bg-[#dc2626] cursor-pointer hover:bg-[#b91c1c]'
+                  desconectando || pendientesMp === 'cargando' ? 'bg-[#0a0a0a]/30 cursor-not-allowed' : 'bg-[#dc2626] cursor-pointer hover:bg-[#b91c1c]'
                 }`}
               >
-                {desconectando ? 'Desconectando...' : 'Sí, desconectar'}
+                {desconectando ? 'Desconectando...' : pendientesMp === 0 ? 'Desconectar' : 'Desconectar y cancelar pedidos'}
               </button>
             </div>
           </div>

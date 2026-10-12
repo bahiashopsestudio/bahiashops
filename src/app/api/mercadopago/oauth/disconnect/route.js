@@ -2,11 +2,16 @@
 //
 // El vendedor NUNCA viaja en el request: se resuelve desde la sesión. Así no
 // hay forma de pedir la desconexión de una cuenta ajena.
+//
+// Desconectar cancela los pedidos pendientes de pago de la tienda (motivo
+// cuenta_mp_cambiada) y le avisa a cada persona que compró: sus links cobran
+// para esta cuenta, y sin su token ningún pago ahí se podría confirmar. El
+// panel lo advierte antes, con la cantidad (/api/mercadopago/cuenta).
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
-import { contarPagosEnProceso } from '@/lib/mercadopago/cuenta';
+import { cancelarPendientesPorCuentaMp } from '@/lib/mercadopago/cuenta';
 import { enviarMailCuentaMp } from '@/lib/mailsCuentaMp';
 
 export async function POST() {
@@ -24,7 +29,7 @@ export async function POST() {
   // 2. ¿Qué vendedor es? Sale de la sesión, no de lo que mande el cliente.
   const { data: vendedor } = await supabase
     .from('vendedores')
-    .select('id, nombre_negocio')
+    .select('id, nombre_negocio, slug')
     .eq('usuario_id', user.id)
     .maybeSingle();
 
@@ -40,25 +45,24 @@ export async function POST() {
     process.env.SUPABASE_SERVICE_ROLE_KEY
   );
 
-  // 3a. Qué cuenta se va a desconectar y cuántos pagos en efectivo siguen en
-  // camino (para el mail). Desconectar no cancela ningún pedido: una venta
-  // existe solo cuando se paga, y los links sin usar vencen solos a las 2 horas.
-  // Es mejor esfuerzo: si algo falla, la desconexión sigue igual (es lo que la
-  // persona pidió).
+  // 3a. Qué cuenta se va a desconectar (para el mail) y su token, que hace
+  // falta para vencer los links de los pedidos que se cancelen: después del
+  // borrado ya no está en la base. Es mejor esfuerzo: si la lectura falla, la
+  // desconexión sigue igual (es lo que la persona pidió) y los pedidos se
+  // cancelan igual, sin vencer los links.
   let cuentaAnterior = null;
-  let pagosEnProceso = 0;
+  let tokenViejo = null;
   try {
     const { data: previa } = await admin
       .from('mercadopago_cuentas')
-      .select('mp_user_id, mp_nickname')
+      .select('mp_user_id, mp_nickname, access_token')
       .eq('vendedor_id', vendedor.id)
       .maybeSingle();
 
     if (previa) {
       const id = previa.mp_user_id === null || previa.mp_user_id === undefined ? '' : String(previa.mp_user_id).trim();
       cuentaAnterior = id ? { id, nickname: previa.mp_nickname || null } : null;
-
-      pagosEnProceso = await contarPagosEnProceso(admin, vendedor.id);
+      tokenViejo = previa.access_token || null;
     }
   } catch (err) {
     console.error('Desconexión de MP: no se pudo leer la cuenta anterior de la tienda', vendedor.id, '|', err?.message || err);
@@ -68,6 +72,8 @@ export async function POST() {
   //    El orden importa: si se cayera en el medio, preferimos quedar con
   //    "conectado: true" y sin tokens (se ve mal pero no guarda nada) antes
   //    que con "conectado: false" y los tokens todavía en la base.
+  //    Y se borra ANTES de cancelar los pendientes: sin la cuenta, nadie puede
+  //    crear un pedido nuevo con ella mientras se cancelan los que había.
   const { data: borradas, error: errorBorrado } = await admin
     .from('mercadopago_cuentas')
     .delete()
@@ -92,6 +98,15 @@ export async function POST() {
     // Los tokens ya no están, así que no se puede cobrar con esta cuenta:
     // la desconexión real ya ocurrió. Lo que quedó mal es el cartel.
     console.error('Tokens borrados pero no se pudo apagar el flag del vendedor', vendedor.id, errorFlag.message);
+  }
+
+  // 5. Cancelar los pendientes y avisar a quienes compraron. Corre aunque no
+  // hubiera ninguna cuenta guardada (por ejemplo, si tocó desconectar dos veces
+  // y la primera vez falló la cancelación): sin cuenta, ningún pendiente se
+  // puede pagar. Nunca lanza.
+  const { cancelados } = await cancelarPendientesPorCuentaMp({ admin, vendedor, tokenViejo });
+
+  if (errorFlag) {
     return NextResponse.json(
       { error: 'Desconectamos tu cuenta, pero no pudimos actualizar el estado. Recargá la página.' },
       { status: 500 }
@@ -106,7 +121,7 @@ export async function POST() {
       tipo: 'desconexion',
       tienda: vendedor.nombre_negocio,
       anterior: cuentaAnterior,
-      pagosEnProceso,
+      cancelados,
     });
   }
 
@@ -115,6 +130,7 @@ export async function POST() {
     // false cuando no había ninguna conexión guardada (por ejemplo, si tocó
     // desconectar dos veces): igual dejamos todo consistente.
     habiaConexion: (borradas?.length ?? 0) > 0,
+    pedidosCancelados: cancelados,
     mensaje: 'Desconectamos tu cuenta de MercadoPago.',
   });
 }

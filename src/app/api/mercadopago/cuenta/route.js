@@ -4,11 +4,13 @@
 // Por qué una ruta: mercadopago_cuentas guarda los tokens y el navegador no la
 // puede leer. Acá la tienda sale de la sesión (nunca de un parámetro) y solo
 // viaja lo que se puede mostrar: el nombre y el número de la cuenta, desde
-// cuándo está conectada y cuándo vence el permiso. Nunca los tokens.
+// cuándo está conectada, cuándo vence el permiso y cuántos pedidos pendientes
+// se cancelarían si la desconectara o cambiara (para el cartel). Nunca los tokens.
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getServiceRoleClient } from '@/lib/supabase/admin';
+import { contarPendientesPorCuentaMp } from '@/lib/mercadopago/cuenta';
 
 const MS_POR_DIA = 24 * 60 * 60 * 1000;
 
@@ -55,5 +57,7 @@ export async function GET() {
     nickname: cuenta.mp_nickname || null,
     conectado_en: cuenta.conectado_en || null,
     dias_restantes: Number.isFinite(vence) ? Math.floor((vence - Date.now()) / MS_POR_DIA) : null,
+    // null si no se pudo contar: el cartel avisa sin el número.
+    pendientes: await contarPendientesPorCuentaMp(admin, vendedor.id),
   });
 }
