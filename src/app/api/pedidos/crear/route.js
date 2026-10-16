@@ -11,6 +11,7 @@ import { zonasPara } from '@/lib/zonaEnvio';
 import { codigoPostalValido, normalizarCodigoPostal } from '@/lib/direcciones';
 import { normalizarTelefonoAR } from '@/lib/telefono';
 import { datosContactoComprador } from '@/lib/contactoComprador';
+import { CAMPOS_COMPRA_RECIENTE, VENTANA_COMPRA_RECIENTE_MS, compraEnCursoDeLaTienda } from '@/lib/compraReciente';
 import { vendedorVendible, mensajeNoVendible, CAMPOS_VENDIBLE, MOTIVOS_NO_VENDIBLE, MENSAJE_NO_RECIBE_PEDIDOS } from '@/lib/vendedorVendible';
 
 export async function POST(request) {
@@ -37,6 +38,9 @@ export async function POST(request) {
     vendedorId, items, metodoEnvio,
     direccionId, turnoPreferido,
     costoEnvio: costoEnvioVisto,
+    // La persona vio el aviso de que ya tiene una compra en curso en esta
+    // tienda y eligió seguir igual (paso 2b).
+    confirmarOtraCompra,
   } = body;
   // La zona del correo ya no la elige quien compra: si una pestaña vieja la
   // manda, se ignora. La calcula el servidor (paso 3d).
@@ -52,6 +56,36 @@ export async function POST(request) {
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.SUPABASE_SERVICE_ROLE_KEY
   );
+
+  // 2b. ¿Ya hay una compra en curso de esta persona en esta tienda? El checkout
+  // avisa al entrar; esto es la segunda barrera (otra pestaña, otro
+  // dispositivo). Puede ser una compra distinta y legítima: con
+  // confirmarOtraCompra se sigue. Si la consulta falla no se frena la compra:
+  // es un aviso, no un control.
+  if (confirmarOtraCompra !== true) {
+    const ahora = Date.now();
+    const { data: recientes, error: errorRecientes } = await admin
+      .from('pedidos')
+      .select(CAMPOS_COMPRA_RECIENTE)
+      .eq('comprador_id', user.id)
+      .eq('vendedor_id', vendedorId)
+      .gte('creado_en', new Date(ahora - VENTANA_COMPRA_RECIENTE_MS).toISOString());
+    if (errorRecientes) {
+      console.error(`Comprador ${user.id}, tienda ${vendedorId}: no se pudieron leer las compras recientes —`, errorRecientes.message);
+    } else {
+      const enCurso = compraEnCursoDeLaTienda(recientes, vendedorId, ahora);
+      if (enCurso) {
+        return NextResponse.json(
+          {
+            error: 'Ya tenés un pedido de esta tienda en curso.',
+            codigo: 'PEDIDO_EN_CURSO',
+            pedido: { id: enCurso.id, estado: enCurso.estado, creado_en: enCurso.creado_en },
+          },
+          { status: 409 }
+        );
+      }
+    }
+  }
 
   // 3. ¿Esto todavía se puede comprar?
   //

@@ -19,6 +19,10 @@ function PendienteContenido() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [categorias, setCategorias] = useState([])
   const [tiendaPagada, setTiendaPagada] = useState(null)
+  // No se pudo leer el pedido (sesión vencida, error de red): el carrito no se
+  // vació. Se avisa, sin reintentar: el cruce del CarritoProvider lo limpia la
+  // próxima vez que entre con su cuenta.
+  const [sinLeerPedido, setSinLeerPedido] = useState(false)
 
   useEffect(() => {
     if (menuOpen) { document.body.style.overflow = 'hidden' } else { document.body.style.overflow = '' }
@@ -39,8 +43,13 @@ function PendienteContenido() {
   useEffect(() => {
     if (!pedidoId || !/^\d+$/.test(pedidoId)) return
     async function cargarPedido() {
-      const { data } = await supabase.from('pedidos').select('vendedor_id').eq('id', Number(pedidoId)).maybeSingle()
-      if (data?.vendedor_id) setTiendaPagada(data.vendedor_id)
+      try {
+        const { data } = await supabase.from('pedidos').select('vendedor_id').eq('id', Number(pedidoId)).maybeSingle()
+        if (data?.vendedor_id) setTiendaPagada(data.vendedor_id)
+        else setSinLeerPedido(true)
+      } catch {
+        setSinLeerPedido(true)
+      }
     }
     cargarPedido()
   }, [pedidoId])
@@ -135,6 +144,14 @@ function PendienteContenido() {
                   </p>
                 </div>
               </>
+            )}
+
+            {sinLeerPedido && (
+              <div className="bg-amber-50 rounded-2xl p-4 text-left -mt-4 mb-8">
+                <p className="text-sm text-amber-900 font-light leading-relaxed m-0">
+                  Recibimos tu pedido, pero no pudimos actualizar el carrito. Si tu carrito sigue lleno, no te preocupes: se va a limpiar solo la próxima vez que entres con tu cuenta.
+                </p>
+              </div>
             )}
 
             <button

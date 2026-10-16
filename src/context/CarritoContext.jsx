@@ -2,6 +2,8 @@
 
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { sinElLocal, guardarCarrito } from '@/lib/carrito';
+import { comprasRecientes, sinLoYaComprado } from '@/lib/compraReciente';
+import { createClient } from '@/lib/supabase/client';
 
 const CarritoContext = createContext(null);
 
@@ -24,6 +26,30 @@ export function CarritoProvider({ children }) {
     setListo(true);
   }, []);
 
+  // Respaldo del vaciado de /compra/exito y /compra/pendiente: si la persona no
+  // volvió de MercadoPago (cerró la pestaña, pagó desde otro dispositivo, se le
+  // venció la sesión), lo que ya compró sigue acá. Con sesión, se cruza contra
+  // sus pedidos recientes y sale (src/lib/compraReciente.js). Corre al cargar y
+  // al iniciar sesión. Sin sesión no consulta nada.
+  useEffect(() => {
+    if (!listo) return;
+    const supabase = createClient();
+    let vigente = true;
+    async function cruzar() {
+      const ahora = Date.now();
+      const pedidos = await comprasRecientes(supabase, ahora);
+      if (vigente && pedidos) setLocales((actual) => sinLoYaComprado(actual, pedidos, ahora));
+    }
+    const { data } = supabase.auth.onAuthStateChange((evento) => {
+      // Fuera del aviso: supabase-js no deja llamarse a sí mismo desde adentro.
+      if (evento === 'INITIAL_SESSION' || evento === 'SIGNED_IN') setTimeout(cruzar, 0);
+    });
+    return () => {
+      vigente = false;
+      data?.subscription?.unsubscribe();
+    };
+  }, [listo]);
+
   // Cada vez que cambia, lo vuelve a guardar (para que no se pierda al recargar).
   // Vacío no se guarda nada: la clave se borra.
   useEffect(() => {
@@ -31,7 +57,10 @@ export function CarritoProvider({ children }) {
   }, [locales, listo]);
 
   // Agrega un producto al local que corresponde. Nunca borra otros locales.
+  // agregadoEn: cuándo se eligió por última vez. Con eso, el cruce contra los
+  // pedidos saca solo lo que estaba antes de una compra, no lo que vino después.
   function agregar(producto, vendedor) {
+    const agregadoEn = Date.now();
     setLocales((actual) => {
       const copia = actual.map((l) => ({ ...l, items: [...l.items] }));
       let local = copia.find((l) => l.vendedorId === vendedor.id);
@@ -43,9 +72,9 @@ export function CarritoProvider({ children }) {
 
       const i = local.items.findIndex((it) => it.productoId === producto.productoId);
       if (i >= 0) {
-        local.items[i] = { ...local.items[i], cantidad: local.items[i].cantidad + producto.cantidad };
+        local.items[i] = { ...local.items[i], cantidad: local.items[i].cantidad + producto.cantidad, agregadoEn };
       } else {
-        local.items.push(producto);
+        local.items.push({ ...producto, agregadoEn });
       }
       return copia;
     });

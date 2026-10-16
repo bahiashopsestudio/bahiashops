@@ -18,6 +18,8 @@ import VolverAtras from '@/components/VolverAtras'
 import FormularioDireccion from '@/components/FormularioDireccion'
 import { rutaInterna } from '@/lib/rutas'
 import { normalizarTelefonoAR, separarTelefonoAR, formatearTelefonoAR } from '@/lib/telefono'
+import { CAMPOS_COMPRA_RECIENTE, VENTANA_COMPRA_RECIENTE_MS, compraEnCursoDeLaTienda } from '@/lib/compraReciente'
+import { fechaDeCupon } from '@/lib/vencimientoPago'
 
 const MENU_CATEGORIAS = [
   'moda', 'belleza-y-bienestar', 'joyeria-y-accesorios',
@@ -107,6 +109,11 @@ function CheckoutContenido() {
   // Aviso de que cambió un precio o el envío: no es un error, es que hay que
   // volver a mirar los números.
   const [avisoPrecios, setAvisoPrecios] = useState('')
+  // Una compra en curso de esta misma tienda (src/lib/compraReciente.js): se
+  // avisa antes de dejar pagar otra. Puede ser una compra distinta y legítima:
+  // con "Seguir con esta compra" se sigue, y el servidor ya no frena.
+  const [compraPrevia, setCompraPrevia] = useState(null)
+  const [seguirIgual, setSeguirIgual] = useState(false)
 
   // Lo que la tienda configuró: métodos, precios y si muestra su dirección
   // (si no, el retiro se coordina con ella).
@@ -228,6 +235,17 @@ function CheckoutContenido() {
         const principal = dirs.find((d) => d.es_principal)
         setDireccionElegida(principal ? principal.id : dirs[0].id)
       }
+
+      // La policy deja leer sólo los pedidos propios. Si falla, no hay aviso:
+      // el servidor lo vuelve a mirar antes de crear el pedido.
+      const ahora = Date.now()
+      const { data: recientes } = await supabase
+        .from('pedidos')
+        .select(CAMPOS_COMPRA_RECIENTE)
+        .eq('comprador_id', user.id)
+        .eq('vendedor_id', vendedorId)
+        .gte('creado_en', new Date(ahora - VENTANA_COMPRA_RECIENTE_MS).toISOString())
+      setCompraPrevia(compraEnCursoDeLaTienda(recientes, vendedorId, ahora))
 
       await cargarVendedor()
       setCargando(false)
@@ -381,9 +399,19 @@ function CheckoutContenido() {
           // La preferencia de turno sólo existe en los métodos que la piden.
           turnoPreferido: METODOS[elegido]?.pideTurno ? turno : null,
           costoEnvio,
+          confirmarOtraCompra: seguirIgual,
         }),
       })
       const data = await res.json()
+
+      // Apareció una compra en curso de esta tienda (otra pestaña, otro
+      // dispositivo): el mismo aviso que al entrar.
+      if (data?.codigo === 'PEDIDO_EN_CURSO') {
+        setCompraPrevia(data.pedido || { id: null })
+        setSeguirIgual(false)
+        setPagando(false)
+        return
+      }
 
       // El servidor tiene la última palabra: si algo dejó de estar disponible
       // entre que entramos y apretamos pagar, se muestra la misma pantalla.
@@ -487,6 +515,65 @@ function CheckoutContenido() {
             <button onClick={() => router.push('/carrito')} className="mt-4 bg-[#0a0a0a] text-white px-6 py-3 rounded-full text-sm font-medium hover:bg-[#2a2a2a] transition cursor-pointer">
               Volver al carrito
             </button>
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  // ═══ YA HAY UNA COMPRA EN CURSO DE ESTA TIENDA ═══
+  // Reemplaza al checkout hasta que la persona elige: ver lo que ya compró o
+  // seguir con esta compra (puede ser otra cosa).
+  if (compraPrevia && !seguirIgual) {
+    const tiendaPrevia = local.vendedorNombre || 'esta tienda'
+    const fecha = fechaDeCupon(compraPrevia.creado_en)
+    const enProceso = compraPrevia.estado === 'pendiente'
+    return (
+      <>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&display=swap" />
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,100..900&family=Poppins:wght@300;400;500&display=swap" />
+
+        <div className="min-h-screen bg-white" style={{ fontFamily: "'Inter', sans-serif" }}>
+          {menuOpen && <MenuTakeover categorias={menuCats} onClose={() => setMenuOpen(false)} />}
+          <Navbar onToggleMenu={() => setMenuOpen(!menuOpen)} variant="solid" />
+
+          <div className="pt-20 pb-24 px-4 md:px-8">
+            <div className="max-w-xl mx-auto">
+              <VolverAtras href="/carrito" texto="Volver al carrito" />
+
+              <h1 className="text-[24px] md:text-[28px]" style={{ fontFamily: 'Fraunces, serif', fontWeight: 500, color: '#0a0a0a', marginTop: '8px', marginBottom: '8px' }}>
+                Ya tenés un pedido de esta tienda en curso
+              </h1>
+              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 300, fontSize: '14px', color: 'rgba(10,10,10,0.5)', lineHeight: 1.7, marginBottom: '24px' }}>
+                {enProceso
+                  ? `${fecha ? `El ${fecha} ` : 'Hace poco '}empezaste una compra en ${tiendaPrevia} y el pago está en proceso.`
+                  : `${fecha ? `El ${fecha} ` : 'Hace poco '}compraste en ${tiendaPrevia}.`}
+                {' '}Si es una compra distinta, podés seguir igual.
+              </p>
+
+              {compraPrevia.id && (
+                <p className="text-sm text-[#0a0a0a]/30 font-light mb-6">Pedido #{compraPrevia.id}</p>
+              )}
+
+              <div className="flex gap-3 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => router.push('/mis-pedidos')}
+                  className="bg-[#0a0a0a] text-white border border-[#0a0a0a] hover:bg-transparent hover:text-[#0a0a0a] transition-colors cursor-pointer"
+                  style={{ fontFamily: "'Inter', sans-serif", fontWeight: 500, fontSize: '14px', borderRadius: '4px', padding: '14px 28px' }}
+                >
+                  Ver mis compras
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSeguirIgual(true)}
+                  className="bg-white text-[#0a0a0a] border border-[#0a0a0a]/15 hover:border-[#0a0a0a] transition-colors cursor-pointer"
+                  style={{ fontFamily: "'Inter', sans-serif", fontWeight: 500, fontSize: '14px', borderRadius: '4px', padding: '14px 28px' }}
+                >
+                  Seguir con esta compra
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </>
