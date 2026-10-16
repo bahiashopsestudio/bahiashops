@@ -16,6 +16,22 @@ function IconoTienda() {
   )
 }
 
+function IconoBandera() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v1.5M3 21v-6m0 0 2.77-.693a9 9 0 0 1 6.208.682l.108.054a9 9 0 0 0 6.086.71l3.114-.732a48.524 48.524 0 0 1-.005-10.499l-3.11.732a9 9 0 0 1-6.085-.711l-.108-.054a9 9 0 0 0-6.208-.682L3 4.5M3 15V4.5" />
+    </svg>
+  )
+}
+
+// Los colores de las etiquetas de las tarjetas: [fondo, texto].
+const BADGES = {
+  rojo: ['#cc152b', '#ffffff'],
+  naranja: ['#fbe8da', '#8a3410'],
+  azul: ['#e8ecff', '#2a3fb8'],
+  proximamente: ['rgba(10,10,10,0.06)', 'rgba(10,10,10,0.35)'],
+}
+
 function IconoCheck() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}>
@@ -64,7 +80,9 @@ function IconoUsuario() {
   )
 }
 
-function Tarjeta({ href, disabled, icono, iconoFondo, iconoColor, titulo, desc, badge, badgeTipo, flecha }) {
+//   borde  color del borde cuando hay algo pendiente
+//   nota   una línea azul debajo de la descripción
+function Tarjeta({ href, disabled, icono, iconoFondo, iconoColor, titulo, desc, badge, badgeTipo, flecha, borde, nota }) {
   const [hover, setHover] = useState(false)
 
   const contenido = (
@@ -76,7 +94,7 @@ function Tarjeta({ href, disabled, icono, iconoFondo, iconoColor, titulo, desc, 
         backgroundColor: '#ffffff',
         borderRadius: '10px',
         padding: '28px',
-        border: `1px solid ${hover && !disabled ? 'rgba(10,10,10,0.12)' : 'rgba(10,10,10,0.06)'}`,
+        border: `1px solid ${borde || (hover && !disabled ? 'rgba(10,10,10,0.12)' : 'rgba(10,10,10,0.06)')}`,
         boxShadow: hover && !disabled ? '0 2px 12px rgba(10,10,10,0.04)' : 'none',
         minHeight: '160px',
         display: 'flex',
@@ -96,8 +114,8 @@ function Tarjeta({ href, disabled, icono, iconoFondo, iconoColor, titulo, desc, 
             fontSize: '11px',
             fontWeight: 500,
             padding: '3px 10px',
-            backgroundColor: badgeTipo === 'rojo' ? '#cc152b' : badgeTipo === 'proximamente' ? 'rgba(10,10,10,0.06)' : 'rgba(10,10,10,0.06)',
-            color: badgeTipo === 'rojo' ? '#ffffff' : badgeTipo === 'proximamente' ? 'rgba(10,10,10,0.35)' : 'rgba(10,10,10,0.5)',
+            backgroundColor: (BADGES[badgeTipo] || ['rgba(10,10,10,0.06)'])[0],
+            color: (BADGES[badgeTipo] || [null, 'rgba(10,10,10,0.5)'])[1],
           }}
         >
           {badge}
@@ -126,6 +144,11 @@ function Tarjeta({ href, disabled, icono, iconoFondo, iconoColor, titulo, desc, 
       <p style={{ fontFamily: "'Inter', sans-serif", fontSize: '12px', fontWeight: 300, color: 'rgba(10,10,10,0.5)', lineHeight: 1.5, flex: 1 }}>
         {desc}
       </p>
+      {nota && (
+        <p style={{ fontFamily: "'Inter', sans-serif", fontSize: '12px', fontWeight: 500, color: '#2a3fb8', marginTop: '8px' }}>
+          {nota}
+        </p>
+      )}
       <p style={{ fontFamily: "'Inter', sans-serif", fontSize: '12px', fontWeight: 400, color: disabled ? 'rgba(10,10,10,0.25)' : 'rgba(10,10,10,0.3)', marginTop: '14px' }}>
         {flecha}
       </p>
@@ -207,6 +230,8 @@ export default function AdminDashboard() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [categorias, setCategorias] = useState([])
   const [pendientesModeracion, setPendientesModeracion] = useState(0)
+  const [revisarDespues, setRevisarDespues] = useState(0)
+  const [denunciasPendientes, setDenunciasPendientes] = useState(0)
   const [vendedoresNuevos, setVendedoresNuevos] = useState(0)
   const [errorConteo, setErrorConteo] = useState('')
   const [tesorosActivos, setTesorosActivos] = useState(0)
@@ -250,13 +275,27 @@ export default function AdminDashboard() {
       try {
         const resModeracion = await fetch('/api/admin/moderacion?conteo=1')
         if (resModeracion.ok) {
-          const { total } = await resModeracion.json()
+          const { total, revisar_despues } = await resModeracion.json()
           setPendientesModeracion(total || 0)
+          setRevisarDespues(revisar_despues || 0)
         } else {
           console.error('No se pudo contar la cola de moderación', resModeracion.status)
         }
       } catch (err) {
         console.error('No se pudo contar la cola de moderación', err)
+      }
+
+      // Productos con denuncias pendientes (la tabla solo la lee el servidor).
+      try {
+        const resDenuncias = await fetch('/api/admin/denuncias?conteo=1')
+        if (resDenuncias.ok) {
+          const { total } = await resDenuncias.json()
+          setDenunciasPendientes(total || 0)
+        } else {
+          console.error('No se pudieron contar las denuncias', resDenuncias.status)
+        }
+      } catch (err) {
+        console.error('No se pudieron contar las denuncias', err)
       }
 
       // El badge cuenta altas nuevas, no pendientes: desde que las tiendas se
@@ -361,6 +400,30 @@ export default function AdminDashboard() {
             style={{ paddingBottom: '100px', gap: '16px' }}
           >
             <Tarjeta
+              href={pendientesModeracion === 0 && revisarDespues > 0 ? '/admin/moderacion?pestana=revisar' : '/admin/moderacion'}
+              icono={<IconoCheck />}
+              iconoFondo="#fce4e4"
+              iconoColor="#cc152b"
+              titulo="Moderación"
+              desc="Productos esperando tu revisión. Aprobar, rechazar, pedir cambios."
+              badge={pendientesModeracion > 0 ? `${pendientesModeracion} ${pendientesModeracion === 1 ? 'nuevo' : 'nuevos'}` : null}
+              badgeTipo="azul"
+              nota={revisarDespues > 0 ? `${revisarDespues} para revisar después` : null}
+              flecha="Ir al panel →"
+            />
+            <Tarjeta
+              href="/admin/denuncias"
+              icono={<IconoBandera />}
+              iconoFondo="#fbe8da"
+              iconoColor="#8a3410"
+              titulo="Denuncias"
+              desc="Productos que denunció la gente."
+              badge={denunciasPendientes > 0 ? `${denunciasPendientes} ${denunciasPendientes === 1 ? 'nueva' : 'nuevas'}` : null}
+              badgeTipo="naranja"
+              borde={denunciasPendientes > 0 ? '#ecd2bf' : null}
+              flecha="Ver denuncias →"
+            />
+            <Tarjeta
               href="/admin/vendedores"
               icono={<IconoTienda />}
               iconoFondo="#e8d4f0"
@@ -370,17 +433,6 @@ export default function AdminDashboard() {
               badge={vendedoresNuevos > 0 ? `${vendedoresNuevos} ${vendedoresNuevos === 1 ? 'nuevo' : 'nuevos'}` : null}
               badgeTipo="neutro"
               flecha="Ver vendedores →"
-            />
-            <Tarjeta
-              href="/admin/moderacion"
-              icono={<IconoCheck />}
-              iconoFondo="#fce4e4"
-              iconoColor="#cc152b"
-              titulo="Moderación"
-              desc="Productos esperando tu revisión. Aprobar, rechazar, pedir cambios."
-              badge={pendientesModeracion > 0 ? pendientesModeracion : null}
-              badgeTipo="rojo"
-              flecha="Ir al panel →"
             />
             <Tarjeta
               href="/admin/colecciones"

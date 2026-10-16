@@ -86,6 +86,7 @@ function escenario(opciones = {}) {
         eq(c, v) { filtros.push((r) => r[c] === v); return q },
         in(c, vs) { filtros.push((r) => vs.includes(r[c])); return q },
         is(c, v) { filtros.push((r) => (r[c] ?? null) === v); return q },
+        not(c, o, v) { filtros.push((r) => (r[c] ?? null) !== v); return q },
         order() { return q },
         insert(p) { op = 'insert'; payload = p; return q },
         update(p) { op = 'update'; payload = p; return q },
@@ -137,6 +138,14 @@ function escenario(opciones = {}) {
       e.rpc.push({ nombre, args })
       if (e.sinFuncion) return { data: null, error: { code: 'PGRST202', message: 'Could not find the function' } }
       if (e.falla.rpc) return { data: null, error: { code: e.falla.rpc, message: 'falla' } }
+      if (nombre === 'rpc_rechazar_producto') {
+        if (e.sinRechazo) return { data: null, error: { code: 'PGRST202', message: 'Could not find the function' } }
+        const p = e.tablas.productos.find((x) => x.id === args.p_producto_id)
+        if (!p) return { data: { resultado: 'no_existe' }, error: null }
+        if (!['en_revision', 'activo', 'pausado', 'agotado'].includes(p.estado)) return { data: { resultado: 'no_se_puede' }, error: null }
+        Object.assign(p, { estado: 'rechazado', motivo_rechazo: args.p_motivo.trim(), revision_posterior_desde: null })
+        return { data: { resultado: 'rechazado', denuncias_resueltas: 2 }, error: null }
+      }
       const actual = args.p_producto_id ? e.tablas.productos.find((p) => p.id === args.p_producto_id && p.vendedor_id === args.p_vendedor_id) : null
       if (args.p_producto_id && !actual) return { data: null, error: { code: 'P0002', message: 'No encontramos ese producto.' } }
       const aprobado = actual && ['activo', 'pausado', 'agotado'].includes(actual.estado)
@@ -302,13 +311,31 @@ ok(r.status === 403 && prod(11).estado === 'en_revision', 'sin ser admin: 403')
 nuevo({ esAdmin: true })
 r = await moderar(11, { accion: 'aprobar' })
 ok(r.status === 200 && prod(11).estado === 'activo' && prod(11).motivo_rechazo === null, 'aprobar: en_revision -> activo')
-r = await moderar(11, { accion: 'rechazar', motivo: 'Fotos' })
-ok(r.status === 409 && prod(11).estado === 'activo', 'moderar uno que ya no está en la cola: 409')
+r = await moderar(11, { accion: 'aprobar' })
+ok(r.status === 409 && prod(11).estado === 'activo', 'aprobar uno que ya no está en la cola: 409')
 nuevo({ esAdmin: true })
 r = await moderar(11, { accion: 'rechazar', motivo: '  ' })
 ok(r.status === 400 && prod(11).estado === 'en_revision', 'rechazar sin motivo: 400')
 r = await moderar(11, { accion: 'rechazar', motivo: ' Fotos borrosas — mejorá la luz ' })
 ok(r.status === 200 && prod(11).estado === 'rechazado' && prod(11).motivo_rechazo === 'Fotos borrosas — mejorá la luz', 'rechazar: guarda el motivo')
+ok(f.rpc.at(-1)?.nombre === 'rpc_rechazar_producto' && f.rpc.at(-1).args.p_admin_id === 'admin-1', 'rechazar va por rpc_rechazar_producto, con quién lo rechazó')
+r = await moderar(11, { accion: 'rechazar', motivo: 'Otra vez' })
+ok(r.status === 409, 'rechazar uno ya rechazado: 409')
+r = await moderar(10, { accion: 'rechazar', motivo: 'Tiene datos de contacto' })
+ok(r.status === 200 && prod(10).estado === 'rechazado' && r.body.denuncias_resueltas === 2, 'rechazar uno publicado (desde Denuncias o Revisar después): OK, y resuelve sus denuncias')
+r = await moderar(999, { accion: 'rechazar', motivo: 'x' })
+ok(r.status === 404, 'rechazar uno que no existe: 404')
+nuevo({ esAdmin: true, sinRechazo: true })
+r = await moderar(10, { accion: 'rechazar', motivo: 'x' })
+ok(r.status === 409 && prod(10).estado === 'activo', 'sin la 035: no rechaza uno publicado')
+r = await moderar(11, { accion: 'rechazar', motivo: 'Fotos' })
+ok(r.status === 200 && prod(11).estado === 'rechazado' && prod(11).motivo_rechazo === 'Fotos', 'sin la 035: rechaza los de la cola, como antes')
+nuevo({ esAdmin: true })
+prod(10).revision_posterior_desde = '2026-10-10T10:00:00Z'
+r = await moderar(10, { accion: 'dar_por_revisado' })
+ok(r.status === 200 && prod(10).revision_posterior_desde === null && prod(10).estado === 'activo', 'dar por revisado: limpia la marca, el producto sigue publicado')
+r = await moderar(10, { accion: 'dar_por_revisado' })
+ok(r.status === 409, 'dar por revisado uno sin marca: 409')
 r = await moderar(10, { accion: 'destacar' })
 ok(r.status === 400, 'otra acción: 400')
 

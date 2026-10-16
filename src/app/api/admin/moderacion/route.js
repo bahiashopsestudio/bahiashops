@@ -1,7 +1,10 @@
-// La cola de moderación: los productos en revisión, para /admin/moderacion.
+// La moderación de productos, para /admin/moderacion.
 //
-//   GET             -> { productos: [...], total }
-//   GET ?conteo=1   -> { total }  (el número del panel de admin)
+//   GET                -> { productos, total }   "Productos nuevos": en revisión
+//   GET ?vista=revisar -> { productos, total }   "Revisar después": ya aprobados
+//                         que se editaron con avisos (revision_posterior_desde,
+//                         migración 033), con el fragmento que encontró el filtro
+//   GET ?conteo=1      -> { total, revisar_despues }  (los números del panel)
 //
 // Por qué por el servidor: desde el navegador el admin ve el producto (la
 // política "Admin ve todos los productos") pero NO sus fotos ni sus variantes:
@@ -17,9 +20,10 @@
 
 import { NextResponse } from 'next/server'
 import { getServiceRoleClient, verificarAdmin } from '@/lib/supabase/admin'
+import { fragmentosDeAvisos } from '@/lib/fragmentosModeracion'
 
 const COLUMNAS_COLA = `
-  id, nombre, descripcion, precio, precio_anterior, marca,
+  id, nombre, descripcion, precio, precio_anterior, marca, estado,
   propiedad_1_nombre, tiempo_preparacion, categoria_id, moderacion_avisos, creado_en,
   vendedores ( id, nombre_negocio, pausada_en, bloqueado, cerrada_en ),
   producto_media ( url, orden ),
@@ -28,37 +32,32 @@ const COLUMNAS_COLA = `
   categorias!categoria_id ( nombre, slug )
 `
 
-export async function GET(request) {
-  const adminUser = await verificarAdmin()
-  if (!adminUser) return NextResponse.json({ error: 'No autorizado.' }, { status: 403 })
+const sinCerradas = (filas) => (filas || []).filter((p) => !p.vendedores?.cerrada_en)
 
-  const soloConteo = new URL(request.url).searchParams.get('conteo') === '1'
+function nuevos(admin, columnas) {
+  return admin.from('productos').select(columnas).eq('estado', 'en_revision').order('creado_en', { ascending: true })
+}
 
-  const admin = getServiceRoleClient()
-  const { data, error } = await admin
-    .from('productos')
-    .select(soloConteo ? 'id, vendedores ( cerrada_en )' : COLUMNAS_COLA)
-    .eq('estado', 'en_revision')
-    .order('creado_en', { ascending: true })
-  if (error) {
-    console.error('[admin-moderacion/cola]', error.message)
-    return NextResponse.json({ error: 'No se pudo cargar la cola de moderación.' }, { status: 500 })
-  }
+function paraRevisar(admin, columnas) {
+  return admin.from('productos').select(columnas)
+    .not('revision_posterior_desde', 'is', null)
+    .order('revision_posterior_desde', { ascending: true })
+}
 
-  const vigentes = (data || []).filter((p) => !p.vendedores?.cerrada_en)
-  if (soloConteo) return NextResponse.json({ total: vigentes.length })
-
-  const productos = vigentes.map((p) => ({
+function armar(p) {
+  const avisos = Array.isArray(p.moderacion_avisos) ? p.moderacion_avisos : []
+  return {
     id: p.id,
     nombre: p.nombre,
     descripcion: p.descripcion,
     precio: p.precio,
     precio_anterior: p.precio_anterior,
     marca: p.marca,
+    estado: p.estado,
     propiedad_1_nombre: p.propiedad_1_nombre,
     tiempo_preparacion: p.tiempo_preparacion,
     categoria_id: p.categoria_id,
-    moderacion_avisos: Array.isArray(p.moderacion_avisos) ? p.moderacion_avisos : [],
+    moderacion_avisos: avisos,
     creado_en: p.creado_en,
     vendedor: p.vendedores
       ? { id: p.vendedores.id, nombre_negocio: p.vendedores.nombre_negocio, pausada: !!p.vendedores.pausada_en, bloqueado: !!p.vendedores.bloqueado }
@@ -67,7 +66,45 @@ export async function GET(request) {
     variantes: (p.producto_variantes || []).map((v) => v.propiedad_1_valor),
     sellos: (p.producto_sellos || []).map((s) => s.sellos?.nombre).filter(Boolean),
     categoria: p.categorias ? { nombre: p.categorias.nombre, slug: p.categorias.slug } : null,
-  }))
+  }
+}
 
+const fallo = (contexto, error) => {
+  console.error(`[admin-moderacion/${contexto}]`, error.message)
+  return NextResponse.json({ error: 'No se pudo cargar la cola de moderación.' }, { status: 500 })
+}
+
+export async function GET(request) {
+  const adminUser = await verificarAdmin()
+  if (!adminUser) return NextResponse.json({ error: 'No autorizado.' }, { status: 403 })
+
+  const parametros = new URL(request.url).searchParams
+  const admin = getServiceRoleClient()
+
+  if (parametros.get('conteo') === '1') {
+    const [cola, revisar] = await Promise.all([
+      nuevos(admin, 'id, vendedores ( cerrada_en )'),
+      paraRevisar(admin, 'id, vendedores ( cerrada_en )'),
+    ])
+    if (cola.error) return fallo('conteo', cola.error)
+    if (revisar.error) return fallo('conteo-revisar', revisar.error)
+    return NextResponse.json({ total: sinCerradas(cola.data).length, revisar_despues: sinCerradas(revisar.data).length })
+  }
+
+  if (parametros.get('vista') === 'revisar') {
+    const { data, error } = await paraRevisar(admin, `${COLUMNAS_COLA}, revision_posterior_desde, actualizado_en`)
+    if (error) return fallo('revisar', error)
+    const productos = sinCerradas(data).map((p) => ({
+      ...armar(p),
+      revision_posterior_desde: p.revision_posterior_desde,
+      actualizado_en: p.actualizado_en,
+      fragmentos: fragmentosDeAvisos(p, p.moderacion_avisos),
+    }))
+    return NextResponse.json({ productos, total: productos.length })
+  }
+
+  const { data, error } = await nuevos(admin, COLUMNAS_COLA)
+  if (error) return fallo('cola', error)
+  const productos = sinCerradas(data).map(armar)
   return NextResponse.json({ productos, total: productos.length })
 }

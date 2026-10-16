@@ -155,7 +155,8 @@ select jsonb_pretty(jsonb_build_object(
       ('pedidos', '', 'SELECT'), ('pedido_items', '', 'SELECT'),
       ('usuarios', 'SELECT', 'SELECT'), ('vendedores', '', ''),
       ('mercadopago_cuentas', '', ''), ('vendedor_bloqueos', '', ''), ('ideas_admin', '', ''), ('pagos_dobles', '', ''),
-      ('mensajes_contacto', '', ''), ('leads_gastronomia', '', ''), ('envio_zona_fallas', '', ''), ('votos_funciones', '', '')
+      ('mensajes_contacto', '', ''), ('leads_gastronomia', '', ''), ('envio_zona_fallas', '', ''), ('votos_funciones', '', ''),
+      ('denuncias_productos', '', '')
     ),
     hoy as (
       select c.relname as tabla,

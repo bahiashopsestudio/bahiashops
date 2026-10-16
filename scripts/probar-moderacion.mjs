@@ -7,7 +7,9 @@
 //     no puede leer por RLS);
 //   · incluye los de tiendas pausadas o bloqueadas, marcados; no los de una
 //     tienda cerrada;
-//   · ?conteo=1 devuelve el mismo número;
+//   · ?conteo=1 devuelve el mismo número, y cuántos hay para revisar después;
+//   · ?vista=revisar: los ya aprobados marcados (migración 033), con el
+//     fragmento del texto que encontró el filtro;
 //   · si la base falla: 500 con un mensaje (no una cola vacía).
 //
 //   npm run probar:moderacion
@@ -53,6 +55,15 @@ function escenario(opciones = {}) {
         { id: 12, vendedor_id: 3, estado: 'en_revision', nombre: 'Jarra', descripcion: 'Vidrio', precio: 3000, categoria_id: 1, moderacion_avisos: null, creado_en: '2026-10-03' },
         { id: 13, vendedor_id: 4, estado: 'en_revision', nombre: 'Vaso', descripcion: 'Vidrio', precio: 4000, categoria_id: 1, moderacion_avisos: [], creado_en: '2026-10-04' },
         { id: 14, vendedor_id: 1, estado: 'activo', nombre: 'Plato', descripcion: 'Hondo', precio: 5000, categoria_id: 1, moderacion_avisos: [], creado_en: '2026-10-05' },
+        // Ya aprobados, editados con algo dudoso (revisar después).
+        { id: 20, vendedor_id: 1, estado: 'activo', nombre: 'Cucha', descripcion: 'Para tu CACHORRO, también la vendo en Instagram.', precio: 6000, categoria_id: 1,
+          moderacion_avisos: [{ tipo: 'venta_animales', texto: 'cachorro' }, { tipo: 'mencion_redes', texto: 'instagram' }],
+          revision_posterior_desde: '2026-10-08T10:00:00Z', actualizado_en: '2026-10-09T10:00:00Z', creado_en: '2026-09-01' },
+        { id: 21, vendedor_id: 2, estado: 'pausado', nombre: 'Mesa', descripcion: 'Roble', precio: 7000, categoria_id: 1,
+          moderacion_avisos: [{ tipo: 'telefono_dudoso', texto: '12345678' }],
+          revision_posterior_desde: '2026-10-07T10:00:00Z', actualizado_en: '2026-10-07T10:00:00Z', creado_en: '2026-09-02' },
+        { id: 22, vendedor_id: 4, estado: 'activo', nombre: 'Silla', descripcion: 'x', precio: 8000, categoria_id: 1,
+          moderacion_avisos: [], revision_posterior_desde: '2026-10-06T10:00:00Z', creado_en: '2026-09-03' },
       ],
       producto_media: [
         { producto_id: 10, url: 'segunda.webp', orden: 1 }, { producto_id: 10, url: 'principal.webp', orden: 0 },
@@ -73,10 +84,12 @@ function escenario(opciones = {}) {
     from(nombre) {
       const filtros = []
       let columnas = ''
+      let orden = null
       const q = {
         select(c) { columnas = c; return q },
         eq(c, v) { filtros.push((r) => r[c] === v); return q },
-        order() { return q },
+        not(c, o, v) { filtros.push((r) => (r[c] ?? null) !== v); return q },
+        order(c, { ascending } = {}) { orden = { c, ascending }; return q },
       }
       const embeber = (p) => {
         const fila = { ...p }
@@ -93,6 +106,7 @@ function escenario(opciones = {}) {
         e.consultas.push({ tabla: nombre, columnas })
         if (e.falla) return Promise.resolve({ data: null, error: { message: 'se cayó' } }).then(res, rej)
         const filas = (t[nombre] || []).filter((r) => filtros.every((f) => f(r))).map(embeber)
+        if (orden) filas.sort((a, b) => (a[orden.c] < b[orden.c] ? -1 : a[orden.c] > b[orden.c] ? 1 : 0) * (orden.ascending ? 1 : -1))
         return Promise.resolve({ data: filas, error: null }).then(res, rej)
       }
       return q
@@ -104,6 +118,7 @@ function escenario(opciones = {}) {
 const nuevo = (o) => (globalThis.__f = escenario(o))
 const pedir = (query = '') => ({ url: `https://bahiashops.com.ar/api/admin/moderacion${query}` })
 const { GET } = await import('../src/app/api/admin/moderacion/route.js')
+const { fragmentosDeAvisos } = await import('../src/lib/fragmentosModeracion.js')
 
 console.log('1. Quién puede')
 let f = nuevo({ esAdmin: false })
@@ -135,14 +150,37 @@ console.log('\n3. El conteo del panel')
 f = nuevo()
 r = await GET(pedir('?conteo=1'))
 ok(r.status === 200 && r.body.total === 3 && !('productos' in r.body), '?conteo=1: el mismo número que la cola (incluye pausadas y bloqueadas)')
+ok(r.body.revisar_despues === 2, 'y cuántos para revisar después (2: el de la tienda cerrada no)')
 ok(!f.consultas[0].columnas.includes('producto_media'), 'sin traer fotos ni variantes')
 
-console.log('\n4. Si la base falla')
+console.log('\n4. Revisar después')
+f = nuevo()
+r = await GET(pedir('?vista=revisar'))
+ok(r.status === 200 && r.body.productos.map((p) => p.id).join() === '21,20', 'los ya aprobados con marca, del más viejo al más nuevo (sin la tienda cerrada)')
+const cucha = r.body.productos.find((p) => p.id === 20)
+ok(cucha.estado === 'activo' && cucha.actualizado_en === '2026-10-09T10:00:00Z' && cucha.revision_posterior_desde === '2026-10-08T10:00:00Z', 'con su estado y las fechas')
+ok(cucha.fragmentos.length === 2 && cucha.fragmentos[0].resaltado === 'CACHORRO' && cucha.fragmentos[0].campo === 'descripcion', 'el fragmento resaltado, tal como está escrito (mayúsculas)')
+ok(cucha.fragmentos[1].resaltado === 'Instagram' && cucha.fragmentos[1].antes.endsWith('también la vendo en ') && cucha.fragmentos[1].despues === '.', 'con su contexto')
+const mesa = r.body.productos.find((p) => p.id === 21)
+ok(mesa.vendedor.pausada && mesa.fragmentos[0].campo === null, 'si no lo encuentra en el texto: solo la etiqueta (campo null)')
+
+console.log('\n5. El fragmento')
+let fr = fragmentosDeAvisos({ nombre: 'Gatito', descripcion: 'Vendo PERRITOS de raza' }, [{ tipo: 'venta_animales', texto: 'gatito' }])
+ok(fr[0].campo === 'nombre' && fr[0].resaltado === 'Gatito', 'busca también en el nombre')
+fr = fragmentosDeAvisos({ nombre: 'X', descripcion: 'Un pájaro cantor' }, [{ tipo: 'venta_animales', texto: 'pajaro' }])
+ok(fr[0].resaltado === 'pájaro' && fr[0].antes === 'Un ' && fr[0].despues === ' cantor', 'sin distinguir tildes: resalta el original con tilde')
+fr = fragmentosDeAvisos({ nombre: 'X', descripcion: 'a'.repeat(100) + 'instagram' + 'b'.repeat(100) }, [{ tipo: 'mencion_redes', texto: 'instagram' }])
+ok(fr[0].antes.startsWith('…') && fr[0].antes.length === 61 && fr[0].despues.endsWith('…') && fr[0].despues.length === 61, 'recorta el contexto a 60 caracteres, con puntos suspensivos')
+ok(fragmentosDeAvisos({ nombre: 'X' }, null).length === 0 && fragmentosDeAvisos({ nombre: 'X' }, [{ tipo: 'x' }]).length === 0, 'sin avisos (o sin texto): nada')
+
+console.log('\n6. Si la base falla')
 nuevo({ falla: true })
 r = await GET(pedir())
 ok(r.status === 500 && r.body.error === 'No se pudo cargar la cola de moderación.', '500 con un mensaje (el panel lo muestra, no una cola vacía)')
 r = await GET(pedir('?conteo=1'))
 ok(r.status === 500, 'el conteo también')
+r = await GET(pedir('?vista=revisar'))
+ok(r.status === 500 && !!r.body.error, 'y revisar después')
 
 console.log(fallas === 0 ? '\nTODO OK' : `\n${fallas} FALLAS`)
 process.exit(fallas ? 1 : 0)

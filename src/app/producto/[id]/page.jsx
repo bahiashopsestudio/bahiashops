@@ -10,6 +10,7 @@ import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
 import VolverAtras from '@/components/VolverAtras'
 import BotonFavorito from '@/components/BotonFavorito'
+import ModalDenuncia from '@/components/ModalDenuncia'
 
 const MENU_CATEGORIAS = [
   'moda', 'belleza-y-bienestar', 'joyeria-y-accesorios',
@@ -35,6 +36,8 @@ export default function PaginaProducto() {
   const [cargando, setCargando] = useState(true)
   const [noEncontrado, setNoEncontrado] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [usuarioId, setUsuarioId] = useState(null)
+  const [denunciando, setDenunciando] = useState(false)
 
   useEffect(() => {
     if (menuOpen) {
@@ -87,7 +90,7 @@ export default function PaginaProducto() {
 
       const { data: vend } = await supabase
         .from('vendedores')
-        .select('nombre_negocio, slug')
+        .select('nombre_negocio, slug, usuario_id')
         .eq('id', prod.vendedor_id)
         .single()
       if (vend) setVendedor(vend)
@@ -98,6 +101,20 @@ export default function PaginaProducto() {
         .eq('id', prod.categoria_id)
         .single()
       if (cat) setCategoria(cat)
+
+      const { data: { user } } = await supabase.auth.getUser()
+      setUsuarioId(user?.id || null)
+
+      // Volvió de Entrar para denunciar: se abre el cuadro (si puede) y se
+      // limpia la URL.
+      try {
+        const url = new URL(window.location.href)
+        if (url.searchParams.get('denunciar') === '1') {
+          url.searchParams.delete('denunciar')
+          window.history.replaceState(null, '', url)
+          if (user && prod.estado === 'activo' && vend?.usuario_id !== user.id) setDenunciando(true)
+        }
+      } catch { /* sin URL: no pasa nada */ }
 
       setCargando(false)
     }
@@ -141,6 +158,18 @@ export default function PaginaProducto() {
   }
 
   const hayOferta = producto.precio_anterior && Number(producto.precio_anterior) > Number(producto.precio)
+
+  // Solo un producto publicado se denuncia, y nunca el propio. La dueña o un
+  // admin pueden estar viendo uno que no está publicado (RLS se los deja ver).
+  const puedeDenunciar = producto.estado === 'activo' && !(usuarioId && vendedor?.usuario_id === usuarioId)
+
+  function abrirDenuncia() {
+    if (!usuarioId) {
+      window.location.href = `/entrar?next=${encodeURIComponent(`/producto/${producto.id}?denunciar=1`)}`
+      return
+    }
+    setDenunciando(true)
+  }
 
   return (
     <>
@@ -320,12 +349,30 @@ export default function PaginaProducto() {
                     </p>
                   </div>
                 )}
+
+                {puedeDenunciar && (
+                  <div className="mt-8 pt-6 border-t border-[#0a0a0a]/5">
+                    <p className="m-0 text-sm text-[#0a0a0a]/40 font-light">¿Ves algo que no debería estar acá?</p>
+                    <button
+                      type="button"
+                      onClick={abrirDenuncia}
+                      className="mt-1 inline-flex items-center gap-1.5 p-0 bg-transparent border-none text-sm font-semibold text-[#4164fe] underline underline-offset-2 cursor-pointer hover:opacity-80"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v1.5M3 21v-6m0 0 2.77-.693a9 9 0 0 1 6.208.682l.108.054a9 9 0 0 0 6.086.71l3.114-.732a48.524 48.524 0 0 1-.005-10.499l-3.11.732a9 9 0 0 1-6.085-.711l-.108-.054a9 9 0 0 0-6.208-.682L3 4.5M3 15V4.5" />
+                      </svg>
+                      Denunciar producto
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
           </div>
         </div>
       </div>
+
+      {denunciando && <ModalDenuncia productoId={producto.id} onClose={() => setDenunciando(false)} />}
     </>
   )
 }
