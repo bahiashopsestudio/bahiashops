@@ -160,7 +160,7 @@ const CUERPO = (extra = {}) => ({
   propiedad_1_nombre: null, variantes: [], fotos: [FOTO('n1')], sellos: [1], ...extra,
 })
 
-const { validarProducto, esFotoDeLaTienda, estadoAlGuardar, origenesPermitidos } = await import('../src/lib/productos.js')
+const { validarProducto, esFotoDeLaTienda, estadoAlGuardar, origenesPermitidos, textoMotivoRechazo } = await import('../src/lib/productos.js')
 const alta = await import('../src/app/api/vendedor/productos/route.js')
 const uno = await import('../src/app/api/vendedor/productos/[id]/route.js')
 const moderacion = await import('../src/app/api/admin/productos/[id]/moderacion/route.js')
@@ -189,6 +189,9 @@ ok(estadoAlGuardar(null) === 'en_revision' && estadoAlGuardar('rechazado') === '
   'la regla de estado al guardar')
 ok(origenesPermitidos('activo').join() === 'pausado,agotado' && origenesPermitidos('pausado').join() === 'activo'
   && origenesPermitidos('en_revision') === null && origenesPermitidos('agotado') === null && origenesPermitidos('toString') === null, 'las transiciones del vendedor')
+
+ok(textoMotivoRechazo('Fotos borrosas — mejorá la luz') === 'Fotos borrosas — mejorá la luz', 'el motivo de rechazo se muestra tal como está guardado')
+ok(textoMotivoRechazo(null) === textoMotivoRechazo('  ') && /^No pudimos publicarlo\./.test(textoMotivoRechazo(null)), 'sin motivo (productos viejos): el texto genérico')
 
 console.log('\n2. Alta')
 nuevo({ usuario: null })

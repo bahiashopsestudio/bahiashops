@@ -17,6 +17,7 @@ import { revisarPublicacion, ETIQUETAS_MODERACION } from '@/lib/moderacion';
 import Navbar from '@/components/Navbar';
 import MenuTakeover from '@/components/MenuTakeover';
 import VolverAtras from '@/components/VolverAtras';
+import { textoMotivoRechazo } from '@/lib/productos';
 
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage'];
 
@@ -114,6 +115,8 @@ export default function EditarProductoPage() {
   const [guardando, setGuardando] = useState(false);
   const [mostrarPrevia, setMostrarPrevia] = useState(false);
   const [bloqueoModeracion, setBloqueoModeracion] = useState(null);
+  // Si el producto está rechazado: el motivo, para el cartel de arriba.
+  const [rechazo, setRechazo] = useState(null);
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [categorias, setCategorias] = useState([]);
@@ -172,6 +175,8 @@ export default function EditarProductoPage() {
           setCargandoPagina(false);
           return;
         }
+
+        if (prod.estado === 'rechazado') setRechazo({ motivo: textoMotivoRechazo(prod.motivo_rechazo) });
 
         setDatos({
           nombre: prod.nombre || '',
@@ -526,7 +531,7 @@ export default function EditarProductoPage() {
   if (cargandoPagina) {
     return (
       <>
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&display=swap" />
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&family=Poppins:wght@300&display=swap" />
         <div className="min-h-screen bg-white flex items-center justify-center" style={{ fontFamily: "'Inter', sans-serif" }}>
           <span className="text-[#0a0a0a]/30 text-sm font-light">Cargando producto...</span>
         </div>
@@ -537,7 +542,7 @@ export default function EditarProductoPage() {
   if (errorPagina) {
     return (
       <>
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&display=swap" />
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&family=Poppins:wght@300&display=swap" />
         <div className="min-h-screen bg-white flex flex-col items-center justify-center gap-4" style={{ fontFamily: "'Inter', sans-serif" }}>
           <span className="text-red-700 text-sm">{errorPagina}</span>
           <button onClick={() => router.push('/vendedor/productos')}
@@ -563,7 +568,7 @@ export default function EditarProductoPage() {
 
   return (
     <>
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&display=swap" />
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&family=Poppins:wght@300&display=swap" />
 
       <div className="min-h-screen bg-white" style={{ fontFamily: "'Inter', sans-serif" }}>
         {menuOpen && <MenuTakeover categorias={menuCats} onClose={() => setMenuOpen(false)} />}
@@ -574,6 +579,16 @@ export default function EditarProductoPage() {
             <VolverAtras href="/vendedor/productos" texto="Volver a Mis productos" />
             <h1 className="text-2xl md:text-3xl font-black text-[#0a0a0a] tracking-tight mb-1">Editar producto</h1>
             <p className="text-sm text-[#0a0a0a]/30 font-light mb-6">{nombreNegocio}</p>
+
+            {rechazo && (
+              <div role="status" className="mb-6 rounded-2xl bg-[#fdf3ec] border border-[#ecd2bf] p-5">
+                <p className="m-0 text-base font-semibold text-[#6e2a0c]">Este producto no se publicó</p>
+                <p className="m-0 mt-1.5 text-[15px] text-[#2b1a10] whitespace-pre-line" style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 300 }}>
+                  {rechazo.motivo}
+                </p>
+                <p className="m-0 mt-2 text-sm text-[#6e2a0c]">Corregilo y guardá: lo volvemos a revisar.</p>
+              </div>
+            )}
 
             <section className="rounded-2xl border border-[#0a0a0a]/5 p-5">
               <h2 className="text-lg font-black text-[#0a0a0a] tracking-tight mb-4">Datos básicos</h2>
@@ -865,7 +880,7 @@ export default function EditarProductoPage() {
                 className={`px-6 py-2.5 border-none rounded-full text-sm text-white font-medium transition-colors ${
                   guardarDeshabilitado ? 'bg-[#0a0a0a]/30 cursor-not-allowed' : 'bg-[#0a0a0a] cursor-pointer hover:bg-[#1a1a1a]'
                 }`}>
-                {guardando ? 'Guardando...' : 'Guardar cambios'}
+                {guardando ? 'Guardando...' : rechazo ? 'Guardar y enviar a revisión' : 'Guardar cambios'}
               </button>
             </div>
           </div>

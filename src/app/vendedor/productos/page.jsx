@@ -7,6 +7,7 @@ import Link from 'next/link';
 import Navbar from '@/components/Navbar';
 import MenuTakeover from '@/components/MenuTakeover';
 import VolverAtras from '@/components/VolverAtras';
+import { textoMotivoRechazo } from '@/lib/productos';
 
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage'];
 
@@ -15,7 +16,7 @@ function infoEstado(estado) {
   if (estado === 'activo')     return { texto: 'Publicado',   fondo: 'bg-emerald-100', color: 'text-emerald-700', punto: 'bg-emerald-500' };
   if (estado === 'pausado')    return { texto: 'Pausado',     fondo: 'bg-gray-100', color: 'text-gray-500', punto: 'bg-gray-400' };
   if (estado === 'agotado')    return { texto: 'Agotado',     fondo: 'bg-red-100', color: 'text-red-700', punto: 'bg-red-400' };
-  if (estado === 'rechazado')  return { texto: 'Rechazado',   fondo: 'bg-gray-100', color: 'text-gray-400', punto: 'bg-gray-300' };
+  if (estado === 'rechazado')  return { texto: 'No publicado', fondo: 'bg-[#fbe8da]', color: 'text-[#8a3410]', punto: 'bg-[#8a3410]' };
   return { texto: estado, fondo: 'bg-gray-100', color: 'text-gray-500', punto: 'bg-gray-400' };
 }
 
@@ -76,7 +77,7 @@ export default function MisProductosPage() {
 
         const { data: lista, error: errProductos } = await supabase
           .from('productos')
-          .select('id, nombre, precio, precio_anterior, estado, subcategoria_id')
+          .select('id, nombre, precio, precio_anterior, estado, motivo_rechazo, subcategoria_id')
           .eq('vendedor_id', vendedor.id)
           .order('id', { ascending: false });
 
@@ -163,7 +164,7 @@ export default function MisProductosPage() {
   if (cargando) {
     return (
       <>
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&display=swap" />
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&family=Poppins:wght@300&display=swap" />
         <div className="min-h-screen bg-white flex items-center justify-center" style={{ fontFamily: "'Inter', sans-serif" }}>
           <span className="text-[#0a0a0a]/30 text-sm font-light">Cargando tus productos...</span>
         </div>
@@ -173,7 +174,7 @@ export default function MisProductosPage() {
 
   return (
     <>
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&display=swap" />
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&family=Poppins:wght@300&display=swap" />
 
       <div className="min-h-screen bg-white" style={{ fontFamily: "'Inter', sans-serif" }}>
         {menuOpen && <MenuTakeover categorias={menuCats} onClose={() => setMenuOpen(false)} />}
@@ -208,13 +209,15 @@ export default function MisProductosPage() {
             {!error && productos.map((p) => {
               const estado = infoEstado(p.estado);
               const estaEliminando = eliminando === p.id;
+              const rechazado = p.estado === 'rechazado';
               return (
                 <div
                   key={p.id}
-                  className={`flex gap-4 items-center rounded-2xl border border-[#0a0a0a]/5 p-4 mb-3 transition-opacity ${
-                    estaEliminando ? 'opacity-50' : ''
-                  }`}
+                  className={`rounded-2xl border p-4 mb-3 transition-opacity ${
+                    rechazado ? 'border-[#ecd2bf]' : 'border-[#0a0a0a]/5'
+                  } ${estaEliminando ? 'opacity-50' : ''}`}
                 >
+                <div className="flex gap-4 items-center">
                   {/* Foto */}
                   <div className="w-[80px] h-[80px] rounded-xl shrink-0 bg-[#F5F2EC] overflow-hidden">
                     {p.foto && <img src={p.foto} alt={p.nombre} className="w-full h-full object-cover" />}
@@ -234,13 +237,19 @@ export default function MisProductosPage() {
                       )}
                       ${formatearPrecio(p.precio)}
                     </p>
+                    {p.estado === 'en_revision' && (
+                      <p className="text-xs text-[#0a0a0a]/40 m-0 mt-1" style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 300 }}>
+                        Lo estamos revisando.
+                      </p>
+                    )}
                     <span className={`inline-flex items-center gap-1.5 text-[10px] font-semibold px-2 py-0.5 rounded-full mt-1.5 ${estado.fondo} ${estado.color}`}>
                       <span className={`w-[6px] h-[6px] rounded-full ${estado.punto}`} />
                       {estado.texto}
                     </span>
                   </div>
 
-                  {/* Acciones */}
+                  {/* Acciones (un rechazado tiene las suyas en el recuadro de abajo) */}
+                  {!rechazado && (
                   <div className="flex flex-col gap-1.5 shrink-0">
                     <Link
                       href={`/vendedor/productos/${p.id}/editar`}
@@ -279,6 +288,36 @@ export default function MisProductosPage() {
                       {estaEliminando ? '...' : 'Eliminar'}
                     </button>
                   </div>
+                  )}
+                </div>
+
+                {/* Por qué no se publicó (solo mientras está rechazado: al
+                    reenviarlo pasa a en revisión y esto deja de verse) */}
+                {rechazado && (
+                  <div className="mt-3 rounded-xl bg-[#fdf3ec] p-4">
+                    <p className="m-0 text-[13px] font-semibold text-[#6e2a0c]">Por qué no lo publicamos</p>
+                    <p className="m-0 mt-1 text-[15px] text-[#2b1a10] whitespace-pre-line" style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 300 }}>
+                      {textoMotivoRechazo(p.motivo_rechazo)}
+                    </p>
+                    <div className="flex gap-2 flex-wrap mt-3">
+                      <Link
+                        href={`/vendedor/productos/${p.id}/editar`}
+                        className="bg-[#0a0a0a] text-white rounded-full px-5 py-2.5 text-sm font-medium no-underline hover:bg-[#1a1a1a] transition-colors"
+                      >
+                        Corregir y reenviar
+                      </Link>
+                      <button
+                        onClick={() => eliminarProducto(p)}
+                        disabled={estaEliminando}
+                        className={`bg-white border border-[#0a0a0a]/10 rounded-full px-5 py-2.5 text-sm text-[#0a0a0a]/60 font-light transition-all ${
+                          estaEliminando ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-[#0a0a0a]/30 hover:text-[#0a0a0a]'
+                        }`}
+                      >
+                        {estaEliminando ? '...' : 'Borrar'}
+                      </button>
+                    </div>
+                  </div>
+                )}
                 </div>
               );
             })}

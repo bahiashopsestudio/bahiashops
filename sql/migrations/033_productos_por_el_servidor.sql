@@ -11,7 +11,7 @@
 -- alta, la edición, la pausa, el borrado de productos y la moderación del
 -- admin fallarían (el navegador ya no puede escribir en productos ni en sus
 -- fotos, variantes y sellos). El código nuevo anda con o sin la migración: si
--- la función de guardado (4) todavía no existe, guarda paso a paso como antes,
+-- la función de guardado (3 y 4) todavía no existe, guarda paso a paso como antes,
 -- sin transacción y sin marcar "revisión posterior" (el paso 1 recupera esas
 -- marcas).
 --

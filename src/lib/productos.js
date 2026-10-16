@@ -27,6 +27,13 @@ export const TRANSICIONES = {
 // Ya aprobados: editarlos no los vuelve a moderar.
 export const ESTADOS_APROBADOS = ['activo', 'pausado', 'agotado']
 
+// Lo que ve el vendedor de un producto rechazado: el motivo tal como lo
+// guardó la moderación, o este texto si no tiene (productos viejos).
+export function textoMotivoRechazo(motivo) {
+  const texto = typeof motivo === 'string' ? motivo.trim() : ''
+  return texto || 'No pudimos publicarlo. Revisá el texto y las fotos y volvé a enviarlo.'
+}
+
 export const MENSAJE_CON_PEDIDOS =
   'Este producto tiene pedidos asociados y no se puede eliminar.\n\nSi no querés que los compradores lo vean, podés pausarlo.'
 
