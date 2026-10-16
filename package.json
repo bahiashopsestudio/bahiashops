@@ -45,6 +45,7 @@
     "probar:productos": "node scripts/probar-productos.mjs",
     "probar:moderacion": "node scripts/probar-moderacion.mjs",
     "probar:035": "node scripts/probar-035.mjs",
+    "probar:036": "node scripts/probar-036.mjs",
     "probar:denuncias": "node scripts/probar-denuncias.mjs",
     "probar:datos-pedido": "node scripts/probar-datos-pedido.mjs",
     "probar:cuenta": "node scripts/probar-eliminar-cuenta.mjs"

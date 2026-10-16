@@ -1,7 +1,7 @@
 // Los métodos de entrega. Es la ÚNICA lista: la leen la pantalla "Cómo
 // entregás" (alta y panel), el checkout, el servidor que crea el pedido, la
 // cotización del envío, el panel de pedidos, los mails, Mis pedidos, la
-// compra exitosa y el admin. Como TRANSICIONES en pedidos.js: si un método
+// compra exitosa y el admin. Como SECUENCIAS en pedidos.js: si un método
 // cambia, cambia acá y en ningún otro lado.
 //
 // Es un módulo puro: no toca la base ni la red.
@@ -163,8 +163,9 @@ export function seguimientoDe(pedido) {
 //                  llega ahí. $0 en una zona es "Envío gratis".
 //   'a_coordinar'  $0 ahora; el envío se arregla por WhatsApp.
 //
-// tipoEntrega: cómo llega el pedido. Lo usan los pasos del pedido (preparar,
-// franja, sale, despachado) para elegir los textos.
+// tipoEntrega: cómo llega el pedido. De ahí sale su secuencia de pasos
+// (formaDeEntrega y SECUENCIAS, en pedidos.js).
+// chip: la etiqueta corta y sus colores, para la franja cerrada de un pedido.
 export const METODOS = {
   retiro: {
     id: 'retiro',
@@ -178,6 +179,7 @@ export const METODOS = {
     pideTurno: false,
     costo: 'gratis',
     tipoEntrega: 'retiro',
+    chip: { texto: 'Retiro', fondo: '#fdeee3', color: '#9a4a17' },
   },
   envio_tienda: {
     id: 'envio_tienda',
@@ -190,6 +192,7 @@ export const METODOS = {
     costo: 'por_zona',
     zonas: ZONAS_TIENDA,
     tipoEntrega: 'domicilio',
+    chip: { texto: 'Envío local', fondo: '#e8eeff', color: '#2f4fd6' },
   },
   correo: {
     id: 'correo',
@@ -202,6 +205,7 @@ export const METODOS = {
     costo: 'por_zona',
     zonas: ZONAS_CORREO,
     tipoEntrega: 'correo',
+    chip: { texto: 'Correo', fondo: '#f3ebfa', color: '#6d3f99' },
   },
   coordinar: {
     id: 'coordinar',
@@ -214,6 +218,7 @@ export const METODOS = {
     pideTurno: false,
     costo: 'a_coordinar',
     tipoEntrega: 'coordinar',
+    chip: { texto: 'Coordinar', fondo: '#e9f3ee', color: '#2e6b4f' },
   },
 }
 
@@ -252,16 +257,15 @@ export function tipoEntregaDe(valor) {
   return metodoDe(valor)?.tipoEntrega || null
 }
 
-// Hasta que los pasos del pedido usen tipoEntrega (t4), sus textos y los de
-// los mails distinguen cuatro casos: 'retiro', 'envio' (la tienda lo lleva a
-// la dirección), 'correo' (lo despacha por correo: no hay franja de entrega
-// ni "ya llega") y 'coordinar' (el resto, incluido un valor desconocido).
-export function grupoEntrega(valor) {
-  const tipo = tipoEntregaDe(valor)
-  if (tipo === 'retiro') return 'retiro'
-  if (tipo === 'domicilio') return 'envio'
-  if (tipo === 'correo') return 'correo'
-  return 'coordinar'
+// La forma de entrega para los pasos del pedido ('retiro', 'envio', 'correo',
+// 'coordinar') es formaDeEntrega, en pedidos.js: va junto con sus secuencias.
+
+// El chip de la forma de entrega en la franja cerrada de un pedido (panel de
+// la tienda y Mis pedidos): etiqueta corta y colores. Adentro del pedido y en
+// el checkout va la etiqueta larga. null si el valor no se conoce.
+export function chipMetodo(valor) {
+  const chip = metodoDe(valor)?.chip
+  return chip ? { ...chip } : null
 }
 
 // Etiqueta para 'comprador', 'vendedor' o 'admin'. Para quien compra, el

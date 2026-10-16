@@ -8,46 +8,30 @@ import Navbar from '@/components/Navbar';
 import MenuTakeover from '@/components/MenuTakeover';
 import VolverAtras from '@/components/VolverAtras';
 import AvatarApodo from '@/components/AvatarApodo';
+import { ChipForma, BarraPasos, FlechaDesplegar, fechaYHora } from '@/components/PasosPedido';
 import { linkWhatsApp } from '@/lib/telefono';
 import {
-  grupoEntrega, etiquetaMetodo, zonaDe, EMPRESAS_ENVIO, validarSeguimiento, seguimientoDe,
+  etiquetaMetodo, zonaDe, EMPRESAS_ENVIO, validarSeguimiento, seguimientoDe,
 } from '@/lib/metodosEntrega';
 import { calleNumeroDepto, ciudadProvinciaCodigo } from '@/lib/direcciones';
-import { pestanaEnElPanel } from '@/lib/pedidos';
+import {
+  pestanaEnElPanel, siguientePaso, pasosDe, formaDeEntrega, NOMBRE_PASO, ESTADO_ENTREGADO, ESTADO_REEMBOLSADO,
+} from '@/lib/pedidos';
 
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage'];
 
-// Las pestañas del panel. Qué pedido va en cada una lo decide pestanaDePedido en el
-// servidor (manda `pestana` en cada pedido) y acá pestanaEnElPanel
-// (src/lib/pedidos.js); el servidor manda las ventas y los carritos
-// abandonados (esCarritoAbandonado). El contador se muestra en todas menos el
-// historial. `pro`: el badge decorativo, no limita nada.
+const VERDE = '#2e6b4f';
+
+// Las pestañas del panel (mismo estilo que Moderación). Qué pedido va en cada
+// una lo decide pestanaDePedido en el servidor (manda `pestana` en cada pedido)
+// y acá pestanaEnElPanel (src/lib/pedidos.js). En "Entregados" los
+// reembolsados van aparte, debajo, y no suman al contador. `pro`: el badge
+// decorativo, no limita nada.
 const PESTANAS = [
-  { clave: 'ventas', label: 'Ventas nuevas', contador: true, vacio: 'No tenés ventas nuevas por ahora.' },
-  { clave: 'preparacion', label: 'En preparación', contador: true, vacio: 'No tenés pedidos en preparación.' },
-  { clave: 'historial', label: 'Historial', contador: false, vacio: 'Todavía no hay pedidos terminados.' },
-  { clave: 'carritos', label: 'Carritos abandonados', contador: true, pro: true, vacio: 'No tenés carritos abandonados.' },
+  { clave: 'nuevos', label: 'Nuevos pedidos', vacio: 'No tenés pedidos para preparar ni entregar.' },
+  { clave: 'entregados', label: 'Entregados', vacio: 'Todavía no marcaste ningún pedido como entregado.' },
+  { clave: 'carritos', label: 'Carritos abandonados', pro: true, vacio: 'No tenés carritos abandonados.' },
 ];
-
-const ESTADOS = {
-  // Un pedido pendiente que llega acá es siempre un pago en efectivo en proceso
-  // con el cupón vigente: solo la etiqueta, sin botones ni datos de contacto.
-  pendiente:  { label: 'Pago en efectivo pendiente', color: 'text-amber-800', bg: 'bg-amber-50', orden: 0 },
-  pagado:     { label: 'Pagado',           color: 'text-emerald-700', bg: 'bg-emerald-100',  orden: 1 },
-  preparando: { label: 'Preparando',       color: 'text-blue-700',    bg: 'bg-blue-50',      orden: 2 },
-  franja:     { label: 'Franja horaria avisada', color: 'text-violet-600',  bg: 'bg-violet-100',   orden: 3 },
-  por_salir:  { label: 'Por salir',        color: 'text-amber-600',   bg: 'bg-amber-50',     orden: 4 },
-  despachado: { label: 'Despachado',       color: 'text-emerald-700', bg: 'bg-emerald-100',  orden: 5 },
-  // Lo escribe sólo el webhook cuando el pago vuelve como reembolso o
-  // contracargo. No tiene entrada en ACCIONES: no se muestra ningún botón.
-  reembolsado: { label: 'Cancelado · dinero devuelto', color: 'text-red-600', bg: 'bg-red-50', orden: -1 },
-};
-
-// El estado a mostrar en una venta. Los estados de abajo son los únicos que
-// llegan en las ventas (los carritos abandonados van en CarritoCard, sin estado).
-function estadoDe(p) {
-  return ESTADOS[p.estado] || { label: p.estado, color: 'text-[#0a0a0a]/40', bg: 'bg-[#0a0a0a]/5' };
-}
 
 // Lo que se ve en lugar de los datos de contacto de un pago en efectivo en
 // proceso: todavía no se pagó.
@@ -55,15 +39,7 @@ function textoDatosOcultos() {
   return 'Los datos de contacto de quien compra (nombre, teléfono y dirección) aparecen cuando se acredite el pago.';
 }
 
-// Cómo le llega el pedido a quien compra, para elegir el texto del WhatsApp:
-// 'retiro', 'coordinar', 'envio' o 'correo'. La regla está en
-// metodosEntrega.js. Con el correo no hay franja de entrega ni "ya llega":
-// los pasos son los mismos, pero los textos dicen cuándo va al correo.
-function tipoEntrega(p) {
-  return grupoEntrega(p.metodo_envio);
-}
-
-// "Envío de la tienda · zona 2", para el panel.
+// "Envío de la tienda · zona 2", para el detalle.
 function textoEntrega(p) {
   const etiqueta = etiquetaMetodo(p.metodo_envio, 'vendedor');
   const zona = p.zona_envio ? zonaDe(p.metodo_envio, p.zona_envio) : null;
@@ -84,72 +60,81 @@ function calleYNumero(p) {
   return null;
 }
 
+// Cómo nombrar a quien compró en los textos del pedido: siempre el apodo,
+// nunca el nombre real. Sin apodo (cuenta eliminada), "quien compró" en medio
+// de la frase y "Quien compró" al empezarla.
+function apodoDe(p, { alEmpezar = false } = {}) {
+  const apodo = p.comprador_eliminado ? '' : String(p.comprador_apodo ?? '').trim();
+  if (apodo) return apodo;
+  return alEmpezar ? 'Quien compró' : 'quien compró';
+}
+
+// Lo que hace cada paso, según a cuál se va. El paso siguiente lo decide
+// siguientePaso (src/lib/pedidos.js), igual que el servidor.
+//   ayuda      el texto gris al lado del botón
+//   whatsapp   después de avanzar se abre WhatsApp con mensajeWA
+//   pideFranja antes de avanzar se elige la franja (modal)
+//   confirmar  antes de avanzar se pide confirmación dentro de la tarjeta
 const ACCIONES = {
-  pagado: {
-    label: 'Empezar a preparar', siguiente: 'preparando',
-    btnClass: 'bg-blue-700 hover:bg-blue-800', whatsapp: true,
-    // Retiro es el único método en el que el pedido no "sale": la persona lo
-    // viene a buscar.
+  preparando: {
+    label: 'Empezar a preparar',
+    ayuda: () => 'Abre WhatsApp con el mensaje armado',
+    whatsapp: true,
     mensajeWA: (p, franja, nombre) =>
       `¡Hola! Te escribimos de ${nombre}. Ya estamos preparando tu pedido con el código número #${p.id}. ` +
-      (tipoEntrega(p) === 'retiro'
-        ? '¡Te avisamos cuando esté listo para retirar!'
-        : tipoEntrega(p) === 'correo'
-          ? '¡Te avisamos cuando lo despachemos por correo!'
-          : '¡Te avisamos cuando esté por salir!'),
+      ({
+        retiro: '¡Te avisamos cuando esté listo para retirar!',
+        correo: '¡Te avisamos cuando lo despachemos por correo!',
+        envio: '¡Te avisamos en qué franja llega!',
+        coordinar: 'Te escribimos para acordar la entrega.',
+      })[formaDeEntrega(p.metodo_envio)],
   },
-  preparando: {
-    label: 'Avisar franja horaria', siguiente: 'franja',
-    labelCorreo: 'Avisar cuándo lo llevás al correo',
-    btnClass: 'bg-violet-600 hover:bg-violet-700', whatsapp: true, pideFranja: true,
+  listo: {
+    label: 'Avisar que está listo',
+    ayuda: () => 'Le llega el mail y se abre WhatsApp',
+    whatsapp: true,
+    // Dos renglones: el salto viaja en el link como %0A (linkWhatsApp).
+    mensajeWA: (p, franja, nombre) =>
+      `¡Hola! Te escribimos de ${nombre}. También te llegó un mail de Bahía Shops con el detalle de tu pedido.\n` +
+      `Tu pedido #${p.id} ya está listo para retirar. ¿Cuándo te queda cómodo pasar?`,
+  },
+  franja: {
+    label: 'Avisar la franja',
+    ayuda: () => 'Elegís la franja y se abre WhatsApp',
+    whatsapp: true,
+    pideFranja: true,
     mensajeWA: (p, franja, nombre) => {
-      const f = franja.toLowerCase();
-      const tipo = tipoEntrega(p);
-      if (tipo === 'correo') {
-        return `¡Hola! Te escribimos de ${nombre}. Tu pedido #${p.id} ya está listo: lo llevamos al correo por la ${f}.`;
-      }
-      if (tipo === 'retiro') {
-        return `¡Hola! Te escribimos de ${nombre}. Tu pedido #${p.id} va a estar listo para retirar por la ${f}.`;
-      }
-      if (tipo === 'coordinar') {
-        return `¡Hola! Te escribimos de ${nombre} por tu pedido #${p.id}. Lo tendríamos listo por la ${f}. ¿Cómo te queda para coordinar la entrega?`;
-      }
       const destino = calleYNumero(p);
-      return `¡Hola! Te escribimos de ${nombre}. Tu pedido #${p.id} sale hoy por la ${f}` +
+      return `¡Hola! Te escribimos de ${nombre}. Tu pedido #${p.id} sale hoy por la ${franja.toLowerCase()}` +
         (destino ? ` hacia ${destino}` : '') +
         '.';
     },
   },
-  franja: {
-    label: 'Avisar que sale', siguiente: 'por_salir',
-    labelCorreo: 'Avisar que sale para el correo',
-    btnClass: 'bg-amber-600 hover:bg-amber-700', whatsapp: true,
-    mensajeWA: (p, franja, nombre) => {
-      const tipo = tipoEntrega(p);
-      if (tipo === 'correo') {
-        return `¡Hola! Te escribimos de ${nombre}. Tu pedido #${p.id} sale hoy para el correo. Apenas lo despachemos te pasamos el número de seguimiento.`;
-      }
-      if (tipo === 'retiro') {
-        return `¡Hola! Tu pedido #${p.id} ya está listo para retirar en ${nombre}. ¡Te esperamos!`;
-      }
-      if (tipo === 'coordinar') {
-        return `¡Hola! Tu pedido #${p.id} de ${nombre} ya está listo. Escribinos y coordinamos la entrega.`;
-      }
-      const destino = calleYNumero(p);
-      return `¡Hola! Te escribimos de ${nombre}. Tu pedido #${p.id} ya está en camino` +
-        (destino ? ` hacia ${destino}` : '') +
-        '. ¡Ya llega!';
-    },
-  },
-  por_salir: {
+  despachado: {
+    label: 'Despachar',
     // Con el correo, despachar pide la empresa y el número de seguimiento.
-    label: 'Marcar como despachado', siguiente: 'despachado',
-    btnClass: 'bg-emerald-700 hover:bg-emerald-800', whatsapp: false,
+    ayuda: (p) => formaDeEntrega(p.metodo_envio) === 'correo'
+      ? 'Cargás el seguimiento; le llega el mail de despacho'
+      : 'Le llega el mail de despacho',
+  },
+  acordado: {
+    label: 'Marcar como acordado',
+    ayuda: () => 'Para cuando ya arreglaron cuándo y dónde',
+  },
+  entregado: {
+    label: 'Marcar como entregado',
+    ayuda: (p) => `Pasa a Entregados y ${apodoDe(p)} puede dejarte una reseña`,
+    confirmar: true,
+    verde: true,
   },
 };
 
-function etiquetaAccion(accion, p) {
-  return tipoEntrega(p) === 'correo' && accion.labelCorreo ? accion.labelCorreo : accion.label;
+// El paso siguiente de este pedido y lo que hace, o null si no hay.
+function accionDe(p) {
+  // Un pago en efectivo en proceso no tiene botones: todavía no se pagó.
+  if (p.estado === 'pendiente') return null;
+  const destino = siguientePaso(p);
+  return destino && ACCIONES[destino] ? { destino, ...ACCIONES[destino] } : null;
 }
 
 // La dirección para mostrar: la copia congelada en el pedido y, en los
@@ -187,6 +172,12 @@ function abrirWhatsApp(telefono, mensaje) {
   window.open(link, '_blank');
 }
 
+// Para ordenar: los entregados, el más reciente arriba.
+function msDe(iso) {
+  const ms = Date.parse(iso);
+  return Number.isFinite(ms) ? ms : 0;
+}
+
 export default function VendedorPedidosPage() {
   const supabase = createClient();
   const router = useRouter();
@@ -198,6 +189,8 @@ export default function VendedorPedidosPage() {
   // El pedido al que hay que bajar cuando la lista ya se dibujó (link del mail).
   const aScrollear = useRef(null);
   const [avanzando, setAvanzando] = useState(null);
+  // El pedido con la confirmación de "Marcar como entregado" abierta.
+  const [confirmando, setConfirmando] = useState(null);
   const [nombreNegocio, setNombreNegocio] = useState('');
   const [franjaModal, setFranjaModal] = useState(null);
   const [franjaElegida, setFranjaElegida] = useState('Mañana');
@@ -211,7 +204,7 @@ export default function VendedorPedidosPage() {
   const [segGuardando, setSegGuardando] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [categorias, setCategorias] = useState([]);
-  const [pestana, setPestana] = useState('ventas');
+  const [pestana, setPestana] = useState('nuevos');
   // La hora a la que se cargó la lista: de ella depende en qué pestaña cae un
   // pago en efectivo (si el cupón sigue vigente). Va en el estado para que el
   // render sea puro.
@@ -262,13 +255,12 @@ export default function VendedorPedidosPage() {
         setAhora(Date.now());
 
         // El link del mail de venta trae ?pedido=N: si ese pedido está en la
-        // lista (o sea, es de esta tienda), se abre desplegado. Si no está, la
-        // lista se muestra normal, sin error.
+        // lista (o sea, es de esta tienda), se abre su pestaña, se despliega y
+        // se baja hasta él. Si no está, la lista se muestra normal, sin error.
         const pedidoDelLink = Number(new URLSearchParams(window.location.search).get('pedido'));
         const delLink = (datos.pedidos || []).find((p) => p.id === pedidoDelLink);
         if (pedidoDelLink && delLink) {
-          // Se abre en la pestaña donde está ese pedido.
-          setPestana(pestanaEnElPanel(delLink, Date.now()) || 'ventas');
+          setPestana(pestanaEnElPanel(delLink, Date.now()) || 'nuevos');
           setAbierto(pedidoDelLink);
           aScrollear.current = pedidoDelLink;
         }
@@ -291,16 +283,18 @@ export default function VendedorPedidosPage() {
   // Los items ya vienen con cada pedido: desplegar es sólo abrir y cerrar.
   function toggleDetalle(pedidoId) {
     setAbierto(abierto === pedidoId ? null : pedidoId);
+    setConfirmando(null);
   }
 
   function iniciarAvance(pedido) {
-    const accion = ACCIONES[pedido.estado];
+    const accion = accionDe(pedido);
     if (!accion) return;
     if (accion.pideFranja) { setFranjaModal(pedido); setFranjaElegida('Mañana'); return; }
-    if (accion.siguiente === 'despachado' && tipoEntrega(pedido) === 'correo') {
+    if (accion.destino === 'despachado' && formaDeEntrega(pedido.metodo_envio) === 'correo') {
       abrirSeguimiento(pedido, 'despachar');
       return;
     }
+    if (accion.confirmar) { setConfirmando(pedido.id); return; }
     ejecutarAvance(pedido);
   }
 
@@ -344,7 +338,7 @@ export default function VendedorPedidosPage() {
   }
 
   async function ejecutarAvance(pedido, franja, seguimiento) {
-    const accion = ACCIONES[pedido.estado];
+    const accion = accionDe(pedido);
     if (!accion) return;
     setAvanzando(pedido.id);
     setFranjaModal(null);
@@ -357,7 +351,7 @@ export default function VendedorPedidosPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           pedido_id: pedido.id,
-          destino: accion.siguiente,
+          destino: accion.destino,
           ...(accion.pideFranja ? { franja } : {}),
           ...(seguimiento ? { seguimiento } : {}),
         }),
@@ -371,16 +365,21 @@ export default function VendedorPedidosPage() {
         return;
       }
 
+      // Un pedido entregado pasa a la pestaña "Entregados".
       setPedidos(prev => prev.map(p => (
         p.id === pedido.id
-          ? { ...p, ...datos.pedido }
+          ? { ...p, ...datos.pedido, ...(datos.pedido.estado === ESTADO_ENTREGADO ? { pestana: 'entregados' } : {}) }
           : p
       )));
+      setConfirmando(null);
 
-      // El mail al comprador lo manda la misma ruta. Si no salió, se avisa:
-      // el pedido ya quedó despachado igual.
+      // Los mails a quien compró los manda la misma ruta. Si no salieron, se
+      // avisa: el pedido ya quedó en su paso igual.
       if (datos.pedido.estado === 'despachado' && datos.aviso && !datos.aviso.enviado) {
         alert('El pedido se marcó como despachado, pero no se pudo enviar el email al comprador.');
+      }
+      if (datos.pedido.estado === 'listo' && datos.aviso && !datos.aviso.enviado && datos.aviso.motivo !== 'ya_enviado') {
+        alert('El pedido quedó como listo para retirar, pero no se pudo enviar el email a quien compró. El WhatsApp se abre igual.');
       }
 
       // El teléfono congelado en el pedido; el de la dirección queda de
@@ -461,17 +460,34 @@ export default function VendedorPedidosPage() {
   }
 
   // Cada pedido en su pestaña. Un pago en efectivo cuyo cupón venció con el panel
-  // abierto sale de la lista (pestanaEnElPanel devuelve null).
-  const porPestana = { ventas: [], preparacion: [], historial: [], carritos: [] };
+  // abierto sale de la lista (pestanaEnElPanel devuelve null). En "Entregados",
+  // los reembolsados van aparte (cancelados).
+  const porPestana = { nuevos: [], entregados: [], carritos: [] };
+  const cancelados = [];
   for (const p of pedidos) {
     const clave = pestanaEnElPanel(p, ahora);
-    if (clave) porPestana[clave].push(p);
+    if (!clave) continue;
+    if (clave === 'entregados' && p.estado === ESTADO_REEMBOLSADO) cancelados.push(p);
+    else porPestana[clave].push(p);
   }
+  porPestana.entregados.sort((a, b) => msDe(b.entregado_at) - msDe(a.entregado_at));
+  cancelados.sort((a, b) => msDe(b.actualizado_en) - msDe(a.actualizado_en));
+
   // Los carritos abandonados no son pedidos: no suman al total, pero si hay
   // alguno las pestañas se muestran igual.
-  const totalPedidos = porPestana.ventas.length + porPestana.preparacion.length + porPestana.historial.length;
+  const totalPedidos = porPestana.nuevos.length + porPestana.entregados.length + cancelados.length;
   const hayAlgo = totalPedidos + porPestana.carritos.length > 0;
   const actual = PESTANAS.find((t) => t.clave === pestana) || PESTANAS[0];
+  const lista = porPestana[actual.clave];
+
+  const tarjeta = (p) => (
+    <PedidoCard key={p.id} pedido={p} abierto={abierto === p.id}
+      items={p.items || []} avanzando={avanzando === p.id}
+      confirmando={confirmando === p.id}
+      onToggle={() => toggleDetalle(p.id)} onAvanzar={() => iniciarAvance(p)}
+      onConfirmarEntrega={() => ejecutarAvance(p)} onCancelarEntrega={() => setConfirmando(null)}
+      onCorregirSeguimiento={() => abrirSeguimiento(p, 'corregir')} />
+  );
 
   return (
     <>
@@ -497,48 +513,54 @@ export default function VendedorPedidosPage() {
               </div>
             ) : (
               <>
-                {/* Las pestañas del panel (mismo estilo que el mockup aprobado):
-                    texto con subrayado en la activa y un contador al lado. */}
-                <div role="tablist" className="flex gap-5 border-b border-[#0a0a0a]/[0.08] mb-5 overflow-x-auto whitespace-nowrap no-scrollbar">
+                {/* Las pestañas, con el estilo de Moderación: subrayado en la
+                    activa y el contador al lado. */}
+                <div role="tablist" className="flex gap-1 mb-5 border-b border-gray-200 overflow-x-auto whitespace-nowrap no-scrollbar">
                   {PESTANAS.map((t) => {
                     const activa = t.clave === actual.clave;
                     const cantidad = porPestana[t.clave].length;
                     return (
                       <button key={t.clave} type="button" role="tab" aria-selected={activa}
-                        onClick={() => { setPestana(t.clave); setAbierto(null); }}
-                        className={`bg-transparent border-0 border-b-2 -mb-px pb-2.5 px-0 text-[13px] cursor-pointer transition-colors ${
-                          activa
-                            ? 'border-[#0a0a0a] text-[#0a0a0a] font-medium'
-                            : 'border-transparent text-[#0a0a0a]/45 font-light hover:text-[#0a0a0a]/70'
+                        onClick={() => { setPestana(t.clave); setAbierto(null); setConfirmando(null); }}
+                        className={`flex items-center gap-2 px-3 md:px-4 py-2.5 -mb-px border-0 border-b-2 border-solid bg-transparent text-sm cursor-pointer transition-colors ${
+                          activa ? 'border-[#0a0a0a] text-[#0a0a0a] font-semibold' : 'border-transparent text-gray-500 hover:text-[#0a0a0a]'
                         }`}>
                         {t.label}
+                        <span className={`text-[11px] font-medium rounded-full px-2 py-0.5 ${
+                          t.clave === 'nuevos' && cantidad > 0 ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {cantidad}
+                        </span>
                         {t.pro && (
-                          <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">Pro</span>
-                        )}
-                        {t.contador && cantidad > 0 && (
-                          <span className="ml-1.5 text-[10px] font-medium bg-[#0a0a0a]/[0.06] text-[#0a0a0a]/60 rounded-full px-[7px] py-0.5">
-                            {cantidad}
-                          </span>
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">Pro</span>
                         )}
                       </button>
                     );
                   })}
                 </div>
 
-                {porPestana[actual.clave].length === 0 ? (
-                  <p className="text-sm text-[#0a0a0a]/30 font-light m-0 py-6">{actual.vacio}</p>
-                ) : actual.clave === 'carritos' ? (
-                  porPestana.carritos.map(p => (
+                {actual.clave === 'carritos' ? (
+                  lista.length === 0 ? (
+                    <p className="text-sm text-[#0a0a0a]/30 font-light m-0 py-6">{actual.vacio}</p>
+                  ) : lista.map(p => (
                     <CarritoCard key={p.id} pedido={p} enviando={!!enviandoRecordatorio[p.id]}
                       onRecordar={() => enviarRecordatorio(p.id)} />
                   ))
                 ) : (
-                  porPestana[actual.clave].map(p => (
-                    <PedidoCard key={p.id} pedido={p} abierto={abierto === p.id}
-                      items={p.items || []} avanzando={avanzando === p.id}
-                      onToggle={() => toggleDetalle(p.id)} onAvanzar={() => iniciarAvance(p)}
-                      onCorregirSeguimiento={() => abrirSeguimiento(p, 'corregir')} />
-                  ))
+                  <>
+                    {lista.length === 0
+                      ? <p className="text-sm text-[#0a0a0a]/30 font-light m-0 py-6">{actual.vacio}</p>
+                      : lista.map(tarjeta)}
+
+                    {actual.clave === 'entregados' && cancelados.length > 0 && (
+                      <>
+                        <h2 className="m-0 mt-8 mb-3 text-[11px] text-[#0a0a0a]/40 font-medium uppercase tracking-wider">
+                          Cancelados · dinero devuelto
+                        </h2>
+                        {cancelados.map(tarjeta)}
+                      </>
+                    )}
+                  </>
                 )}
               </>
             )}
@@ -546,22 +568,20 @@ export default function VendedorPedidosPage() {
             {franjaModal && (
               <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[1000] p-4"
                 onClick={() => setFranjaModal(null)}>
-                <div onClick={(e) => e.stopPropagation()}
+                <div onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="franja-titulo"
                   className="bg-white rounded-2xl p-6 max-w-[380px] w-full">
-                  <h3 className="text-lg font-black text-[#0a0a0a] tracking-tight m-0 mb-2">
-                    {tipoEntrega(franjaModal) === 'correo' ? '¿En qué franja lo llevás al correo?' : '¿En qué franja horaria sale?'}
+                  <h3 id="franja-titulo" className="text-lg font-black text-[#0a0a0a] tracking-tight m-0 mb-2">
+                    ¿En qué franja horaria sale?
                   </h3>
                   <p className="text-sm text-[#0a0a0a]/30 font-light m-0 mb-4">
-                    {tipoEntrega(franjaModal) === 'correo'
-                      ? 'Le avisamos al comprador cuándo lo llevás al correo.'
-                      : 'Le avisamos al comprador en qué horario esperar el envío.'}
+                    Le avisamos al comprador en qué horario esperar el envío.
                   </p>
                   <div className="flex gap-2 mb-5">
                     {['Mañana', 'Tarde'].map(f => (
-                      <button key={f} type="button" onClick={() => setFranjaElegida(f)}
+                      <button key={f} type="button" onClick={() => setFranjaElegida(f)} aria-pressed={franjaElegida === f}
                         className={`flex-1 py-3 rounded-xl cursor-pointer text-sm transition-all ${
                           franjaElegida === f
-                            ? 'border-2 border-violet-600 bg-violet-50 text-violet-600 font-semibold'
+                            ? 'border-2 border-[#0a0a0a] bg-[#0a0a0a]/[0.03] text-[#0a0a0a] font-semibold'
                             : 'border border-[#0a0a0a]/5 bg-white text-[#0a0a0a]/40 hover:border-[#0a0a0a]/15'
                         }`}>
                         {f}
@@ -574,7 +594,7 @@ export default function VendedorPedidosPage() {
                       Cancelar
                     </button>
                     <button type="button" onClick={() => ejecutarAvance(franjaModal, franjaElegida)}
-                      className="flex-1 py-3 border-none rounded-full bg-violet-600 text-white cursor-pointer text-sm font-medium hover:bg-violet-700 transition-colors">
+                      className="flex-1 py-3 border-none rounded-full bg-[#0a0a0a] text-white cursor-pointer text-sm font-medium hover:bg-[#0a0a0a]/80 transition-colors">
                       Avisar por WhatsApp
                     </button>
                   </div>
@@ -616,9 +636,9 @@ export default function VendedorPedidosPage() {
             {seguimientoModal && (
               <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[1000] p-4"
                 onClick={() => !segGuardando && setSeguimientoModal(null)}>
-                <div onClick={(e) => e.stopPropagation()}
+                <div onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="seguimiento-titulo"
                   className="bg-white rounded-2xl p-6 max-w-[400px] w-full">
-                  <h3 className="text-lg font-black text-[#0a0a0a] tracking-tight m-0 mb-2">
+                  <h3 id="seguimiento-titulo" className="text-lg font-black text-[#0a0a0a] tracking-tight m-0 mb-2">
                     {seguimientoModal.modo === 'despachar' ? '¿Con qué lo despachaste?' : 'Corregir el seguimiento'}
                   </h3>
                   <p className="text-sm text-[#0a0a0a]/30 font-light m-0 mb-4">
@@ -626,20 +646,20 @@ export default function VendedorPedidosPage() {
                       ? 'Quien compra recibe el número por mail y lo ve en Mis pedidos.'
                       : 'Se actualiza en Mis pedidos. No se vuelve a mandar el mail.'}
                   </p>
-                  <label className="block text-sm text-[#0a0a0a]/50 font-light mb-1">Empresa</label>
-                  <select value={segEmpresa} onChange={(e) => { setSegError(''); setSegEmpresa(e.target.value); }}
+                  <label className="block text-sm text-[#0a0a0a]/50 font-light mb-1" htmlFor="seg-empresa">Empresa</label>
+                  <select id="seg-empresa" value={segEmpresa} onChange={(e) => { setSegError(''); setSegEmpresa(e.target.value); }}
                     className="w-full mb-3 px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white outline-none focus:border-[#0a0a0a]">
                     {Object.entries(EMPRESAS_ENVIO).map(([clave, e]) => <option key={clave} value={clave}>{e.nombre}</option>)}
                   </select>
                   {segEmpresa === 'otra' && (
                     <>
-                      <label className="block text-sm text-[#0a0a0a]/50 font-light mb-1">Nombre de la empresa</label>
-                      <input value={segOtra} maxLength={60} onChange={(e) => { setSegError(''); setSegOtra(e.target.value); }}
+                      <label className="block text-sm text-[#0a0a0a]/50 font-light mb-1" htmlFor="seg-otra">Nombre de la empresa</label>
+                      <input id="seg-otra" value={segOtra} maxLength={60} onChange={(e) => { setSegError(''); setSegOtra(e.target.value); }}
                         className="w-full mb-3 px-3 py-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:border-[#0a0a0a]" />
                     </>
                   )}
-                  <label className="block text-sm text-[#0a0a0a]/50 font-light mb-1">Número de seguimiento</label>
-                  <input value={segNumero} maxLength={60} onChange={(e) => { setSegError(''); setSegNumero(e.target.value); }}
+                  <label className="block text-sm text-[#0a0a0a]/50 font-light mb-1" htmlFor="seg-numero">Número de seguimiento</label>
+                  <input id="seg-numero" value={segNumero} maxLength={60} onChange={(e) => { setSegError(''); setSegNumero(e.target.value); }}
                     className="w-full mb-3 px-3 py-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:border-[#0a0a0a]" />
                   {segError && <p className="m-0 mb-3 text-sm text-red-700">{segError}</p>}
                   <div className="flex gap-3">
@@ -648,8 +668,8 @@ export default function VendedorPedidosPage() {
                       Cancelar
                     </button>
                     <button type="button" onClick={confirmarSeguimiento} disabled={segGuardando}
-                      className="flex-1 py-3 border-none rounded-full bg-emerald-700 text-white cursor-pointer text-sm font-medium hover:bg-emerald-800 transition-colors disabled:opacity-50">
-                      {segGuardando ? 'Guardando...' : (seguimientoModal.modo === 'despachar' ? 'Marcar como despachado' : 'Guardar')}
+                      className="flex-1 py-3 border-none rounded-full bg-[#0a0a0a] text-white cursor-pointer text-sm font-medium hover:bg-[#0a0a0a]/80 transition-colors disabled:opacity-50">
+                      {segGuardando ? 'Guardando...' : (seguimientoModal.modo === 'despachar' ? 'Despachar' : 'Guardar')}
                     </button>
                   </div>
                 </div>
@@ -715,158 +735,189 @@ function CarritoCard({ pedido, enviando, onRecordar }) {
   );
 }
 
-function PedidoCard({ pedido, abierto, items, avanzando, onToggle, onAvanzar, onCorregirSeguimiento }) {
+// El paso, tal como se lee en la franja cerrada.
+function textoPaso(p) {
+  if (p.estado === 'pendiente') return 'Pago en efectivo pendiente';
+  if (p.estado === ESTADO_REEMBOLSADO) return 'Cancelado · dinero devuelto';
+  return NOMBRE_PASO[p.estado] || p.estado;
+}
+
+function Etiqueta({ children }) {
+  return <p className="m-0 mb-1.5 text-[11px] text-[#0a0a0a]/25 font-light uppercase tracking-wider">{children}</p>;
+}
+
+function PedidoCard({
+  pedido, abierto, items, avanzando, confirmando,
+  onToggle, onAvanzar, onConfirmarEntrega, onCancelarEntrega, onCorregirSeguimiento,
+}) {
   const p = pedido;
-  const estado = estadoDe(p);
-  const accion = ACCIONES[p.estado];
-  const primerItem = items[0];
+  const accion = accionDe(p);
   const direccion = direccionDe(p);
   const seguimiento = seguimientoDe(p);
+  const forma = formaDeEntrega(p.metodo_envio);
+  const entregado = p.estado === ESTADO_ENTREGADO;
+  const reembolsado = p.estado === ESTADO_REEMBOLSADO;
+  const idDetalle = `pedido-${p.id}-detalle`;
 
   return (
     // scroll-mt: que la barra fija de arriba no tape el pedido al bajar.
-    <div id={`pedido-${p.id}`} className="scroll-mt-24 border border-[#0a0a0a]/5 rounded-2xl px-5 py-4 mb-3">
-      <div onClick={onToggle} className="cursor-pointer">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl bg-[#F5F2EC] shrink-0 overflow-hidden flex items-center justify-center text-[#0a0a0a]/15 text-xl">
-            {primerItem?.foto_url ? (
-              <img src={primerItem.foto_url} alt="" className="w-full h-full object-cover" />
-            ) : '📦'}
-          </div>
-
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              {/* Afuera va el apodo; nombre real y teléfono, sólo en el detalle. */}
-              <span className="text-sm text-[#0a0a0a] inline-flex items-center gap-2">
-                {p.comprador_eliminado ? (
-                  // Cuenta eliminada: círculo gris claro, sin letra.
-                  <span aria-hidden="true" className="inline-block shrink-0 rounded-full" style={{ width: '28px', height: '28px', backgroundColor: '#e8e5df' }} />
-                ) : (
-                  <AvatarApodo apodo={p.comprador_apodo} tamano={28} />
-                )}
-                <strong>{p.comprador_eliminado ? 'Cuenta eliminada' : (p.comprador_apodo || 'Comprador')}</strong>
-                <span className="text-[#0a0a0a]/50"> · Pedido #{p.id}</span>
-              </span>
-              <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${estado.bg} ${estado.color}`}>
-                {estado.label}
-              </span>
-            </div>
-            <p className="mt-0.5 mb-0 text-[11px] text-[#0a0a0a]/25 font-light">
-              {textoEntrega(p)} · {tiempoRelativo(p.creado_en)}
-            </p>
-          </div>
-
-          <div className="text-right shrink-0">
-            <div className="font-semibold text-[#0a0a0a] text-sm">${fmt(p.total)}</div>
-            <div className="text-[10px] text-[#0a0a0a]/20 font-light">{abierto ? 'Ocultar ▲' : 'Ver detalle ▼'}</div>
-          </div>
-        </div>
-      </div>
+    <div id={`pedido-${p.id}`} className="scroll-mt-24 border border-[#0a0a0a]/5 rounded-2xl mb-3">
+      {/* La franja entera despliega y pliega. */}
+      <button type="button" onClick={onToggle} aria-expanded={abierto} aria-controls={idDetalle}
+        className="w-full flex items-center gap-3 px-5 py-4 bg-transparent border-0 text-left cursor-pointer rounded-2xl">
+        {p.comprador_eliminado ? (
+          // Cuenta eliminada: círculo gris claro, sin letra.
+          <span aria-hidden="true" className="inline-block shrink-0 rounded-full" style={{ width: '36px', height: '36px', backgroundColor: '#e8e5df' }} />
+        ) : (
+          <AvatarApodo apodo={p.comprador_apodo} tamano={36} />
+        )}
+        <span className="flex-1 min-w-0">
+          {/* Afuera va el apodo; nombre real y teléfono, sólo en el detalle. */}
+          <span className="block truncate text-[#0a0a0a]" style={{ fontWeight: 600, fontSize: '15px' }}>
+            {p.comprador_eliminado ? 'Cuenta eliminada' : (p.comprador_apodo || 'Comprador')}
+          </span>
+          <span className="mt-1 flex items-center gap-2 min-w-0">
+            <ChipForma metodoEnvio={p.metodo_envio} />
+            <span className="truncate" style={{ fontWeight: 500, fontSize: '12.5px', color: reembolsado ? '#dc2626' : '#0a0a0a' }}>
+              #{p.id} · {textoPaso(p)}
+            </span>
+          </span>
+        </span>
+        <span className="shrink-0 text-[#0a0a0a] text-sm tabular-nums" style={{ fontWeight: 600 }}>$ {fmt(p.total)}</span>
+        <FlechaDesplegar abierto={abierto} />
+      </button>
 
       {abierto && (
-        <div className="mt-4 pt-4 border-t border-[#0a0a0a]/5">
-          <div className="mb-4">
-            <p className="m-0 mb-2 text-[11px] text-[#0a0a0a]/25 font-light uppercase tracking-wider">Productos</p>
-            {items.length === 0 ? (
-              <p className="text-sm text-[#0a0a0a]/20 font-light">Este pedido no tiene productos registrados.</p>
-            ) : items.map(it => (
-              <div key={it.id} className="flex justify-between py-1 text-sm">
-                <span className="text-[#0a0a0a]/60 font-light">{it.nombre}{it.variante ? ` · ${it.variante}` : ''} × {it.cantidad}</span>
-                <span className="text-[#0a0a0a]">${fmt(it.precio * it.cantidad)}</span>
-              </div>
-            ))}
-          </div>
+        <div id={idDetalle} className="px-5 pb-5">
+          <div className="pt-4 border-t border-[#0a0a0a]/5">
+            <p className="m-0 mb-4 text-sm text-[#0a0a0a] font-medium">{textoEntrega(p)}</p>
 
-          <div className="mb-4">
-            <p className="m-0 mb-1.5 text-[11px] text-[#0a0a0a]/25 font-light uppercase tracking-wider">Entrega</p>
-            <p className="m-0 text-sm text-[#0a0a0a]/60 font-light">{textoEntrega(p)}</p>
-            {p.turno_preferido && (
-              <p className="m-0 text-[11px] text-[#0a0a0a]/25 font-light">Preferencia: {p.turno_preferido.toLowerCase()}</p>
-            )}
-            {p.franja_horaria && (
-              <p className="m-0 text-[11px] text-[#0a0a0a]/40 font-light">
-                {tipoEntrega(p) === 'correo' ? 'Lo llevás al correo a la' : 'Franja horaria avisada:'} {p.franja_horaria.toLowerCase()}
-              </p>
-            )}
-            {seguimiento && (
-              <p className="mt-1 mb-0 text-sm text-[#0a0a0a]/60 font-light">
-                {seguimiento.empresa} · N° {seguimiento.numero}
-                {tipoEntrega(p) === 'correo' && (
-                  <button type="button" onClick={(e) => { e.stopPropagation(); onCorregirSeguimiento(); }}
-                    className="ml-2 text-[11px] text-[#0a0a0a]/40 underline underline-offset-2 cursor-pointer bg-transparent border-none p-0">
-                    Corregir
-                  </button>
-                )}
-              </p>
-            )}
-            {p.datos_de_contacto === 'ocultos' ? (
-              // Sin pagar: la ruta ni siquiera manda nombre, teléfono ni dirección.
-              <p className="mt-1 mb-0 text-sm text-[#0a0a0a]/40 font-light leading-relaxed">
-                {textoDatosOcultos()}
-              </p>
-            ) : p.comprador_eliminado ? (
-              // Cuenta eliminada: el método de entrega queda a la vista; el nombre,
-              // el teléfono y la dirección ya no existen.
-              <p className="mt-1 mb-0 text-sm text-[#0a0a0a]/40 font-light">Quien hizo esta compra eliminó su cuenta.</p>
-            ) : (
-              <>
-                {(p.comprador_nombre || p.comprador_apellido || p.comprador_telefono) && (
-                  <p className="mt-1 mb-0 text-sm text-[#0a0a0a]/60 font-light">
-                    {[p.comprador_nombre, p.comprador_apellido].filter(Boolean).join(' ')}
-                    {(p.comprador_nombre || p.comprador_apellido) && p.comprador_telefono && <br />}
-                    {p.comprador_telefono && <>Tel. {p.comprador_telefono}</>}
-                  </p>
-                )}
-                {direccion && (
-                  <p className="mt-1 mb-0 text-sm text-[#0a0a0a]/60 font-light">
-                    {calleNumeroDepto(direccion)}
-                    {ciudadProvinciaCodigo(direccion) && <><br />{ciudadProvinciaCodigo(direccion)}</>}
-                    {direccion.telefono && <><br />Tel. {direccion.telefono}</>}
-                  </p>
-                )}
-              </>
-            )}
-          </div>
+            <div className="mb-4">
+              <Etiqueta>Productos</Etiqueta>
+              {items.length === 0 ? (
+                <p className="m-0 text-sm text-[#0a0a0a]/20 font-light">Este pedido no tiene productos registrados.</p>
+              ) : items.map(it => (
+                <div key={it.id} className="flex justify-between gap-3 py-1 text-sm">
+                  <span className="text-[#0a0a0a]/60 font-light">{it.nombre}{it.variante ? ` · ${it.variante}` : ''} × {it.cantidad}</span>
+                  <span className="text-[#0a0a0a] shrink-0 tabular-nums">$ {fmt(it.precio * it.cantidad)}</span>
+                </div>
+              ))}
+            </div>
 
-          <div className="pt-2 border-t border-[#0a0a0a]/5 mb-4">
-            <div className="flex justify-between text-sm py-0.5">
-              <span className="text-[#0a0a0a]/40 font-light">Productos</span>
-              <span className="text-[#0a0a0a]">${fmt(p.subtotal_productos)}</span>
+            <div className="mb-4 text-sm text-[#0a0a0a]/60 font-light space-y-0.5">
+              <p className="m-0">Compró: {fechaYHora(p.creado_en)}</p>
+              {Number(p.costo_envio) > 0 && <p className="m-0">Incluye envío: $ {fmt(p.costo_envio)}</p>}
+              {entregado && p.entregado_at && <p className="m-0" style={{ color: VERDE }}>Entregado el {fechaYHora(p.entregado_at)}</p>}
             </div>
-            <div className="flex justify-between text-sm py-0.5">
-              <span className="text-[#0a0a0a]/40 font-light">Envío</span>
-              <span className="text-[#0a0a0a]">${fmt(p.costo_envio)}</span>
-            </div>
-            <div className="flex justify-between text-sm py-0.5">
-              <span className="text-[#0a0a0a]/25 font-light">Comisión Bahía Shops (5%)</span>
-              <span className="text-[#0a0a0a]/25">-${fmt(p.comision_plataforma)}</span>
-            </div>
-            <div className="flex justify-between text-sm font-semibold text-[#0a0a0a] pt-2 border-t border-[#0a0a0a]/5 mt-1">
-              <span>Recibís</span>
-              <span>${fmt(p.total - (p.comision_plataforma || 0))}</span>
-            </div>
-          </div>
 
-          {accion && (
-            <button type="button" onClick={(e) => { e.stopPropagation(); onAvanzar(); }} disabled={avanzando}
-              className={`w-full py-3 text-sm border-none rounded-full text-white flex items-center justify-center gap-2 font-medium transition-colors ${
-                avanzando ? 'bg-[#0a0a0a]/20 cursor-not-allowed' : `${accion.btnClass} cursor-pointer`
-              }`}>
-              {accion.whatsapp && (
-                <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
-                  <path d="M12 0C5.373 0 0 5.373 0 12c0 2.625.846 5.059 2.284 7.034L.789 23.564l4.72-1.236A11.942 11.942 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.6c-2.07 0-4.046-.54-5.795-1.56l-.42-.25-2.8.735.747-2.73-.27-.43A9.554 9.554 0 0 1 2.4 12c0-5.302 4.298-9.6 9.6-9.6 5.302 0 9.6 4.298 9.6 9.6 0 5.302-4.298 9.6-9.6 9.6z"/>
-                </svg>
+            <div className="mb-4">
+              <Etiqueta>Entrega</Etiqueta>
+              {p.datos_de_contacto === 'ocultos' ? (
+                // Sin pagar: la ruta ni siquiera manda nombre, teléfono ni dirección.
+                <p className="m-0 text-sm text-[#0a0a0a]/40 font-light leading-relaxed">{textoDatosOcultos()}</p>
+              ) : p.comprador_eliminado ? (
+                // Cuenta eliminada: el método de entrega queda a la vista; el nombre,
+                // el teléfono y la dirección ya no existen.
+                <p className="m-0 text-sm text-[#0a0a0a]/40 font-light">Quien hizo esta compra eliminó su cuenta.</p>
+              ) : (
+                <>
+                  {(p.comprador_nombre || p.comprador_apellido || p.comprador_telefono) && (
+                    <p className="m-0 text-sm text-[#0a0a0a]/60 font-light">
+                      {[p.comprador_nombre, p.comprador_apellido].filter(Boolean).join(' ')}
+                      {(p.comprador_nombre || p.comprador_apellido) && p.comprador_telefono && <br />}
+                      {p.comprador_telefono && <>Tel. {p.comprador_telefono}</>}
+                    </p>
+                  )}
+                  {/* Envío: dirección y barrio. Correo: el destino completo. */}
+                  {direccion && (forma === 'envio' || forma === 'correo') && (
+                    <p className="mt-1 mb-0 text-sm text-[#0a0a0a]/60 font-light">
+                      {calleNumeroDepto(direccion)}
+                      {forma === 'envio' && p.barrio_nombre && <><br />{p.barrio_nombre}</>}
+                      {forma === 'correo' && ciudadProvinciaCodigo(direccion) && <><br />{ciudadProvinciaCodigo(direccion)}</>}
+                    </p>
+                  )}
+                </>
               )}
-              {avanzando ? 'Actualizando...' : etiquetaAccion(accion, p)}
-            </button>
-          )}
-
-          {p.estado === 'despachado' && (
-            <div className="text-center py-3 bg-emerald-50 rounded-xl text-emerald-700 font-medium text-sm">
-              ✓ Pedido completado
+              {forma === 'envio' && p.turno_preferido && (
+                <p className="mt-1 mb-0 text-[11px] text-[#0a0a0a]/30 font-light">Preferencia: {p.turno_preferido.toLowerCase()}</p>
+              )}
+              {forma === 'envio' && p.franja_horaria && (
+                <p className="m-0 text-[11px] text-[#0a0a0a]/40 font-light">Franja avisada: {p.franja_horaria.toLowerCase()}</p>
+              )}
+              {seguimiento && (
+                <p className="mt-1 mb-0 text-sm text-[#0a0a0a]/60 font-light">
+                  {seguimiento.empresa} · N° {seguimiento.numero}
+                  {forma === 'correo' && (
+                    <button type="button" onClick={onCorregirSeguimiento}
+                      className="ml-2 text-[11px] text-[#0a0a0a]/40 underline underline-offset-2 cursor-pointer bg-transparent border-none p-0">
+                      Corregir
+                    </button>
+                  )}
+                </p>
+              )}
             </div>
-          )}
+
+            <div className="pt-2 border-t border-[#0a0a0a]/5 mb-5">
+              <div className="flex justify-between text-sm py-0.5">
+                <span className="text-[#0a0a0a]/40 font-light">Productos</span>
+                <span className="text-[#0a0a0a] tabular-nums">$ {fmt(p.subtotal_productos)}</span>
+              </div>
+              <div className="flex justify-between text-sm py-0.5">
+                <span className="text-[#0a0a0a]/40 font-light">Envío</span>
+                <span className="text-[#0a0a0a] tabular-nums">$ {fmt(p.costo_envio)}</span>
+              </div>
+              <div className="flex justify-between text-sm py-0.5">
+                <span className="text-[#0a0a0a]/25 font-light">Comisión Bahía Shops (5%)</span>
+                <span className="text-[#0a0a0a]/25 tabular-nums">-$ {fmt(p.comision_plataforma)}</span>
+              </div>
+              <div className="flex justify-between text-sm font-semibold text-[#0a0a0a] pt-2 border-t border-[#0a0a0a]/5 mt-1">
+                <span>Recibís</span>
+                <span className="tabular-nums">$ {fmt(p.total - (p.comision_plataforma || 0))}</span>
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <BarraPasos pasos={pasosDe(p)} estado={p.estado} />
+            </div>
+
+            {entregado ? (
+              <p className="m-0 text-sm font-medium" style={{ color: VERDE }}>
+                ✓ Entregado · {apodoDe(p, { alEmpezar: true })} ya puede dejarte una reseña
+              </p>
+            ) : accion && !confirmando ? (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                <button type="button" onClick={onAvanzar} disabled={avanzando}
+                  className="px-5 py-2.5 text-sm border-none rounded-full text-white font-medium transition-opacity cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 hover:opacity-85"
+                  style={{ backgroundColor: accion.verde ? VERDE : '#0a0a0a' }}>
+                  {avanzando ? 'Actualizando...' : accion.label}
+                </button>
+                <span className="text-[12px] text-[#0a0a0a]/45 font-light">{accion.ayuda(p)}</span>
+              </div>
+            ) : null}
+
+            {/* La confirmación de "Marcar como entregado", dentro de la tarjeta. */}
+            {confirmando && accion?.destino === ESTADO_ENTREGADO && (
+              <div role="group" aria-labelledby={`confirmar-${p.id}`} className="border border-[#0a0a0a]/10 rounded-xl p-4">
+                <p id={`confirmar-${p.id}`} className="m-0 mb-1 text-sm text-[#0a0a0a] font-semibold">
+                  ¿{apodoDe(p, { alEmpezar: true })} ya lo tiene?
+                </p>
+                <p className="m-0 mb-4 text-sm text-[#0a0a0a]/60 font-light leading-relaxed">
+                  Al marcarlo como entregado, el pedido pasa a «Entregados» y {apodoDe(p)} puede dejarte una reseña.
+                </p>
+                <div className="flex flex-wrap items-center gap-4">
+                  <button type="button" onClick={onConfirmarEntrega} disabled={avanzando}
+                    className="px-5 py-2.5 text-sm border-none rounded-full text-white font-medium cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 hover:opacity-85"
+                    style={{ backgroundColor: VERDE }}>
+                    {avanzando ? 'Guardando...' : 'Sí, ya lo entregué'}
+                  </button>
+                  <button type="button" onClick={onCancelarEntrega} disabled={avanzando}
+                    className="text-sm text-[#0a0a0a]/45 font-light bg-transparent border-none p-0 cursor-pointer hover:text-[#0a0a0a]/70 underline underline-offset-2">
+                    Todavía no
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

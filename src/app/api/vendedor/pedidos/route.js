@@ -59,7 +59,7 @@ export async function GET() {
     .select(`
       id, estado, metodo_envio, zona_envio, subtotal_productos, costo_envio, total,
       envio_empresa, envio_empresa_otra, envio_seguimiento,
-      comision_plataforma, turno_preferido, franja_horaria, creado_en, actualizado_en,
+      comision_plataforma, turno_preferido, franja_horaria, creado_en, actualizado_en, entregado_at,
       vence_en, efectivo_vence_en, cancelado_motivo, mp_payment_id,
       recordatorio_enviado_en,
       comprador_id,
@@ -109,6 +109,28 @@ export async function GET() {
       return NextResponse.json({ error: 'No se pudieron cargar los pedidos.' }, { status: 500 });
     }
     for (const { id, ...contacto } of filasContacto || []) contactos.set(id, contacto);
+
+    // El nombre del barrio, para el envío de la tienda: la dirección guarda
+    // solo el id. Primero la copia congelada en el pedido, después la
+    // embebida. Si la lectura falla, el pedido sale sin barrio (no es motivo
+    // para no mostrarlo).
+    const idsBarrios = [...new Set([...contactos.values()]
+      .map((c) => c.direccion_copia?.barrio_id ?? c.direccion?.barrio_id)
+      .filter((b) => b !== null && b !== undefined))];
+    if (idsBarrios.length > 0) {
+      const { data: barrios, error: errorBarrios } = await admin
+        .from('barrios')
+        .select('id, nombre')
+        .in('id', idsBarrios);
+      if (errorBarrios) {
+        console.error('No se pudieron leer los barrios de los pedidos', vendedor.id, errorBarrios.message);
+      }
+      const nombres = new Map((barrios || []).map((b) => [b.id, b.nombre]));
+      for (const contacto of contactos.values()) {
+        const barrioId = contacto.direccion_copia?.barrio_id ?? contacto.direccion?.barrio_id;
+        contacto.barrio_nombre = nombres.get(barrioId) || null;
+      }
+    }
   }
 
   // El apodo de cada comprador, para la lista. Va en una segunda consulta por

@@ -1,18 +1,23 @@
-// Avanzar un pedido al siguiente paso de preparación.
+// Avanzar un pedido al siguiente paso de su forma de entrega.
 //
 // Lo que se valida acá, en este orden:
 //   1. Hay sesión.
 //   2. Quien llama es un vendedor.
 //   3. El pedido es SUYO.
-//   4. La transición está permitida desde el estado en que está hoy.
+//   4. El destino es el paso siguiente de la secuencia de su forma de entrega
+//      (SECUENCIAS en src/lib/pedidos.js).
 //
-// El vendedor nunca puede escribir 'pendiente', 'pagado', 'rechazado' ni
-// 'cancelado': esos los pone el webhook de MercadoPago y no aparecen como
-// destino posible en la máquina de estados (src/lib/pedidos.js). Tampoco puede
-// retroceder ni saltear pasos, por lo mismo.
+// El vendedor nunca puede escribir 'pendiente', 'pagado', 'rechazado',
+// 'cancelado' ni 'reembolsado': esos los pone el webhook de MercadoPago y no
+// aparecen como destino en ninguna secuencia. Tampoco puede retroceder ni
+// saltear pasos, por lo mismo.
 //
-// El aviso de despacho al comprador sale desde acá, no de una ruta suelta:
-// para cuando se manda, ya está verificado quién lo pidió.
+// Los mails a quien compró salen desde acá, no de una ruta suelta: para cuando
+// se mandan, ya está verificado quién lo pidió. Van DESPUÉS de guardar el
+// estado y nunca lo deshacen:
+//   · despachado  el mail de despacho
+//   · listo       «Tu pedido está listo para retirar», una sola vez por pedido
+//   · entregado   ninguno (marca entregado_at)
 //
 // Un pedido por correo no se puede marcar como despachado sin la empresa y el
 // número de seguimiento: van en el mail de despacho y en Mis pedidos.
@@ -20,8 +25,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getServiceRoleClient } from '@/lib/supabase/admin';
-import { validarAvance, ESTADO_PIDE_FRANJA, FRANJAS_VALIDAS } from '@/lib/pedidos';
-import { avisarDespacho } from '@/lib/mailsPedidos';
+import { validarAvance, ESTADO_PIDE_FRANJA, FRANJAS_VALIDAS, ESTADO_ENTREGADO } from '@/lib/pedidos';
+import { avisarDespacho, avisarListo } from '@/lib/mailsPedidos';
 import { tipoEntregaDe, validarSeguimiento } from '@/lib/metodosEntrega';
 
 export async function POST(request) {
@@ -78,13 +83,14 @@ export async function POST(request) {
     return NextResponse.json({ error: veredicto.error, motivo: veredicto.motivo }, { status: veredicto.status });
   }
 
+  const ahora = new Date().toISOString();
   const campos = {
     estado: veredicto.siguiente,
-    actualizado_en: new Date().toISOString(),
+    actualizado_en: ahora,
   };
 
-  // La franja se guarda: hasta ahora se elegía, se usaba para el WhatsApp y se
-  // perdía. Sólo tiene sentido en el paso que la pide.
+  // La franja se guarda: va en el WhatsApp, en el mail de despacho y en Mis
+  // pedidos. Sólo tiene sentido en el paso que la pide.
   if (veredicto.siguiente === ESTADO_PIDE_FRANJA) {
     const franja = typeof body.franja === 'string' ? body.franja.trim() : '';
     if (!FRANJAS_VALIDAS.includes(franja)) {
@@ -105,6 +111,10 @@ export async function POST(request) {
     Object.assign(campos, seguimiento.campos);
   }
 
+  if (veredicto.siguiente === ESTADO_ENTREGADO) {
+    campos.entregado_at = ahora;
+  }
+
   const { data: actualizado, error: errorUpdate } = await admin
     .from('pedidos')
     .update(campos)
@@ -114,7 +124,7 @@ export async function POST(request) {
     // entre la lectura y la escritura, no escribe nada.
     .eq('vendedor_id', vendedor.id)
     .eq('estado', pedido.estado)
-    .select('id, estado, franja_horaria, actualizado_en, envio_empresa, envio_empresa_otra, envio_seguimiento')
+    .select('id, estado, franja_horaria, actualizado_en, entregado_at, envio_empresa, envio_empresa_otra, envio_seguimiento')
     .maybeSingle();
 
   if (errorUpdate) {
@@ -130,9 +140,12 @@ export async function POST(request) {
   }
 
   // El mail va DESPUÉS de que el estado quedó guardado, y no puede deshacerlo.
+  // Los dos nunca lanzan: si fallan, queda en el log y la pantalla avisa.
   let aviso = { enviado: false, motivo: 'sin_aviso' };
   if (actualizado.estado === 'despachado') {
     aviso = await avisarDespacho({ admin, pedidoId });
+  } else if (actualizado.estado === 'listo') {
+    aviso = await avisarListo({ admin, pedidoId });
   }
 
   return NextResponse.json({ pedido: actualizado, aviso });

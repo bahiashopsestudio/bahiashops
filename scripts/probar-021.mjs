@@ -29,6 +29,7 @@ export function resolve(especificador, contexto, siguiente) {
 `))
 
 const L = await import("../src/lib/metodosEntrega.js")
+const P = await import("../src/lib/pedidos.js")
 const D = await import("../src/lib/direcciones.js")
 const { calcularEnvio } = await import("../src/lib/precioPedido.js")
 const { zonasPara } = await import("../src/lib/zonaEnvio.js")
@@ -402,7 +403,7 @@ console.log("\n13. Seguimiento y textos")
   ok(s.empresa === "Correo Argentino" && s.url.startsWith("https://www.correoargentino.com.ar/"), "Correo Argentino con su página")
   ok(L.seguimientoDe({ envio_empresa: "otra", envio_empresa_otra: "Vía Cargo", envio_seguimiento: "1" }).url === null, "otra: sin link")
   ok(L.seguimientoDe({}) === null, "sin seguimiento: nada")
-  ok(L.grupoEntrega("correo") === "correo" && L.grupoEntrega("envio_tienda") === "envio", "el correo tiene sus propios textos")
+  ok(P.formaDeEntrega("correo") === "correo" && P.formaDeEntrega("envio_tienda") === "envio", "el correo tiene sus propios textos")
   ok(!L.validarEntrega({ metodos: ["correo"], costos: { correo_1: 100 }, tienePunto: false }).ok, "el correo necesita el punto de la tienda")
   ok(L.validarEntrega({ metodos: ["correo"], costos: { correo_1: 100 }, tienePunto: true }).ok, "con punto y un precio: vale")
 }

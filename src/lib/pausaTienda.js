@@ -13,7 +13,8 @@ const RE_LINK_CUALQUIERA = /https?:\/\/|www\.|\b[a-z0-9-]+\.(?:com|ar|net|org|io
 
 // Los estados de un pedido que la tienda todavía tiene que entregar (para el
 // cartel de "¿Pausar tu tienda?"). Pausar no los toca: siguen su curso.
-export const ESTADOS_PARA_ENTREGAR = ['pagado', 'preparando', 'franja', 'por_salir']
+// 'despachado' no cuenta: ya salió de la tienda.
+export const ESTADOS_PARA_ENTREGAR = ['pagado', 'preparando', 'franja', 'por_salir', 'listo', 'acordado']
 
 // El mensaje que el vendedor deja al público. Opcional: vacío es null. Hasta
 // 200 caracteres y, como lo ve cualquiera, sin datos de contacto ni lenguaje

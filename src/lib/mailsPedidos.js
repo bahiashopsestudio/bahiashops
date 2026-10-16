@@ -1,5 +1,6 @@
 // Mails de un pedido: el aviso de venta al vendedor, la confirmación a quien
-// compró (los dos cuando MercadoPago confirma el pago) y el aviso de despacho.
+// compró (los dos cuando MercadoPago confirma el pago), el aviso de «listo para
+// retirar» (Retiro) y el aviso de despacho.
 //
 // El de despacho vivía en /api/notificaciones/despacho, una ruta sin ninguna
 // verificación: alcanzaba con acertarle al número de pedido para dispararle a
@@ -24,9 +25,9 @@ import {
 } from '@/lib/mailBase'
 import { normalizarTelefonoAR, formatearTelefonoAR, linkWhatsApp } from '@/lib/telefono'
 import { inicialDeApodo, colorDeApodo } from '@/lib/apodos'
-import { metodoPideDireccion, grupoEntrega, tipoEntregaDe, zonaDe, textoCostoEnvio, seguimientoDe } from '@/lib/metodosEntrega'
+import { metodoPideDireccion, tipoEntregaDe, zonaDe, textoCostoEnvio, seguimientoDe } from '@/lib/metodosEntrega'
 import { calleNumeroDepto, ciudadProvinciaCodigo } from '@/lib/direcciones'
-import { pedidoTuvoPago } from '@/lib/pedidos'
+import { pedidoTuvoPago, formaDeEntrega } from '@/lib/pedidos'
 
 // ── 1. Piezas propias de los mails de pedido ──────────────────────────────────
 
@@ -61,10 +62,10 @@ function textoCompra({ etiqueta, etiquetaTotal, items, costoEnvio, total, comisi
   return lineas.join('\n')
 }
 
-// Cómo le llega el pedido a quien compra: 'retiro', 'envio' o 'coordinar'.
-// Es grupoEntrega(), de metodosEntrega.js: la misma regla que usa el panel
-// del vendedor para elegir el texto del WhatsApp.
-const tipoEntrega = grupoEntrega
+// Cómo le llega el pedido a quien compra: 'retiro', 'envio', 'correo' o
+// 'coordinar'. Es formaDeEntrega(), de pedidos.js: la misma regla que eligen
+// los pasos del pedido y los textos del panel.
+const tipoEntrega = formaDeEntrega
 
 // "Envío de tu tienda · Zona 2 ($ 2.500)" para el mail de venta.
 function textoEntregaVenta({ metodoEnvio, zonaEnvio, costoEnvio, direccionVisible }) {
@@ -103,6 +104,31 @@ const TEXTO_TURNO = {
 
 function textoTurno(turno) {
   return TEXTO_TURNO[String(turno ?? '').trim().toLowerCase()] || null
+}
+
+// El pie gris de los mails a quien compró (compra, listo, despacho).
+const PIE_COMPRADOR = [
+  'Si tenés algún problema con tu compra, respondé este mail.',
+  'Bahía Shops · Bahía Blanca, Argentina.',
+]
+
+function htmlPie(pie) {
+  return `<p style="margin:28px 0 0;font-family:${FUENTE_TEXTO};font-size:12px;font-weight:300;line-height:1.6;color:${GRIS};">${pie.map(escapar).join('<br>')}</p>`
+}
+
+// Un párrafo armado en partes [texto, enNegrita]: el HTML (escapado) y el
+// texto plano. El teléfono no se parte en dos renglones.
+function partesHtml(partes, telefono) {
+  return partes.map(([parte, fuerte]) => {
+    if (!fuerte) return escapar(parte)
+    return telefono && parte === telefono
+      ? `<span style="white-space:nowrap;">${negrita(escapar(parte))}</span>`
+      : negrita(escapar(parte))
+  }).join('')
+}
+
+function partesTexto(partes) {
+  return partes.map(([parte]) => parte).join('')
 }
 
 // ── 2. Armado ───────────────────────────────────────────────────────────────
@@ -237,10 +263,7 @@ export function armarMailCompra(datos) {
   ]
 
   const saludo = nombre ? `Hola ${nombre}: ` : ''
-  const pie = [
-    'Si tenés algún problema con tu compra, respondé este mail.',
-    'Bahía Shops · Bahía Blanca, Argentina.',
-  ]
+  const pie = PIE_COMPRADOR
 
   const cuerpo = [
     lineaAzul(`Pedido #${pedidoId}`),
@@ -275,6 +298,56 @@ export function armarMailCompra(datos) {
   return { asunto, html: plantilla({ asunto, cuerpo }), texto }
 }
 
+// «Tu pedido está listo para retirar»: sale cuando un pedido de Retiro pasa a
+// 'listo', una sola vez por pedido. Recibe
+//   { pedidoId, tienda, nombre, telefono (el de quien compró), items,
+//     costoEnvio, total }
+// El teléfono es el de quien compró: la tienda le va a escribir a ese número.
+export function armarMailListo(datos) {
+  const { pedidoId, tienda, items, costoEnvio, total } = datos
+  const nombre = String(datos.nombre ?? '').trim()
+  const telefono = telefonoALaVista(datos.telefono)
+  const linkPedidos = `${SITIO_URL}/mis-pedidos`
+
+  const asunto = `Tu pedido en ${tienda} está listo para retirar`
+  const titulo = '¡Tu pedido está listo!'
+  const compra = { etiqueta: 'LO QUE COMPRASTE', etiquetaTotal: 'Total', items, costoEnvio, total }
+
+  const saludo = nombre ? [[`Hola ${nombre}: `]] : []
+  const presentacion = [...saludo, [tienda, true], [' ya tiene listo tu pedido.']]
+  const quePasa = [
+    [`${tienda} te va a escribir por WhatsApp`],
+    ...(telefono ? [[' al '], [telefono, true]] : []),
+    [' para coordinar cuándo pasás a buscarlo.'],
+  ]
+
+  const cuerpo = [
+    lineaAzul(`Pedido #${pedidoId}`),
+    tituloImagen('titulo-listo.png', titulo),
+    parrafo(partesHtml(presentacion)),
+    tarjetaCompra(compra),
+    tarjeta('QUÉ PASA AHORA',
+      `<p style="margin:0;font-family:${FUENTE_TEXTO};font-size:15px;font-weight:300;line-height:1.6;color:${TEXTO};">` +
+      partesHtml(quePasa, telefono) +
+      '</p>'
+    ),
+    boton('Ver mis pedidos', linkPedidos),
+    htmlPie(PIE_COMPRADOR),
+  ].join('\n')
+
+  const texto = [
+    `PEDIDO #${pedidoId}`,
+    titulo,
+    partesTexto(presentacion),
+    textoCompra(compra),
+    `QUÉ PASA AHORA\n${partesTexto(quePasa)}`,
+    `Ver mis pedidos: ${linkPedidos}`,
+    PIE_COMPRADOR.join('\n'),
+  ].join('\n\n')
+
+  return { asunto, html: plantilla({ asunto, cuerpo }), texto }
+}
+
 // Recibe { pedido: { id, metodo_envio, subtotal_productos, costo_envio, total,
 // envio_empresa, envio_empresa_otra, envio_seguimiento }, nombreVendedor,
 // direccion, franja }.
@@ -283,7 +356,7 @@ export function armarMailCompra(datos) {
 // correo): esa línea no va, y en su lugar va el seguimiento.
 export function armarMailDespacho({ pedido, nombreVendedor, direccion, franja }) {
   const asunto = `Tu pedido #${pedido.id} fue despachado`
-  const titulo = '¡Tu pedido fue despachado! 🚀'
+  const titulo = '¡Tu pedido va en camino!'
   const porCorreo = tipoEntregaDe(pedido.metodo_envio) === 'correo'
   const seguimiento = porCorreo ? seguimientoDe(pedido) : null
   const franjaVisible = porCorreo ? null : franja
@@ -291,10 +364,11 @@ export function armarMailDespacho({ pedido, nombreVendedor, direccion, franja })
     ? 'A coordinar'
     : Number(pedido.costo_envio) === 0 ? 'Gratis' : pesos(pedido.costo_envio)
   const linkPedidos = `${SITIO_URL}/mis-pedidos`
-  const pie = 'Este email fue enviado desde Bahía Shops. Si tenés alguna consulta, respondé a este email.'
+  const pie = PIE_COMPRADOR
 
   const cuerpo = [
-    tituloTexto(titulo),
+    lineaAzul(`Pedido #${pedido.id}`),
+    tituloImagen('titulo-despacho.png', titulo),
     parrafo(`${escapar(nombreVendedor)} acaba de despachar tu pedido ${negrita(`#${pedido.id}`)}.`),
     direccion ? parrafo(`Va camino a ${negrita(escapar(direccion))}.`) : '',
     franjaVisible ? parrafo(`Franja de entrega: ${negrita(escapar(franjaVisible))}.`) : '',
@@ -314,10 +388,11 @@ export function armarMailDespacho({ pedido, nombreVendedor, direccion, franja })
       filaMonto('Total', pesos(pedido.total), { fuerte: true, borde: true }),
     ].join('\n')}</table>`),
     boton('Ver mis compras', linkPedidos),
-    `<p style="margin:28px 0 0;font-family:${FUENTE_TEXTO};font-size:12px;font-weight:300;line-height:1.6;color:${GRIS};">${escapar(pie)}</p>`,
+    htmlPie(pie),
   ].filter(Boolean).join('\n')
 
   const texto = [
+    `PEDIDO #${pedido.id}`,
     titulo,
     `${nombreVendedor} acaba de despachar tu pedido #${pedido.id}.`,
     direccion ? `Va camino a ${direccion}.` : null,
@@ -334,7 +409,7 @@ export function armarMailDespacho({ pedido, nombreVendedor, direccion, franja })
       `Total: ${pesos(pedido.total)}`,
     ].join('\n'),
     `Ver mis compras: ${linkPedidos}`,
-    pie,
+    pie.join('\n'),
   ].filter(Boolean).join('\n\n')
 
   return { asunto, html: plantilla({ asunto, cuerpo }), texto }
@@ -732,6 +807,68 @@ export async function avisarPagoDoble({ admin, pedidoId, pagoNuevo }) {
     return { enviado: true }
   } catch (err) {
     console.error(`${etiqueta} falló —`, err)
+    return { enviado: false, motivo: 'excepcion' }
+  }
+}
+
+// Avisa a quien compró que su pedido de Retiro está listo. Lo llama la ruta
+// que avanza el pedido, DESPUÉS de guardar 'listo'. Una sola vez por pedido
+// (reclama pedidos.aviso_listo_en, migración 036): como el pedido no vuelve a
+// 'listo', si Resend falla el mail no se reintenta; queda en el log y la
+// pantalla avisa. Nunca lanza. Devuelve { enviado, motivo }.
+//
+// 'admin' tiene que ser un cliente con service_role.
+export async function avisarListo({ admin, pedidoId }) {
+  try {
+    const { data: pedido, error } = await admin
+      .from('pedidos')
+      .select(`
+        id, estado, metodo_envio, comprador_id, comprador_nombre, comprador_telefono,
+        costo_envio, total, vendedor_nombre,
+        vendedor:vendedores ( nombre_negocio ),
+        items:pedido_items ( id, nombre, variante, cantidad, precio )
+      `)
+      .eq('id', pedidoId)
+      .maybeSingle()
+
+    if (error || !pedido) {
+      console.error(`Pedido ${pedidoId}: mail de listo no enviado — no se pudo leer el pedido.`, error?.message)
+      return { enviado: false, motivo: 'pedido_no_encontrado' }
+    }
+    if (pedido.estado !== 'listo' || formaDeEntrega(pedido.metodo_envio) !== 'retiro') {
+      console.error(`Pedido ${pedidoId}: mail de listo no enviado — el pedido está en "${pedido.estado}" (${pedido.metodo_envio}).`)
+      return { enviado: false, motivo: 'no_corresponde' }
+    }
+
+    const { data: cuenta, error: errorCuenta } = await admin
+      .from('usuarios')
+      .select('email, cerrada_en')
+      .eq('id', pedido.comprador_id)
+      .maybeSingle()
+    if (errorCuenta) {
+      console.error(`Pedido ${pedidoId}: no se pudo leer la cuenta de quien compró para el mail de listo — ${errorCuenta.message}`)
+    }
+    // Una cuenta eliminada no recibe mails: le queda un mail .invalid.
+    const para = cuenta && !cuenta.cerrada_en && !/.invalid$/i.test(cuenta.email || '') ? cuenta.email : null
+
+    return await enviarUnaVez({
+      admin,
+      pedidoId: pedido.id,
+      columna: 'aviso_listo_en',
+      destinatario: 'comprador (listo para retirar)',
+      para,
+      armar: () => armarMailListo({
+        pedidoId: pedido.id,
+        tienda: pedido.vendedor_nombre || pedido.vendedor?.nombre_negocio || 'La tienda',
+        nombre: pedido.comprador_nombre,
+        telefono: pedido.comprador_telefono,
+        items: [...(pedido.items || [])].sort((a, b) => a.id - b.id),
+        costoEnvio: pedido.costo_envio,
+        total: pedido.total,
+      }),
+    })
+  } catch (err) {
+    console.error(`Pedido ${pedidoId}: error en el mail de listo`, err)
     return { enviado: false, motivo: 'excepcion' }
   }
 }

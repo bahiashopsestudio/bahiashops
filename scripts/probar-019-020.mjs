@@ -33,6 +33,7 @@ export function resolve(especificador, contexto, siguiente) {
 `))
 
 const L = await import("../src/lib/metodosEntrega.js")
+const P = await import("../src/lib/pedidos.js")
 const { calcularEnvio, calcularPedido } = await import("../src/lib/precioPedido.js")
 
 const leer = (f) => readFileSync(new URL(`../sql/migrations/${f}`, import.meta.url), "utf8")
@@ -438,8 +439,8 @@ console.log("\n5. La lista: nombres, dirección y etiquetas")
      L.etiquetaMetodo("retiro", "comprador", { direccionVisible: true }) === "Retiro en el local", "retiro sin dirección visible se llama 'Retiro'")
   ok(L.etiquetaMetodo("flash_pedidos", "admin") === "Envío de la tienda (por zona)", "el admin ve el nombre nuevo de un valor viejo")
   ok(L.etiquetaMetodo("xyz", "vendedor") === "Otro (xyz)", "un valor desconocido se nota")
-  ok(L.grupoEntrega("retiro") === "retiro" && L.grupoEntrega("envio_tienda") === "envio" && L.grupoEntrega("correo") === "correo" &&
-     L.grupoEntrega("coordinar") === "coordinar" && L.grupoEntrega("xyz") === "coordinar", "grupos de los textos de los pasos")
+  ok(P.formaDeEntrega("retiro") === "retiro" && P.formaDeEntrega("envio_tienda") === "envio" && P.formaDeEntrega("correo") === "correo" &&
+     P.formaDeEntrega("coordinar") === "coordinar" && P.formaDeEntrega("xyz") === "coordinar", "grupos de los textos de los pasos")
   ok(L.ORDEN_METODOS.every((id) => ["retiro", "domicilio", "correo", "coordinar"].includes(L.METODOS[id].tipoEntrega)), "cada método tiene tipo de entrega")
   ok(L.textoCostoEnvio("envio_tienda", 0) === "Envío gratis" && L.textoCostoEnvio("coordinar", 0) === "A coordinar", "$0 es 'Envío gratis'")
 }

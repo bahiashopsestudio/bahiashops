@@ -1,15 +1,18 @@
 // Corregir la empresa y el número de seguimiento de un pedido por correo que
-// ya se despachó. No cambia el estado ni vuelve a mandar el mail de despacho:
-// quien compra ve el dato nuevo en Mis pedidos.
+// ya se despachó (o ya se entregó). No cambia el estado ni vuelve a mandar el
+// mail de despacho: quien compra ve el dato nuevo en Mis pedidos.
 //
 // Lo que se valida, en este orden: hay sesión, quien llama es un vendedor, el
-// pedido es SUYO, es por correo y ya está despachado. Un pedido ajeno se
-// responde igual que uno inexistente.
+// pedido es SUYO, es por correo y ya está despachado o entregado. Un pedido
+// ajeno se responde igual que uno inexistente.
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getServiceRoleClient } from '@/lib/supabase/admin';
 import { tipoEntregaDe, validarSeguimiento } from '@/lib/metodosEntrega';
+
+// Los estados en los que el pedido ya tiene seguimiento cargado.
+const ESTADOS_CON_SEGUIMIENTO = ['despachado', 'entregado'];
 
 export async function POST(request) {
   const supabase = await createClient();
@@ -47,8 +50,8 @@ export async function POST(request) {
   if (!pedido || pedido.vendedor_id !== vendedor.id) {
     return NextResponse.json({ error: 'No encontramos ese pedido.' }, { status: 404 });
   }
-  if (tipoEntregaDe(pedido.metodo_envio) !== 'correo' || pedido.estado !== 'despachado') {
-    return NextResponse.json({ error: 'Solo se corrige el seguimiento de un pedido por correo ya despachado.' }, { status: 409 });
+  if (tipoEntregaDe(pedido.metodo_envio) !== 'correo' || !ESTADOS_CON_SEGUIMIENTO.includes(pedido.estado)) {
+    return NextResponse.json({ error: 'Solo se corrige el seguimiento de un pedido por correo ya despachado o entregado.' }, { status: 409 });
   }
 
   const seguimiento = validarSeguimiento(body);
@@ -59,7 +62,7 @@ export async function POST(request) {
     .update(seguimiento.campos)
     .eq('id', pedidoId)
     .eq('vendedor_id', vendedor.id)
-    .eq('estado', 'despachado')
+    .eq('estado', pedido.estado)
     .select('id, envio_empresa, envio_empresa_otra, envio_seguimiento')
     .maybeSingle();
   if (errorUpdate || !actualizado) {

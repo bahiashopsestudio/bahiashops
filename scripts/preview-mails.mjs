@@ -23,7 +23,7 @@ export function resolve(especificador, contexto, siguiente) {
 `
 register('data:text/javascript,' + encodeURIComponent(alias))
 
-const { armarMailVenta, armarMailCompra, armarMailDespacho, armarMailPagoTardio } =
+const { armarMailVenta, armarMailCompra, armarMailListo, armarMailDespacho, armarMailPagoTardio } =
   await import('../src/lib/mailsPedidos.js')
 const { armarMailCuentaEliminada } = await import('../src/lib/mailsCuenta.js')
 const { armarMailCuentaCambiada, armarMailCuentaMp } = await import('../src/lib/mailsCuentaMp.js')
@@ -96,6 +96,10 @@ for (const [caso, datos] of Object.entries(casos)) {
   mails[`venta-${caso}`] = armarMailVenta(datos)
   mails[`compra-${caso}`] = armarMailCompra(datos)
 }
+// Listo para retirar (Retiro): con y sin teléfono de quien compró, y escapado.
+mails.listo = armarMailListo({ ...casos.retiro, pedidoId: 1045 })
+mails['listo-sin-telefono'] = armarMailListo({ ...casos.retiro, pedidoId: 1046, telefono: null, nombre: null })
+mails['listo-escapado'] = armarMailListo({ ...casos.escapado, metodoEnvio: 'retiro', costoEnvio: 0, total: 14500 })
 mails.despacho = armarMailDespacho({
   pedido: { id: 1042, metodo_envio: 'envio_tienda', subtotal_productos: 22800, costo_envio: 2500, total: 25300 },
   nombreVendedor: 'Cerámica del Puerto',
