@@ -72,6 +72,7 @@ export async function GET(request) {
     .maybeSingle();
 
   if (errorVendedor || !vendedor) {
+    if (errorVendedor) console.error('[mp-callback/vendedores]', errorVendedor.message);
     return conError(request, 'sin_vendedor');
   }
 

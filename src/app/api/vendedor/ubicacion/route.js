@@ -81,11 +81,12 @@ export async function POST(request) {
   // ── Localidad: activa, o la que la tienda ya tenía (017) ──
   const localidadId = Number(cuerpo.localidadId);
   if (!Number.isInteger(localidadId)) return rechazo(400, 'Elegí tu localidad.');
-  const { data: localidad } = await admin
+  const { data: localidad, error: errorLocalidad } = await admin
     .from('localidades')
     .select('id, activa')
     .eq('id', localidadId)
     .maybeSingle();
+  if (errorLocalidad) console.error('[ubicacion/localidades]', errorLocalidad.message);
   if (!localidad) return rechazo(400, 'Elegí tu localidad.');
   if (!localidad.activa && localidad.id !== vendedor.localidad_id) {
     return rechazo(400, 'Por ahora Bahía Shops no está disponible en esa localidad.');
@@ -123,11 +124,12 @@ export async function POST(request) {
   const barrioId = detectado ? detectado.id : Number(cuerpo.barrioId);
   if (!Number.isInteger(barrioId)) return rechazo(400, 'Elegí tu barrio.');
 
-  const { data: barrio } = await admin
+  const { data: barrio, error: errorLecturaBarrio } = await admin
     .from('barrios')
     .select('id, localidad_id')
     .eq('id', barrioId)
     .maybeSingle();
+  if (errorLecturaBarrio) console.error('[ubicacion/barrios]', errorLecturaBarrio.message);
   if (!barrio || barrio.localidad_id !== localidadId) {
     return rechazo(400, detectado
       ? 'El punto que marcaste no está en la localidad elegida.'

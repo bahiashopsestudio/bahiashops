@@ -27,6 +27,7 @@ export async function GET() {
     .order('creado_en', { ascending: false });
 
   if (error) {
+    console.error('[admin-vendedores/listar]', error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
@@ -54,6 +55,7 @@ export async function GET() {
     .gte('creado_en', desde);
 
   if (errorConteo) {
+    console.error('[admin-vendedores/conteo-nuevos]', errorConteo.message);
     return NextResponse.json({ error: errorConteo.message }, { status: 500 });
   }
 

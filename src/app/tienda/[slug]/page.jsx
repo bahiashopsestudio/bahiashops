@@ -17,12 +17,13 @@ const CAMPOS = `
 export async function generateMetadata({ params }) {
   const { slug } = await params
   const supabase = await createClient()
-  const { data } = await soloVendedoresConFicha(
+  const { data, error } = await soloVendedoresConFicha(
     supabase
       .from('vendedores')
       .select('nombre_negocio, descripcion_corta, pausada_en')
       .eq('slug', slug)
   ).maybeSingle()
+  if (error) console.error('[tienda/metadata-vendedor]', error.message)
 
   // Una tienda sin publicar o bloqueada no expone su nombre ni se indexa, ni
   // siquiera cuando el admin la está previsualizando.
@@ -61,12 +62,13 @@ export default async function TiendaPage({ params, searchParams }) {
   // Vista normal: sólo tiendas publicadas, no bloqueadas y no cerradas. Para
   // el visitante esas situaciones son la misma: el 404 de siempre, sin decir
   // cuál es. Una tienda PAUSADA sí tiene ficha: la del cartel, sin productos.
-  const { data: publicada } = await soloVendedoresConFicha(
+  const { data: publicada, error: errorPublicada } = await soloVendedoresConFicha(
     supabase
       .from('vendedores')
       .select(CAMPOS)
       .eq('slug', slug)
   ).maybeSingle()
+  if (errorPublicada) console.error('[tienda/vendedor]', errorPublicada.message)
 
   let vendedor = publicada
   let esPrevisualizacion = false
@@ -82,11 +84,12 @@ export default async function TiendaPage({ params, searchParams }) {
     const admin_user = await verificarAdmin()
     if (admin_user) {
       const admin = getServiceRoleClient()
-      const { data: sinAprobar } = await admin
+      const { data: sinAprobar, error: errorSinAprobar } = await admin
         .from('vendedores')
         .select(CAMPOS)
         .eq('slug', slug)
         .maybeSingle()
+      if (errorSinAprobar) console.error('[tienda/vendedor-preview]', errorSinAprobar.message)
       if (sinAprobar) {
         vendedor = sinAprobar
         esPrevisualizacion = true
@@ -110,7 +113,7 @@ export default async function TiendaPage({ params, searchParams }) {
   }
 
   const clienteProductos = esPrevisualizacion ? getServiceRoleClient() : supabase
-  const { data: productos } = await clienteProductos
+  const { data: productos, error: errorProductos } = await clienteProductos
     .from('productos')
     .select(`
       id, nombre, precio, precio_anterior,
@@ -119,6 +122,7 @@ export default async function TiendaPage({ params, searchParams }) {
     .eq('vendedor_id', vendedor.id)
     .eq('estado', 'activo')
     .order('creado_en', { ascending: false })
+  if (errorProductos) console.error('[tienda/productos]', errorProductos.message)
 
   return (
     <>

@@ -16,23 +16,25 @@ export async function POST(request) {
 
   const admin = getServiceRoleClient();
 
-  const { data: existente } = await admin
+  const { data: existente, error: errorExistente } = await admin
     .from('tesoros')
     .select('id')
     .eq('producto_id', producto_id)
     .eq('activo', true)
     .maybeSingle();
+  if (errorExistente) console.error('[admin-tesoros/existente]', errorExistente.message);
 
   if (existente) {
     return NextResponse.json({ error: 'Ese producto ya es un tesoro activo.' }, { status: 409 });
   }
 
-  const { data: ultimo } = await admin
+  const { data: ultimo, error: errorUltimo } = await admin
     .from('tesoros')
     .select('orden')
     .order('orden', { ascending: false })
     .limit(1)
     .maybeSingle();
+  if (errorUltimo) console.error('[admin-tesoros/orden]', errorUltimo.message);
 
   const siguienteOrden = (ultimo?.orden ?? -1) + 1;
 
@@ -48,6 +50,7 @@ export async function POST(request) {
     .single();
 
   if (error) {
+    console.error('[admin-tesoros/crear]', error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

@@ -14,6 +14,7 @@ export async function GET() {
     .order('orden');
 
   if (error) {
+    console.error('[admin-colecciones/listar]', error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
@@ -63,6 +64,7 @@ export async function POST(request) {
     if (error.code === '23505') {
       return NextResponse.json({ error: 'Ya existe una colección con ese slug.' }, { status: 409 });
     }
+    console.error('[admin-colecciones/crear]', error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

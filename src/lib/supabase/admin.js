@@ -17,11 +17,12 @@ export async function verificarAdmin() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const { data: perfil } = await supabase
+  const { data: perfil, error } = await supabase
     .from('usuarios')
     .select('es_admin')
     .eq('id', user.id)
     .single()
+  if (error) console.error('[verificar-admin/usuarios]', error.message)
 
   if (!perfil?.es_admin) return null
   return user

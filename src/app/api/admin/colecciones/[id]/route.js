@@ -25,6 +25,7 @@ export async function GET(request, { params }) {
     .single();
 
   if (errColeccion || !coleccion) {
+    if (errColeccion && errColeccion.code !== 'PGRST116') console.error('[admin-coleccion/colecciones]', errColeccion.message);
     return NextResponse.json({ error: 'No se encontró la colección.' }, { status: 404 });
   }
 
@@ -42,6 +43,7 @@ export async function GET(request, { params }) {
     .order('orden');
 
   if (errProductos) {
+    console.error('[admin-coleccion/coleccion_productos]', errProductos.message);
     return NextResponse.json({ error: errProductos.message }, { status: 500 });
   }
 
@@ -98,6 +100,7 @@ export async function PUT(request, { params }) {
     if (error.code === '23505') {
       return NextResponse.json({ error: 'Ya existe una colección con ese slug.' }, { status: 409 });
     }
+    console.error('[admin-coleccion/actualizar]', error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
@@ -115,6 +118,7 @@ export async function DELETE(request, { params }) {
   const { error } = await admin.from('colecciones').delete().eq('id', id);
 
   if (error) {
+    console.error('[admin-coleccion/borrar]', error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

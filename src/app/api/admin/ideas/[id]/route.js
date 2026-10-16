@@ -15,6 +15,7 @@ export async function PATCH(request, { params }) {
     .eq('id', id);
 
   if (error) {
+    console.error('[admin-ideas/actualizar]', error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
@@ -32,6 +33,7 @@ export async function DELETE(request, { params }) {
   const { error } = await admin.from('ideas_admin').delete().eq('id', id);
 
   if (error) {
+    console.error('[admin-ideas/borrar]', error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

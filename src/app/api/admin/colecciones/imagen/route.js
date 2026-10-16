@@ -20,6 +20,7 @@ export async function POST(request) {
   const { error } = await admin.storage.from('colecciones').upload(nombreArchivo, file);
 
   if (error) {
+    console.error('[admin-colecciones/subir-imagen]', error.message);
     return NextResponse.json({ error: 'Error al subir la imagen: ' + error.message }, { status: 500 });
   }
 

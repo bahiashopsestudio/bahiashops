@@ -96,10 +96,12 @@ export async function POST(request) {
   let nombreAntes = null;
   let tiendaAntes = null;
   try {
-    const { data: perfil } = await admin.from('usuarios').select('nombre').eq('id', user.id).maybeSingle();
+    const { data: perfil, error: errorPerfil } = await admin.from('usuarios').select('nombre').eq('id', user.id).maybeSingle();
+    if (errorPerfil) console.error('[cerrar-cuenta/usuarios]', errorPerfil.message);
     nombreAntes = (perfil?.nombre || '').trim() || null;
-    const { data: tienda } = await admin
+    const { data: tienda, error: errorTienda } = await admin
       .from('vendedores').select('nombre_negocio').eq('usuario_id', user.id).is('cerrada_en', null).maybeSingle();
+    if (errorTienda) console.error('[cerrar-cuenta/vendedores]', errorTienda.message);
     tiendaAntes = (tienda?.nombre_negocio || '').trim() || null;
   } catch (err) {
     console.warn(`Eliminar cuenta ${user.id}: no se pudo leer el nombre antes de eliminar —`, err?.message || err);

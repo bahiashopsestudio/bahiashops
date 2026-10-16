@@ -28,6 +28,7 @@ export async function PUT(request, { params }) {
     .single();
 
   if (error) {
+    console.error('[admin-categoria/actualizar]', error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

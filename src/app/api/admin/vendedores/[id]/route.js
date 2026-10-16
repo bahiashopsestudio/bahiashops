@@ -45,11 +45,12 @@ async function avisarAlVendedor({ vendedor, estado, bloqueo, admin, baseUrl }) {
     // El mail de contacto público es opcional: si no hay, va al de la cuenta.
     let destino = vendedor.email_contacto;
     if (!destino) {
-      const { data: cuenta } = await admin
+      const { data: cuenta, error: errorCuenta } = await admin
         .from('usuarios')
         .select('email')
         .eq('id', vendedor.usuario_id)
         .maybeSingle();
+      if (errorCuenta) console.error('[admin-vendedores/usuarios]', errorCuenta.message);
       destino = cuenta?.email || null;
     }
 
@@ -161,6 +162,7 @@ export async function PUT(request, { params }) {
     .single();
 
   if (error) {
+    console.error('[admin-vendedores/actualizar]', error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

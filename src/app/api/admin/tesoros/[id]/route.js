@@ -34,6 +34,7 @@ export async function PUT(request, { params }) {
     .single();
 
   if (error) {
+    console.error('[admin-tesoros/actualizar]', error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

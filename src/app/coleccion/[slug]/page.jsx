@@ -16,16 +16,18 @@ export default async function ColeccionPage({ params }) {
   const { slug } = await params;
   const supabase = await createClient();
 
-  const { data: coleccion } = await supabase
+  const { data: coleccion, error: errorColeccion } = await supabase
     .from('colecciones')
     .select('id, nombre, slug, descripcion, imagen_url, tipo')
     .eq('slug', slug)
     .eq('activa', true)
     .single();
+  // PGRST116 es "no hay fila": una colección que no existe es un 404, no un error.
+  if (errorColeccion && errorColeccion.code !== 'PGRST116') console.error('[coleccion/colecciones]', errorColeccion.message);
 
   if (!coleccion) notFound();
 
-  const { data: filas } = await supabase
+  const { data: filas, error: errorFilas } = await supabase
     .from('coleccion_productos')
     .select(`
       orden,
@@ -37,6 +39,7 @@ export default async function ColeccionPage({ params }) {
     `)
     .eq('coleccion_id', coleccion.id)
     .order('orden');
+  if (errorFilas) console.error('[coleccion/coleccion_productos]', errorFilas.message);
 
   // El vendedor cuelga dos niveles adentro, así que el filtro va acá y no en
   // la query. Que un producto esté curado en una cápsula no lo hace visible:

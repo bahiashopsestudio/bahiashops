@@ -92,6 +92,7 @@ export async function POST(request) {
     .maybeSingle();
 
   if (errorLectura || !categoria) {
+    if (errorLectura) console.error('[activar-categoria/categorias]', errorLectura.message);
     return NextResponse.json({ error: 'Esa categoría no existe.' }, { status: 404 });
   }
 

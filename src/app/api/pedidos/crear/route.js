@@ -119,6 +119,8 @@ export async function POST(request) {
     .maybeSingle();
 
   if (errorVendedor || errorCuentaMp) {
+    if (errorVendedor) console.error('[crear-pedido/vendedores]', errorVendedor.message);
+    if (errorCuentaMp) console.error('[crear-pedido/mercadopago_cuentas]', errorCuentaMp.message);
     return NextResponse.json(
       { error: 'No se pudo verificar el pedido.' },
       { status: 500 }
@@ -162,6 +164,7 @@ export async function POST(request) {
     .eq('estado', 'activo');
 
   if (errorProductos) {
+    console.error('[crear-pedido/productos]', errorProductos.message);
     return NextResponse.json(
       { error: 'No se pudo verificar el pedido.' },
       { status: 500 }
@@ -484,6 +487,7 @@ export async function POST(request) {
         { status: 409 }
       );
     }
+    console.error('[crear-pedido/insertar]', errorPedido.message);
     return NextResponse.json(
       { error: 'No se pudo crear el pedido.', detalle: errorPedido.message },
       { status: 500 }
@@ -507,7 +511,8 @@ export async function POST(request) {
     .insert(itemsParaGuardar);
 
   if (errorItems) {
-    await admin.from('pedidos').delete().eq('id', pedido.id);
+    const { error: errorBorrado } = await admin.from('pedidos').delete().eq('id', pedido.id);
+    if (errorBorrado) console.error('[crear-pedido/borrar-sin-items]', errorBorrado.message);
     return NextResponse.json(
       { error: 'No se pudieron guardar los productos.', detalle: errorItems.message },
       { status: 500 }

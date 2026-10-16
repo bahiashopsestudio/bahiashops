@@ -37,6 +37,8 @@ export async function getCuentaValida(vendedorId, admin) {
     .single();
 
   if (error || !cuenta) {
+    // PGRST116 es "no hay fila": una tienda sin MercadoPago conectado, no un error.
+    if (error && error.code !== 'PGRST116') console.error('[mp-tokens/mercadopago_cuentas]', error.message);
     throw new Error('VENDEDOR_SIN_MP');
   }
 
@@ -117,8 +119,9 @@ function idDeCuenta(valor) {
  * En la UI le va a aparecer el botón de "Reconectar".
  */
 async function marcarDesconectado(vendedorId, admin) {
-  await admin
+  const { error } = await admin
     .from('vendedores')
     .update({ mercadopago_conectado: false })
     .eq('id', vendedorId);
+  if (error) console.error('[mp-tokens/marcar-desconectado]', error.message);
 }

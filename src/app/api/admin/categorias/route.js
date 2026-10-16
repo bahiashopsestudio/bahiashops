@@ -22,6 +22,7 @@ export async function GET() {
     .order('orden');
 
   if (error) {
+    console.error('[admin-categorias/categorias]', error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
@@ -30,6 +31,7 @@ export async function GET() {
     .select('id, categoria_id, estado_validacion, bloqueado');
 
   if (errorVendedores) {
+    console.error('[admin-categorias/vendedores]', errorVendedores.message);
     return NextResponse.json({ error: errorVendedores.message }, { status: 500 });
   }
 
@@ -38,6 +40,7 @@ export async function GET() {
     .select('id, categoria_id, categoria_secundaria_id');
 
   if (errorProductos) {
+    console.error('[admin-categorias/productos]', errorProductos.message);
     return NextResponse.json({ error: errorProductos.message }, { status: 500 });
   }
 

@@ -44,11 +44,12 @@ export default async function BienvenidaPage({ searchParams }) {
     redirect(`/entrar?next=${encodeURIComponent(vuelta)}`)
   }
 
-  const { data: cuenta } = await supabase
+  const { data: cuenta, error: errorCuenta } = await supabase
     .from('usuarios')
     .select('nombre, apellido, nombre_usuario, bienvenida_vista_en')
     .eq('id', user.id)
     .maybeSingle()
+  if (errorCuenta) console.error('[bienvenida/usuarios]', errorCuenta.message)
 
   // Ya la vio (por ejemplo, volvió con el botón de atrás): sigue de largo.
   if (cuenta?.bienvenida_vista_en) redirect(next)

@@ -15,12 +15,13 @@ export async function POST(request, { params }) {
 
   const admin = getServiceRoleClient();
 
-  const { data: existentes } = await admin
+  const { data: existentes, error: errorExistentes } = await admin
     .from('coleccion_productos')
     .select('orden')
     .eq('coleccion_id', id)
     .order('orden', { ascending: false })
     .limit(1);
+  if (errorExistentes) console.error('[admin-coleccion-productos/orden]', errorExistentes.message);
 
   const siguienteOrden = existentes?.length ? existentes[0].orden + 1 : 0;
 
@@ -32,6 +33,7 @@ export async function POST(request, { params }) {
     if (error.code === '23505') {
       return NextResponse.json({ error: 'Ese producto ya está en la colección.' }, { status: 409 });
     }
+    console.error('[admin-coleccion-productos/agregar]', error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
@@ -58,6 +60,7 @@ export async function DELETE(request, { params }) {
     .eq('producto_id', producto_id);
 
   if (error) {
+    console.error('[admin-coleccion-productos/quitar]', error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
@@ -84,6 +87,7 @@ export async function PUT(request, { params }) {
     .eq('producto_id', producto_id);
 
   if (error) {
+    console.error('[admin-coleccion-productos/ordenar]', error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

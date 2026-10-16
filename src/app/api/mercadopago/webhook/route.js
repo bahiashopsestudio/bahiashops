@@ -167,9 +167,10 @@ export async function POST(request) {
       process.env.SUPABASE_SERVICE_ROLE_KEY
     );
 
-    const { data: cuentas } = await admin
+    const { data: cuentas, error: errorCuentas } = await admin
       .from('mercadopago_cuentas')
       .select('vendedor_id, access_token, mp_user_id');
+    if (errorCuentas) console.error('[webhook/mercadopago_cuentas]', errorCuentas.message);
 
     if (!cuentas || cuentas.length === 0) {
       console.log('No hay vendedores conectados con MercadoPago.');

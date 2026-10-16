@@ -15,6 +15,7 @@ export async function GET() {
     .order('creada_en', { ascending: false });
 
   if (error) {
+    console.error('[admin-ideas/listar]', error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
@@ -42,6 +43,7 @@ export async function POST(request) {
     .single();
 
   if (error) {
+    console.error('[admin-ideas/crear]', error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

@@ -27,6 +27,7 @@ export async function GET(request, { params }) {
     .maybeSingle();
 
   if (error) {
+    console.error('[admin-vendedor-detalle/vendedores]', error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
@@ -40,11 +41,12 @@ export async function GET(request, { params }) {
       .filter((b) => !b.levantado_en)
       .sort((a, b) => new Date(b.creado_en) - new Date(a.creado_en))[0] || null;
 
-  const { data: productos } = await admin
+  const { data: productos, error: errorProductos } = await admin
     .from('productos')
     .select('id, nombre, precio, estado, creado_en, producto_media ( url, es_principal, orden )')
     .eq('vendedor_id', id)
     .order('creado_en', { ascending: false });
+  if (errorProductos) console.error('[admin-vendedor-detalle/productos]', errorProductos.message);
 
   return NextResponse.json({ vendedor, productos: productos || [] });
 }

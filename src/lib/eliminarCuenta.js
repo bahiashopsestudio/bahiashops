@@ -75,7 +75,8 @@ export async function evaluarCuenta(admin, userId) {
     .filter((p) => !['', 'null', 'undefined'].includes(String(p.mp_payment_id ?? '').trim()))
     .map((p) => ({ id: p.id, tienda: textoTienda(p.vendedor_nombre) }))
 
-  const { data: cuenta } = await admin.from('usuarios').select('nombre_usuario').eq('id', userId).maybeSingle()
+  const { data: cuenta, error: errorCuenta } = await admin.from('usuarios').select('nombre_usuario').eq('id', userId).maybeSingle()
+  if (errorCuenta) console.error('[eliminar-cuenta/usuarios]', errorCuenta.message)
 
   const motivos = ordenarMotivos(data.motivos || [])
   const tienda = data.tienda && typeof data.tienda === 'object'

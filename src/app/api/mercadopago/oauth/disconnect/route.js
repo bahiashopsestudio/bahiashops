@@ -27,11 +27,12 @@ export async function POST() {
   }
 
   // 2. ¿Qué vendedor es? Sale de la sesión, no de lo que mande el cliente.
-  const { data: vendedor } = await supabase
+  const { data: vendedor, error: errorVendedor } = await supabase
     .from('vendedores')
     .select('id, nombre_negocio, slug')
     .eq('usuario_id', user.id)
     .maybeSingle();
+  if (errorVendedor) console.error('[mp-disconnect/vendedores]', errorVendedor.message);
 
   if (!vendedor) {
     return NextResponse.json(
@@ -53,11 +54,12 @@ export async function POST() {
   let cuentaAnterior = null;
   let tokenViejo = null;
   try {
-    const { data: previa } = await admin
+    const { data: previa, error: errorPrevia } = await admin
       .from('mercadopago_cuentas')
       .select('mp_user_id, mp_nickname, access_token')
       .eq('vendedor_id', vendedor.id)
       .maybeSingle();
+    if (errorPrevia) console.error('[mp-disconnect/mercadopago_cuentas]', errorPrevia.message);
 
     if (previa) {
       const id = previa.mp_user_id === null || previa.mp_user_id === undefined ? '' : String(previa.mp_user_id).trim();

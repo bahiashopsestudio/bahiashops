@@ -93,11 +93,12 @@ export async function POST(request) {
   }
 
   // Una cuenta cerrada queda con un mail .invalid: a esa no se le manda nada.
-  const { data: comprador } = await admin
+  const { data: comprador, error: errorComprador } = await admin
     .from('usuarios')
     .select('id, email, nombre_usuario, cerrada_en')
     .eq('id', pedido.comprador_id)
     .maybeSingle();
+  if (errorComprador) console.error('[recordar/usuarios]', errorComprador.message);
 
   const email = comprador && !comprador.cerrada_en && !/\.invalid$/i.test(comprador.email || '')
     ? comprador.email

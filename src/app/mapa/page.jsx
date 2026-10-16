@@ -11,19 +11,21 @@ export const metadata = {
 export default async function MapaPage() {
   const supabase = await createClient()
 
-  const { data: vendedores } = await soloVendedoresPublicados(
+  const { data: vendedores, error: errorVendedores } = await soloVendedoresPublicados(
     supabase
       .from('vendedores')
       .select('id, nombre_negocio, slug, latitud, longitud, direccion_visible, barrio_id, logo_url, descripcion_corta')
       .not('latitud', 'is', null)
       .not('longitud', 'is', null)
   )
+  if (errorVendedores) console.error('[mapa/vendedores]', errorVendedores.message)
 
-  const { data: categorias } = await supabase
+  const { data: categorias, error: errorCategorias } = await supabase
     .from('categorias')
     .select('id, nombre, slug')
     .eq('activa', true)
     .order('orden')
+  if (errorCategorias) console.error('[mapa/categorias]', errorCategorias.message)
 
   return (
     <MapaContent
