@@ -40,6 +40,10 @@
     "probar:031": "node scripts/probar-031.mjs",
     "probar:eliminar-tienda": "node scripts/probar-eliminar-tienda.mjs",
     "probar:032": "node scripts/probar-032.mjs",
+    "probar:033": "node scripts/probar-033.mjs",
+    "probar:034": "node scripts/probar-034.mjs",
+    "probar:productos": "node scripts/probar-productos.mjs",
+    "probar:moderacion": "node scripts/probar-moderacion.mjs",
     "probar:datos-pedido": "node scripts/probar-datos-pedido.mjs",
     "probar:cuenta": "node scripts/probar-eliminar-cuenta.mjs"
   },

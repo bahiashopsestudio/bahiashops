@@ -303,6 +303,31 @@ export default function NuevoProductoPage() {
     setMostrarPrevia(true);
   }
 
+  // Lo que se le manda a /api/vendedor/productos. El servidor vuelve a validar
+  // todo; estas son solo las elecciones del formulario.
+  function armarCuerpo(urls) {
+    const tieneVariantes = nombrePropiedad.trim() !== '' && valores.length > 0;
+    return {
+      nombre: datos.nombre.trim(),
+      descripcion: datos.descripcion.trim(),
+      marca: datos.marca.trim() || null,
+      precio: Number(datos.precio),
+      precio_anterior: datos.precio_anterior ? Number(datos.precio_anterior) : null,
+      tiempo_preparacion: datos.tiempo_preparacion || null,
+      categoria_id: Number(categoriaPrincipalId),
+      subcategoria_id: subcategoriaPrincipalId ? Number(subcategoriaPrincipalId) : null,
+      subcategoria_personalizada: subcategoriaPrincipalEsOtra ? subcategoriaPersonalizada.trim() : null,
+      categoria_secundaria_id: categoriaSecundariaId ? Number(categoriaSecundariaId) : null,
+      subcategoria_secundaria_id: subcategoriaSecundariaId ? Number(subcategoriaSecundariaId) : null,
+      subcategoria_secundaria_personalizada: subcategoriaSecundariaEsOtra ? subcategoriaSecundariaPersonalizada.trim() : null,
+      genero,
+      propiedad_1_nombre: tieneVariantes ? nombrePropiedad.trim() : null,
+      variantes: tieneVariantes ? valores : [],
+      fotos: urls,
+      sellos: sellosSeleccionados,
+    };
+  }
+
   // ── Guardar producto ──
   async function guardarProducto() {
     if (!datos.nombre.trim()) { alert('Poné un nombre al producto.'); return; }
@@ -341,58 +366,17 @@ export default function NuevoProductoPage() {
         urls.push(dataUrl.publicUrl);
       }
 
-      // Insertar producto
-      const { data: productoCreado, error: errorProducto } = await supabase
-        .from('productos')
-        .insert({
-          vendedor_id: vendedorId,
-          categoria_id: Number(categoriaPrincipalId),
-          subcategoria_id: subcategoriaPrincipalId ? Number(subcategoriaPrincipalId) : null,
-          subcategoria_personalizada: subcategoriaPrincipalEsOtra ? subcategoriaPersonalizada.trim() : null,
-          categoria_secundaria_id: categoriaSecundariaId ? Number(categoriaSecundariaId) : null,
-          subcategoria_secundaria_id: subcategoriaSecundariaId ? Number(subcategoriaSecundariaId) : null,
-          subcategoria_secundaria_personalizada: subcategoriaSecundariaEsOtra ? subcategoriaSecundariaPersonalizada.trim() : null,
-          genero: genero.length > 0 ? genero : null,
-          nombre: datos.nombre.trim(),
-          descripcion: datos.descripcion.trim(),
-          marca: datos.marca.trim() || null,
-          precio: Number(datos.precio),
-          precio_anterior: datos.precio_anterior ? Number(datos.precio_anterior) : null,
-          tiempo_preparacion: datos.tiempo_preparacion || null,
-          estado: 'en_revision',
-          tiene_variantes: tieneNombre && tieneValores,
-          propiedad_1_nombre: tieneNombre ? nombrePropiedad.trim() : null,
-          moderacion_avisos: moderacion.avisos,
-        })
-        .select()
-        .single();
-      if (errorProducto) throw new Error('Error al guardar el producto: ' + errorProducto.message);
-
-      const productoId = productoCreado.id;
-
-      // Guardar fotos
-      const mediaItems = urls.map((url, index) => ({
-        producto_id: productoId, url, tipo: 'foto', orden: index, es_principal: index === 0,
-      }));
-      const { error: errorMedia } = await supabase.from('producto_media').insert(mediaItems);
-      if (errorMedia) throw new Error('El producto se guardó pero hubo un error con las fotos: ' + errorMedia.message);
-
-      // Guardar variantes
-      if (tieneNombre && tieneValores) {
-        const variantesItems = valores.map((valor) => ({ producto_id: productoId, propiedad_1_valor: valor }));
-        const { error: errorVariantes } = await supabase.from('producto_variantes').insert(variantesItems);
-        if (errorVariantes) throw new Error('El producto se guardó pero hubo un error con las variantes: ' + errorVariantes.message);
-      }
-
-      // Guardar sellos del producto
-      if (sellosSeleccionados.length > 0) {
-        const filasSellos = sellosSeleccionados.map((selloId) => ({
-          producto_id: productoId,
-          sello_id: selloId,
-        }));
-        const { error: errorSellos } = await supabase.from('producto_sellos').insert(filasSellos);
-        if (errorSellos) console.error('Error al guardar sellos del producto:', errorSellos.message);
-      }
+      // El producto, las fotos, las variantes y los sellos los guarda el
+      // servidor (migración 033: el navegador no puede escribir en productos).
+      // Ahí corre la moderación de verdad y se decide el estado.
+      const res = await fetch('/api/vendedor/productos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(armarCuerpo(urls)),
+      });
+      const respuesta = await res.json().catch(() => ({}));
+      if (res.status === 422 && respuesta.moderacion) { setBloqueoModeracion(respuesta.moderacion); return; }
+      if (!res.ok) throw new Error(respuesta.error || 'Hubo un error al guardar. Probá de nuevo.');
 
       // Abrir las categorías del producto si estaban cerradas. Va por el
       // servidor: el navegador no puede escribir en 'categorias'.

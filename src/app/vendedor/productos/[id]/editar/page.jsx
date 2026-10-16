@@ -401,6 +401,31 @@ export default function EditarProductoPage() {
     setMostrarPrevia(true);
   }
 
+  // Lo que se le manda a /api/vendedor/productos/[id]. El servidor vuelve a
+  // validar todo; estas son solo las elecciones del formulario.
+  function armarCuerpo(urls) {
+    const tieneVariantes = nombrePropiedad.trim() !== '' && valores.length > 0;
+    return {
+      nombre: datos.nombre.trim(),
+      descripcion: datos.descripcion.trim(),
+      marca: datos.marca.trim() || null,
+      precio: Number(datos.precio),
+      precio_anterior: datos.precio_anterior ? Number(datos.precio_anterior) : null,
+      tiempo_preparacion: datos.tiempo_preparacion || null,
+      categoria_id: Number(categoriaPrincipalId),
+      subcategoria_id: subcategoriaPrincipalId ? Number(subcategoriaPrincipalId) : null,
+      subcategoria_personalizada: subcategoriaPrincipalEsOtra ? subcategoriaPersonalizada.trim() : null,
+      categoria_secundaria_id: categoriaSecundariaId ? Number(categoriaSecundariaId) : null,
+      subcategoria_secundaria_id: subcategoriaSecundariaId ? Number(subcategoriaSecundariaId) : null,
+      subcategoria_secundaria_personalizada: subcategoriaSecundariaEsOtra ? subcategoriaSecundariaPersonalizada.trim() : null,
+      genero,
+      propiedad_1_nombre: tieneVariantes ? nombrePropiedad.trim() : null,
+      variantes: tieneVariantes ? valores : [],
+      fotos: urls,
+      sellos: sellosSeleccionados,
+    };
+  }
+
   async function guardarCambios() {
     if (!datos.nombre.trim()) { alert('Poné un nombre al producto.'); return; }
     if (!datos.descripcion.trim()) { alert('Escribí una descripción.'); return; }
@@ -435,13 +460,6 @@ export default function EditarProductoPage() {
     setGuardando(true);
 
     try {
-      if (fotosAEliminar.length > 0) {
-        const rutas = fotosAEliminar.map(url => extraerRutaStorage(url, 'productos')).filter(Boolean);
-        if (rutas.length > 0) {
-          await supabase.storage.from('productos').remove(rutas);
-        }
-      }
-
       const urlsFinales = [];
 
       for (const foto of fotos) {
@@ -458,66 +476,26 @@ export default function EditarProductoPage() {
         }
       }
 
-      // Fotos y variantes se reemplazan ANTES de pasar el producto a revisión:
-      // la lectura pública de producto_variantes solo ve las de productos
-      // 'activo', y en Postgres una fila que no se puede leer tampoco se puede
-      // borrar. Con el producto ya en 'en_revision', el borrado no borraba nada
-      // (sin dar error) y cada edición sumaba otra tanda de talles.
-      const { error: errBorrarMedia } = await supabase.from('producto_media').delete().eq('producto_id', id);
-      if (errBorrarMedia) throw new Error('No se pudieron reemplazar las fotos: ' + errBorrarMedia.message);
+      // El producto, las fotos, las variantes y los sellos los guarda el
+      // servidor (migración 033: el navegador no puede escribir en productos).
+      // Ahí corre la moderación de verdad y se decide el estado: un producto
+      // ya aprobado sigue publicado.
+      const res = await fetch(`/api/vendedor/productos/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(armarCuerpo(urlsFinales)),
+      });
+      const respuesta = await res.json().catch(() => ({}));
+      if (res.status === 422 && respuesta.moderacion) { setBloqueoModeracion(respuesta.moderacion); return; }
+      if (!res.ok) throw new Error(respuesta.error || 'Hubo un error al guardar. Probá de nuevo.');
 
-      const mediaItems = urlsFinales.map((url, index) => ({
-        producto_id: Number(id), url, tipo: 'foto', orden: index, es_principal: index === 0,
-      }));
-
-      const { error: errMedia } = await supabase.from('producto_media').insert(mediaItems);
-      if (errMedia) throw new Error('Hubo un error con las fotos: ' + errMedia.message);
-
-      const { error: errBorrarVar } = await supabase.from('producto_variantes').delete().eq('producto_id', id);
-      if (errBorrarVar) throw new Error('No se pudieron reemplazar los talles: ' + errBorrarVar.message);
-
-      if (tieneNombre && tieneValores) {
-        const variantesItems = valores.map(valor => ({
-          producto_id: Number(id), propiedad_1_valor: valor,
-        }));
-        const { error: errVar } = await supabase.from('producto_variantes').insert(variantesItems);
-        if (errVar) throw new Error('Hubo un error con las variantes: ' + errVar.message);
-      }
-
-      const { error: errUpdate } = await supabase
-        .from('productos')
-        .update({
-          nombre: datos.nombre.trim(),
-          descripcion: datos.descripcion.trim(),
-          marca: datos.marca.trim() || null,
-          categoria_id: Number(categoriaPrincipalId),
-          subcategoria_id: subcategoriaPrincipalId ? Number(subcategoriaPrincipalId) : null,
-          subcategoria_personalizada: subcategoriaPrincipalEsOtra ? subcategoriaPersonalizada.trim() : null,
-          categoria_secundaria_id: categoriaSecundariaId ? Number(categoriaSecundariaId) : null,
-          subcategoria_secundaria_id: subcategoriaSecundariaId ? Number(subcategoriaSecundariaId) : null,
-          subcategoria_secundaria_personalizada: subcategoriaSecundariaEsOtra ? subcategoriaSecundariaPersonalizada.trim() : null,
-          genero: genero.length > 0 ? genero : null,
-          precio: Number(datos.precio),
-          precio_anterior: datos.precio_anterior ? Number(datos.precio_anterior) : null,
-          tiempo_preparacion: datos.tiempo_preparacion || null,
-          tiene_variantes: tieneNombre && tieneValores,
-          propiedad_1_nombre: tieneNombre ? nombrePropiedad.trim() : null,
-          estado: 'en_revision',
-          moderacion_avisos: moderacion.avisos,
-        })
-        .eq('id', id);
-
-      if (errUpdate) throw new Error('Error al actualizar: ' + errUpdate.message);
-
-      // Guardar sellos del producto
-      await supabase.from('producto_sellos').delete().eq('producto_id', id);
-      if (sellosSeleccionados.length > 0) {
-        const filasSellos = sellosSeleccionados.map((selloId) => ({
-          producto_id: Number(id),
-          sello_id: selloId,
-        }));
-        const { error: errSellos } = await supabase.from('producto_sellos').insert(filasSellos);
-        if (errSellos) console.error('Error al guardar sellos del producto:', errSellos.message);
+      // Las fotos que se sacaron, recién ahora que el producto ya no las usa.
+      if (fotosAEliminar.length > 0) {
+        const rutas = fotosAEliminar.map(url => extraerRutaStorage(url, 'productos')).filter(Boolean);
+        if (rutas.length > 0) {
+          const { error: errRemove } = await supabase.storage.from('productos').remove(rutas);
+          if (errRemove) console.error('No se pudieron borrar fotos viejas:', errRemove.message);
+        }
       }
 
       // Abrir las categorías del producto si estaban cerradas. Va por el
@@ -529,11 +507,10 @@ export default function EditarProductoPage() {
       ]);
 
       // El producto ya quedó guardado: esto se avisa, no se deshace.
-      if (falloCategoria) {
-        alert(`¡Producto actualizado! Queda en revisión hasta que lo apruebes.\n\n${AVISO_CATEGORIA}`);
-      } else {
-        alert('¡Producto actualizado! Queda en revisión hasta que lo apruebes.');
-      }
+      const texto = respuesta.estado === 'en_revision'
+        ? '¡Producto actualizado! Queda en revisión hasta que lo apruebes.'
+        : '¡Producto actualizado!';
+      alert(falloCategoria ? `${texto}\n\n${AVISO_CATEGORIA}` : texto);
       router.push('/vendedor/productos');
 
     } catch (err) {

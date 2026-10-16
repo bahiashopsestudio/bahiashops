@@ -24,13 +24,6 @@ function formatearPrecio(valor) {
   return Number(valor).toLocaleString('es-AR');
 }
 
-function extraerRutaStorage(url, bucket) {
-  const marker = `/${bucket}/`;
-  const idx = url.indexOf(marker);
-  if (idx === -1) return null;
-  return url.substring(idx + marker.length).split('?')[0];
-}
-
 export default function MisProductosPage() {
   const supabase = createClient();
   const router = useRouter();
@@ -122,11 +115,23 @@ export default function MisProductosPage() {
     cargarProductos();
   }, []);
 
+  // Pausar, reactivar y borrar van por el servidor (migración 033: el
+  // navegador no puede escribir en productos). El servidor verifica el estado
+  // actual y borra también las fotos de Storage.
   async function toggleEstado(producto) {
     const nuevoEstado = producto.estado === 'activo' ? 'pausado' : 'activo';
-    const { error } = await supabase.from('productos').update({ estado: nuevoEstado }).eq('id', producto.id);
-    if (error) { alert('No se pudo cambiar el estado del producto.'); return; }
-    setProductos(prev => prev.map(p => p.id === producto.id ? { ...p, estado: nuevoEstado } : p));
+    try {
+      const res = await fetch(`/api/vendedor/productos/${producto.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado: nuevoEstado }),
+      });
+      const datos = await res.json().catch(() => ({}));
+      if (datos.estado) setProductos(prev => prev.map(p => p.id === producto.id ? { ...p, estado: datos.estado } : p));
+      if (!res.ok) alert(datos.error || 'No se pudo cambiar el estado del producto.');
+    } catch {
+      alert('No se pudo cambiar el estado del producto.');
+    }
   }
 
   async function eliminarProducto(producto) {
@@ -135,24 +140,16 @@ export default function MisProductosPage() {
 
     setEliminando(producto.id);
     try {
-      const { data: medias } = await supabase.from('producto_media').select('url').eq('producto_id', producto.id);
-      if (medias && medias.length > 0) {
-        const rutas = medias.map(m => extraerRutaStorage(m.url, 'productos')).filter(Boolean);
-        if (rutas.length > 0) await supabase.storage.from('productos').remove(rutas);
+      const res = await fetch(`/api/vendedor/productos/${producto.id}`, { method: 'DELETE' });
+      const datos = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(datos.error || 'Hubo un error al eliminar. Intentá de nuevo.');
+        return;
       }
-      await supabase.from('producto_variantes').delete().eq('producto_id', producto.id);
-      await supabase.from('producto_media').delete().eq('producto_id', producto.id);
-      const { error: errDelete } = await supabase.from('productos').delete().eq('id', producto.id);
-      if (errDelete) throw errDelete;
       setProductos(prev => prev.filter(p => p.id !== producto.id));
     } catch (err) {
       console.error(err);
-      const esForeignKey = err?.message?.includes('foreign key') || err?.message?.includes('violates') || err?.code === '23503';
-      if (esForeignKey) {
-        alert('Este producto tiene pedidos asociados y no se puede eliminar.\n\nSi no querés que los compradores lo vean, podés pausarlo.');
-      } else {
-        alert('Hubo un error al eliminar. Intentá de nuevo.');
-      }
+      alert('Hubo un error al eliminar. Intentá de nuevo.');
     } finally {
       setEliminando(null);
     }

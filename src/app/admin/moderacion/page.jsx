@@ -53,6 +53,7 @@ export default function ModeracionPage() {
   const [nota, setNota] = useState('');
   const [previa, setPrevia] = useState(null);
   const [tesorosMarcados, setTesorosMarcados] = useState(new Set());
+  const [errorCola, setErrorCola] = useState(null);
 
   function toggleTesoro(productoId) {
     setTesorosMarcados((prev) => {
@@ -83,30 +84,22 @@ export default function ModeracionPage() {
     iniciar();
   }, []);
 
+  // La cola va por el servidor: desde el navegador el admin no ve las fotos
+  // ni las variantes de un producto en revisión (RLS), ni los productos de
+  // una tienda pausada o bloqueada. Ver /api/admin/moderacion.
   async function cargarCola() {
-    const { data, error } = await supabase
-      .from('productos')
-      .select(`
-        id, nombre, descripcion, precio, precio_anterior, marca,
-        propiedad_1_nombre, tiempo_preparacion, categoria_id, moderacion_avisos,
-        vendedores ( nombre_negocio ),
-        producto_media ( url, orden ),
-        producto_variantes ( propiedad_1_valor ),
-        categorias!categoria_id ( nombre, slug )
-      `)
-      .eq('estado', 'en_revision')
-      .order('creado_en', { ascending: true });
-
-    if (error) {
-      console.error('Error cargando la cola:', JSON.stringify(error));
-      return;
+    setErrorCola(null);
+    try {
+      const res = await fetch('/api/admin/moderacion');
+      const datos = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErrorCola(datos.error || 'No se pudo cargar la cola de moderación.');
+        return;
+      }
+      setProductos(datos.productos || []);
+    } catch {
+      setErrorCola('No pudimos conectarnos para cargar la cola de moderación.');
     }
-
-    const limpios = (data || []).map((p) => ({
-      ...p,
-      producto_media: [...(p.producto_media || [])].sort((a, b) => a.orden - b.orden),
-    }));
-    setProductos(limpios);
   }
 
   function formatearPrecio(valor) {
@@ -114,15 +107,29 @@ export default function ModeracionPage() {
     return Number(valor).toLocaleString('es-AR');
   }
 
+  // Aprobar y rechazar van por el servidor (migración 033: el navegador no
+  // puede escribir en productos). Devuelve el texto del error, o null.
+  async function moderar(id, cuerpo) {
+    try {
+      const res = await fetch(`/api/admin/productos/${id}/moderacion`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cuerpo),
+      });
+      if (res.ok) return null;
+      const datos = await res.json().catch(() => ({}));
+      return datos.error || 'Error inesperado.';
+    } catch {
+      return 'No pudimos conectarnos.';
+    }
+  }
+
   async function aprobar(id) {
     setProcesando(id);
-    const { error } = await supabase
-      .from('productos')
-      .update({ estado: 'activo', motivo_rechazo: null })
-      .eq('id', id);
+    const error = await moderar(id, { accion: 'aprobar' });
 
     if (error) {
-      alert('No se pudo aprobar: ' + error.message);
+      alert('No se pudo aprobar: ' + error);
       setProcesando(null);
       return;
     }
@@ -156,13 +163,10 @@ export default function ModeracionPage() {
       return;
     }
     setProcesando(id);
-    const { error } = await supabase
-      .from('productos')
-      .update({ estado: 'rechazado', motivo_rechazo: construirMotivoFinal() })
-      .eq('id', id);
+    const error = await moderar(id, { accion: 'rechazar', motivo: construirMotivoFinal() });
 
     if (error) {
-      alert('No se pudo rechazar: ' + error.message);
+      alert('No se pudo rechazar: ' + error);
       setProcesando(null);
       return;
     }
@@ -191,10 +195,10 @@ export default function ModeracionPage() {
         propiedad_1_nombre: p.propiedad_1_nombre,
         tiempo_preparacion: p.tiempo_preparacion,
       },
-      fotos: (p.producto_media || []).map((m) => ({ url: m.url })),
-      variantes: (p.producto_variantes || []).map((v) => ({ propiedad_1_valor: v.propiedad_1_valor })),
-      vendedor: p.vendedores ? { nombre_negocio: p.vendedores.nombre_negocio } : null,
-      categoria: p.categorias ? { nombre: p.categorias.nombre, slug: p.categorias.slug } : null,
+      fotos: p.fotos.map((url) => ({ url })),
+      variantes: p.variantes.map((valor) => ({ propiedad_1_valor: valor })),
+      vendedor: p.vendedor ? { nombre_negocio: p.vendedor.nombre_negocio } : null,
+      categoria: p.categoria,
     });
   }
 
@@ -232,13 +236,27 @@ export default function ModeracionPage() {
             <h1 className="text-2xl font-semibold text-[#0a0a0a] m-0">Productos en revisión</h1>
             <p className="text-gray-500 mt-1 mb-0 text-sm">Aprobá o rechazá lo que cargan los vendedores</p>
           </div>
-          <span className="text-sm font-semibold px-3 py-1 bg-amber-100 text-amber-700 rounded-full">
-            {productos.length} {productos.length === 1 ? 'pendiente' : 'pendientes'}
-          </span>
+          {!errorCola && (
+            <span className="text-sm font-semibold px-3 py-1 bg-amber-100 text-amber-700 rounded-full">
+              {productos.length} {productos.length === 1 ? 'pendiente' : 'pendientes'}
+            </span>
+          )}
         </div>
 
-        {/* Estado vacío */}
-        {productos.length === 0 ? (
+        {/* Error: no es lo mismo que "no hay nada para moderar" */}
+        {errorCola ? (
+          <div className="mt-8 px-8 py-10 text-center border border-red-300 bg-red-50 rounded-xl text-red-700">
+            <p className="text-lg m-0">No pudimos cargar los productos en revisión</p>
+            <p className="mt-2 mb-4 text-sm">{errorCola}</p>
+            <button
+              type="button"
+              onClick={async () => { setCargando(true); await cargarCola(); setCargando(false); }}
+              className="px-4 py-2 border border-red-700 rounded-lg bg-white text-red-700 text-sm cursor-pointer hover:bg-red-50 transition-colors"
+            >
+              Reintentar
+            </button>
+          </div>
+        ) : productos.length === 0 ? (
           <div className="mt-8 px-8 py-12 text-center border border-dashed border-gray-300 rounded-xl text-gray-500">
             <p className="text-lg m-0">No hay productos esperando revisión 🎉</p>
             <p className="mt-2 mb-0 text-sm">Cuando un vendedor cargue algo nuevo, va a aparecer acá.</p>
@@ -246,7 +264,7 @@ export default function ModeracionPage() {
         ) : (
           <div className="mt-6 flex flex-col gap-4">
             {productos.map((p) => {
-              const foto = p.producto_media?.[0]?.url;
+              const foto = p.fotos[0];
               const enAccion = procesando === p.id;
               const avisos = Array.isArray(p.moderacion_avisos) ? p.moderacion_avisos : [];
               const etiquetasAviso = [...new Set(avisos.map((a) => ETIQUETAS_MODERACION[a.tipo] || a.tipo))];
@@ -276,10 +294,25 @@ export default function ModeracionPage() {
                     {/* Info */}
                     <div className="flex-1 min-w-0">
                       <p className="m-0 font-semibold text-[#0a0a0a]">{p.nombre}</p>
-                      <p className="mt-0.5 mb-0 text-sm text-gray-500">
-                        {p.vendedores?.nombre_negocio || 'Vendedor desconocido'}
-                        {p.categorias?.nombre ? ` · ${p.categorias.nombre}` : ''}
+                      <p className="mt-0.5 mb-0 text-sm text-gray-500 flex items-center flex-wrap gap-x-1.5 gap-y-1">
+                        <span>
+                          {p.vendedor?.nombre_negocio || 'Vendedor desconocido'}
+                          {p.categoria?.nombre ? ` · ${p.categoria.nombre}` : ''}
+                        </span>
+                        {p.vendedor?.bloqueado && (
+                          <span className="text-[10px] font-medium text-white bg-[#cc152b] rounded-full px-[9px] py-[2px]">
+                            Tienda bloqueada
+                          </span>
+                        )}
+                        {p.vendedor?.pausada && (
+                          <span className="text-[10px] font-medium text-gray-600 bg-gray-100 rounded-full px-[9px] py-[2px]">
+                            Tienda pausada
+                          </span>
+                        )}
                       </p>
+                      {p.sellos.length > 0 && (
+                        <p className="mt-0.5 mb-0 text-xs text-gray-400">Sellos: {p.sellos.join(' · ')}</p>
+                      )}
                       <p className="mt-1.5 mb-0 font-semibold text-[#0a0a0a]">${formatearPrecio(p.precio)}</p>
                       <p className="mt-1 mb-0 text-sm text-gray-400 overflow-hidden text-ellipsis whitespace-nowrap">
                         {p.descripcion}

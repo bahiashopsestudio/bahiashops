@@ -245,11 +245,19 @@ export default function AdminDashboard() {
         .order('orden')
       if (cats) setCategorias(cats)
 
-      const { count: countModeracion } = await supabase
-        .from('productos')
-        .select('*', { count: 'exact', head: true })
-        .eq('estado', 'en_revision')
-      setPendientesModeracion(countModeracion || 0)
+      // El mismo conteo que la cola (/api/admin/moderacion): desde el
+      // navegador no se cuentan los productos de tiendas pausadas o bloqueadas.
+      try {
+        const resModeracion = await fetch('/api/admin/moderacion?conteo=1')
+        if (resModeracion.ok) {
+          const { total } = await resModeracion.json()
+          setPendientesModeracion(total || 0)
+        } else {
+          console.error('No se pudo contar la cola de moderación', resModeracion.status)
+        }
+      } catch (err) {
+        console.error('No se pudo contar la cola de moderación', err)
+      }
 
       // El badge cuenta altas nuevas, no pendientes: desde que las tiendas se
       // publican solas ya no hay cola de revisión, y lo que interesa mirar es
