@@ -23,7 +23,7 @@ export function resolve(especificador, contexto, siguiente) {
 `
 register('data:text/javascript,' + encodeURIComponent(alias))
 
-const { armarMailVenta, armarMailCompra, armarMailListo, armarMailDespacho, armarMailPagoTardio } =
+const { armarMailVenta, armarMailCompra, armarMailListo, armarMailDespacho, armarMailPagoTardio, armarMailResena } =
   await import('../src/lib/mailsPedidos.js')
 const { armarMailCuentaEliminada } = await import('../src/lib/mailsCuenta.js')
 const { armarMailCuentaCambiada, armarMailCuentaMp } = await import('../src/lib/mailsCuentaMp.js')
@@ -157,6 +157,10 @@ mails['cuenta-mp-vendedor-conexion'] = armarMailCuentaMp({ tipo: 'primera', tien
 mails['cuenta-mp-vendedor-cambio'] = armarMailCuentaMp({ tipo: 'cambio', tienda: 'Cerámica del Puerto', cuenta: cuentaMp, cancelados: 0 })
 mails['cuenta-mp-vendedor-cambio-con-cancelados'] = armarMailCuentaMp({ tipo: 'cambio', tienda: 'Cerámica del Puerto', cuenta: cuentaMp, cancelados: 1 })
 
+// ¿Cómo te fue? (al marcarlo entregado): con nombre, sin nombre y escapado.
+mails.resena = armarMailResena({ ...casos.envio, pedidoId: 1047 })
+mails['resena-sin-nombre'] = armarMailResena({ ...casos.retiro, pedidoId: 1048, nombre: null })
+mails['resena-escapado'] = armarMailResena({ ...casos.escapado, pedidoId: 1049 })
 // Pausar la tienda: con y sin mensaje para el público.
 mails['tienda-pausada'] = armarMailPausa({ tienda: 'Cerámica del Puerto', mensaje: 'Estamos de vacaciones, volvemos el 15 de febrero.' })
 mails['tienda-pausada-sin-mensaje'] = armarMailPausa({ tienda: 'Cerámica del Puerto' })

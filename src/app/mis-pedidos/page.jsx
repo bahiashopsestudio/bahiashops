@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -15,6 +15,8 @@ import {
   NOMBRE_PASO, ESTADO_REEMBOLSADO, ESTADO_ENTREGADO, ESTADOS_PARA_RECLAMAR,
 } from '@/lib/pedidos'
 import { linkWhatsApp } from '@/lib/telefono'
+import { estadoDeResena } from '@/lib/resenas'
+import { EtiquetaFranja, BotonDejarResena, TextoEstadoResena, TuResena, FormularioResena } from '@/components/ResenaPedido'
 
 // Lo que costó la entrega, al lado del método: "Envío a tu zona: $2.500",
 // "Gratis", "A coordinar". A quien compra no se le muestran zonas ni
@@ -173,6 +175,16 @@ export default function MisPedidosPage() {
   // ({ estado: 'cargando' | 'ok' | 'sin_telefono' | 'cerrada' | 'error', ... }).
   const [reclamosAbiertos, setReclamosAbiertos] = useState(() => new Set())
   const [reclamos, setReclamos] = useState({})
+  // Las reseñas de quien compró, por pedido (las lee el servidor: resenas no
+  // tiene permisos para el navegador), y su apodo. Si no se pudieron leer, no
+  // se ofrece reseñar (podría duplicar) y el pedido lo dice.
+  const [resenas, setResenas] = useState(() => new Map())
+  const [apodo, setApodo] = useState(null)
+  const [errorResenas, setErrorResenas] = useState(false)
+  const [formulariosAbiertos, setFormulariosAbiertos] = useState(() => new Set())
+  const [recienPublicadas, setRecienPublicadas] = useState(() => new Set())
+  // ?resena={id} (el link del mail): el pedido a desplegar y llevar a la vista.
+  const aMostrar = useRef(null)
 
   // Mientras la pantalla está abierta, la hora se actualiza sola: al vencer el
   // cupón el botón "Pagar ahora" desaparece y queda el texto de "Venció".
@@ -266,8 +278,9 @@ export default function MisPedidosPage() {
       const { data: cats } = await supabase.from('categorias').select('id, nombre, slug').eq('activa', true).order('orden')
       if (cats) setCategorias(cats)
 
+      // Sin sesión, a entrar y de vuelta acá con lo que traía (?resena=).
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.replace('/entrar?next=%2Fmis-pedidos'); return }
+      if (!user) { router.replace(`/entrar?next=${encodeURIComponent('/mis-pedidos' + window.location.search)}`); return }
 
       // El historial se arma con lo que quedó congelado al comprar, no con lo
       // que exista hoy: pedido_items guarda el nombre, el precio y la foto de
@@ -280,11 +293,11 @@ export default function MisPedidosPage() {
       // tienda cerrada (la dueña eliminó su cuenta) se muestra como "Tienda
       // cerrada": eso lo dice mis_tiendas_cerradas (migración 031), porque RLS
       // la oculta igual que a una bloqueada y desde acá no se distinguen.
-      // entregado_at necesita la migración 036 (su grant select).
+      // entregado_at necesita la migración 036 y pagado_en la 037.
       const { data, error } = await supabase
         .from('pedidos')
         .select(`
-          id, estado, total, costo_envio, metodo_envio, zona_envio, creado_en, entregado_at,
+          id, estado, total, costo_envio, metodo_envio, zona_envio, creado_en, entregado_at, pagado_en,
           vendedor_nombre, franja_horaria, envio_empresa, envio_empresa_otra, envio_seguimiento,
           vence_en, efectivo_vence_en, cancelado_motivo, mp_payment_id, vendedor_id,
           vendedor:vendedores(slug, direccion_visible),
@@ -305,14 +318,59 @@ export default function MisPedidosPage() {
       if (errorCerradas) console.error('No se pudieron leer las tiendas cerradas', errorCerradas)
       setTiendasCerradas(new Set(Array.isArray(cerradas) ? cerradas.map(Number) : []))
 
+      // Las reseñas. Si falla, los pedidos se muestran igual, sin ofrecer
+      // reseñar.
+      try {
+        const res = await fetch('/api/resenas')
+        const cuerpo = await res.json().catch(() => null)
+        if (!res.ok || !Array.isArray(cuerpo?.resenas)) throw new Error(cuerpo?.error || `HTTP ${res.status}`)
+        setResenas(new Map(cuerpo.resenas.map((r) => [Number(r.pedido_id), r])))
+        setApodo(cuerpo.apodo || null)
+      } catch (err) {
+        console.error('No se pudieron cargar las reseñas', err)
+        setErrorResenas(true)
+      }
+
       // Solo las compras: los pedidos que nunca se pagaron (carritos
       // abandonados) no aparecen.
-      setAhora(Date.now())
-      setPedidos((data || []).filter(esVentaVisible))
+      const visibles = (data || []).filter(esVentaVisible)
+      const ahoraMs = Date.now()
+      setAhora(ahoraMs)
+      setPedidos(visibles)
+
+      // ?resena={id}: despliega ese pedido y, si todavía se puede reseñar,
+      // con el formulario abierto. Un pedido que no es suyo no está en la
+      // lista: no pasa nada.
+      const pedidoLink = Number(new URLSearchParams(window.location.search).get('resena'))
+      if (Number.isInteger(pedidoLink) && visibles.some((p) => p.id === pedidoLink)) {
+        setAbiertos(new Set([pedidoLink]))
+        aMostrar.current = pedidoLink
+      }
       setCargando(false)
     }
     cargar()
   }, [])
+
+  // El formulario del link se abre recién cuando se sabe si se puede reseñar.
+  useEffect(() => {
+    const id = aMostrar.current
+    if (!id || cargando) return
+    aMostrar.current = null
+    const pedido = pedidos.find((p) => p.id === id)
+    const cerrada = pedido && tiendasCerradas.has(Number(pedido.vendedor_id))
+    if (pedido && !errorResenas && !cerrada && estadoDeResena({ pedido, resena: resenas.get(id), ahoraMs: ahora }).estado === 'puede') {
+      setFormulariosAbiertos(new Set([id]))
+    }
+    requestAnimationFrame(() => {
+      document.getElementById(`compra-${id}`)?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    })
+  }, [cargando, pedidos, resenas, errorResenas, tiendasCerradas, ahora])
+
+  function resenaPublicada(pedidoId, resena) {
+    setResenas((previas) => new Map(previas).set(pedidoId, resena))
+    setFormulariosAbiertos((previos) => { const nuevo = new Set(previos); nuevo.delete(pedidoId); return nuevo })
+    setRecienPublicadas((previas) => new Set(previas).add(pedidoId))
+  }
 
   function fmt(n) { return Number(n).toLocaleString('es-AR') }
 
@@ -387,6 +445,13 @@ export default function MisPedidosPage() {
                   const reembolsado = pedido.estado === ESTADO_REEMBOLSADO
                   const idDetalle = `compra-${pedido.id}-detalle`
                   const compraste = textoCompraste(pedido.creado_en, ahora)
+                  // La reseña (src/lib/resenas.js). Sin las reseñas cargadas no se
+                  // sabe; una tienda cerrada ya no recibe reseñas nuevas.
+                  const resena = resenas.get(pedido.id) || null
+                  let estadoR = errorResenas ? null : estadoDeResena({ pedido, resena, ahoraMs: ahora })
+                  if (estadoR && tiendaCerrada && estadoR.estado !== 'hecha') estadoR = { estado: 'no_corresponde' }
+                  const formularioAbierto = estadoR?.estado === 'puede' && formulariosAbiertos.has(pedido.id)
+                  const puedeResenar = estadoR?.estado === 'puede' && !formularioAbierto
                   return (
                     <div key={pedido.id} id={`compra-${pedido.id}`} className="rounded-2xl border border-[#0a0a0a]/5 mb-3">
                       {/* La franja entera despliega y pliega. */}
@@ -402,6 +467,7 @@ export default function MisPedidosPage() {
                             <ChipForma metodoEnvio={pedido.metodo_envio} />
                             <span className="truncate" style={{ fontWeight: 500, fontSize: '12.5px', color: reembolsado ? '#dc2626' : '#0a0a0a' }}>
                               #{pedido.id} · {textoPaso(pedido, vencido)}
+                              {estadoR && <EtiquetaFranja estado={estadoR.estado} />}
                             </span>
                           </span>
                         </span>
@@ -482,8 +548,11 @@ export default function MisPedidosPage() {
                               </div>
                             )}
 
-                            {(puedePagar || (puedeReclamar && !reclamoAbierto)) && (
+                            {(puedePagar || puedeResenar || (puedeReclamar && !reclamoAbierto)) && (
                               <div className="flex flex-wrap gap-3 pt-4">
+                                {puedeResenar && (
+                                  <BotonDejarResena onClick={() => setFormulariosAbiertos((previos) => new Set(previos).add(pedido.id))} />
+                                )}
                                 {puedePagar && (
                                   <button
                                     type="button"
@@ -509,6 +578,27 @@ export default function MisPedidosPage() {
                             )}
                             {erroresPago[pedido.id] && (
                               <p className="mt-2 mb-0 text-xs text-[#dc2626] font-light leading-relaxed">{erroresPago[pedido.id]}</p>
+                            )}
+
+                            {/* La reseña: el texto de su estado, el formulario o la que ya dejó. */}
+                            {errorResenas && ESTADOS_PARA_RECLAMAR.includes(pedido.estado) && (
+                              <p className="m-0 mt-2 text-xs text-[#dc2626] font-light leading-relaxed">
+                                No pudimos ver si ya dejaste tu reseña de este pedido. Recargá la página para intentarlo de nuevo.
+                              </p>
+                            )}
+                            {estadoR && !formularioAbierto && estadoR.estado !== 'hecha' && <TextoEstadoResena estado={estadoR} />}
+                            {formularioAbierto && (
+                              <FormularioResena pedidoId={pedido.id} tienda={nombreTienda} apodo={apodo} via={estadoR.via}
+                                onPublicada={(r) => resenaPublicada(pedido.id, r)}
+                                onCerrar={() => setFormulariosAbiertos((previos) => { const nuevo = new Set(previos); nuevo.delete(pedido.id); return nuevo })} />
+                            )}
+                            {recienPublicadas.has(pedido.id) && resena && (
+                              <p role="status" className="m-0 mt-4 text-sm font-medium text-[#2e6b4f] bg-[#e9f3ec] rounded-lg px-3.5 py-2.5">
+                                ¡Gracias! Tu reseña ya está publicada
+                              </p>
+                            )}
+                            {estadoR?.estado === 'hecha' && resena && (
+                              <TuResena resena={resena} apodo={apodo} tienda={nombreTienda} />
                             )}
 
                             {puedeReclamar && reclamoAbierto && (

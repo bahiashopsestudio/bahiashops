@@ -9,6 +9,7 @@ import { useCarrito } from '@/context/CarritoContext'
 import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
 import VolverAtras from '@/components/VolverAtras'
+import { textoPuntajeCorto } from '@/lib/resenas'
 import BotonFavorito from '@/components/BotonFavorito'
 import ModalDenuncia from '@/components/ModalDenuncia'
 
@@ -88,11 +89,13 @@ export default function PaginaProducto() {
         .eq('producto_id', productoId)
       if (vars) setVariantes(vars)
 
-      const { data: vend } = await supabase
+      // puntaje: migración 037 (lectura pública).
+      const { data: vend, error: errorVend } = await supabase
         .from('vendedores')
-        .select('nombre_negocio, slug, usuario_id')
+        .select('nombre_negocio, slug, usuario_id, puntaje:puntajes_tiendas(cantidad, promedio)')
         .eq('id', prod.vendedor_id)
         .single()
+      if (errorVend) console.error('[producto/vendedor]', errorVend.message)
       if (vend) setVendedor(vend)
 
       const { data: cat } = await supabase
@@ -247,12 +250,16 @@ export default function PaginaProducto() {
 
               <div className="flex-1 min-w-0">
                 {vendedor && (
-                  <Link
-                    href={`/tienda/${vendedor.slug}`}
-                    className="text-sm font-light text-[#0a0a0a]/40 hover:text-[#0a0a0a] transition underline underline-offset-2"
-                  >
-                    {vendedor.nombre_negocio}
-                  </Link>
+                  <p className="m-0 text-sm font-light text-[#0a0a0a]/45">
+                    Vendido por{' '}
+                    <Link
+                      href={`/tienda/${vendedor.slug}`}
+                      className="font-semibold text-[#0a0a0a]/80 hover:text-[#0a0a0a] transition underline underline-offset-2"
+                    >
+                      {vendedor.nombre_negocio}
+                    </Link>
+                    {' · '}{textoPuntajeCorto(vendedor.puntaje)}
+                  </p>
                 )}
 
                 <h1 className="text-2xl md:text-3xl font-black text-[#0a0a0a] tracking-tight mt-2 mb-4">

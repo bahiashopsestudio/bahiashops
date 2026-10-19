@@ -18,6 +18,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { TILES_VENDEDORES } from '@/lib/mapaTiles'
 import CirculoZona from '@/components/CirculoZona'
+import { textoPuntajeTarjeta } from '@/lib/resenas'
 import 'leaflet/dist/leaflet.css'
 
 const CENTRO_BB = [-38.7183, -62.2663]
@@ -96,9 +97,10 @@ function FichaTienda({ v, nombreBarrio, compacta = false }) {
         )}
         <div>
           <div style={{ fontWeight: 700, fontSize: '14px', color: '#0a0a0a' }}>{v.nombre_negocio}</div>
-          {nombreBarrio && (
-            <div style={{ fontSize: '11px', fontWeight: 500, color: '#4164fe', marginTop: '1px' }}>{nombreBarrio}</div>
-          )}
+          {/* "{barrio} · 4,6 ★ (32)" o "{barrio} · Tienda nueva" (puntaje: migración 037) */}
+          <div style={{ fontSize: '11px', fontWeight: 500, color: '#4164fe', marginTop: '1px' }}>
+            {nombreBarrio ? `${nombreBarrio} · ` : ''}{textoPuntajeTarjeta(v.puntaje)}
+          </div>
         </div>
       </div>
       {!compacta && v.descripcion_corta && (

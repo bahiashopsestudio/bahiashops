@@ -474,6 +474,11 @@ export default function PerfilVendedorPage() {
                 <span className="flex-1 text-sm font-light">Mis pedidos</span>
                 <Chevron />
               </Link>
+              <Link href="/vendedor/resenas" className="flex items-center gap-3 px-5 py-4 no-underline text-[#0a0a0a] hover:bg-[#0a0a0a]/[0.02] transition-colors">
+                <span className="text-lg">⭐</span>
+                <span className="flex-1 text-sm font-light">Reseñas</span>
+                <Chevron />
+              </Link>
               <Link href="/vendedor/envios" className="flex items-center gap-3 px-5 py-4 no-underline text-[#0a0a0a] hover:bg-[#0a0a0a]/[0.02] transition-colors">
                 <span className="text-lg">🚚</span>
                 <span className="flex-1 text-sm font-light">Cómo entregás</span>

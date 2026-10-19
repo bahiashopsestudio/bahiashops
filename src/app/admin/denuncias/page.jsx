@@ -9,10 +9,20 @@ import RechazoProducto from '@/components/admin/RechazoProducto';
 import VistaPreviaProducto, { previaDe } from '@/components/admin/VistaPreviaProducto';
 import EtiquetasTienda from '@/components/admin/EtiquetasTienda';
 import { ErrorDeLista, BOTON_NEGRO, BOTON_BORDE_NEGRO, BOTON_BORDE_GRIS } from '@/components/admin/comun';
+import ResenasDenunciadas from './ResenasDenunciadas';
 
-// Las denuncias pendientes, una tarjeta por producto (/api/admin/denuncias).
-// Rechazar el producto usa el mismo rechazo de la moderación, y resuelve sus
-// denuncias; descartarlas deja el producto como está.
+// Dos pestañas:
+//   Productos  las denuncias pendientes, una tarjeta por producto
+//              (/api/admin/denuncias). Rechazar el producto usa el mismo
+//              rechazo de la moderación, y resuelve sus denuncias;
+//              descartarlas deja el producto como está.
+//   Reseñas    las marcadas por el filtro, las ocultas y todas
+//              (ResenasDenunciadas). ?pestana=resenas abre esta.
+const PESTANAS = [
+  { id: 'productos', titulo: 'Productos' },
+  { id: 'resenas', titulo: 'Reseñas' },
+];
+
 export default function DenunciasPage() {
   const supabase = createClient();
 
@@ -23,14 +33,34 @@ export default function DenunciasPage() {
   const [procesando, setProcesando] = useState(null);
   const [rechazandoId, setRechazandoId] = useState(null);
   const [previa, setPrevia] = useState(null);
+  const [pestana, setPestana] = useState('productos');
+  // Reseñas por revisar (null: todavía no se sabe o no se pudo leer).
+  const [porRevisar, setPorRevisar] = useState(null);
+
+  function elegir(id) {
+    setPestana(id);
+    try {
+      const url = new URL(window.location.href);
+      if (id === 'resenas') url.searchParams.set('pestana', 'resenas');
+      else url.searchParams.delete('pestana');
+      window.history.replaceState(null, '', url);
+    } catch { /* no importa */ }
+  }
 
   useEffect(() => {
     async function iniciar() {
+      try {
+        if (new URLSearchParams(window.location.search).get('pestana') === 'resenas') setPestana('resenas');
+      } catch { /* sin URL: queda la primera */ }
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setEsAdmin(false); setCargando(false); return; }
       const { data: perfil } = await supabase.from('usuarios').select('es_admin').eq('id', user.id).single();
       if (!perfil?.es_admin) { setEsAdmin(false); setCargando(false); return; }
       setEsAdmin(true);
+      // El número de la pestaña Reseñas, aunque se abra en Productos.
+      leerDelAdmin('/api/admin/resenas?conteo=1', '').then(({ datos }) => {
+        if (datos) setPorRevisar(datos.por_revisar ?? null);
+      });
       await cargar();
       setCargando(false);
     }
@@ -101,7 +131,35 @@ export default function DenunciasPage() {
 
       <main className="pt-28 pb-12 px-6 max-w-[820px] w-full mx-auto">
         <h1 className="text-2xl font-semibold text-[#0a0a0a] m-0">Denuncias</h1>
-        <p className="text-gray-500 mt-1 mb-0 text-sm">
+
+        {/* Pestañas */}
+        <div role="tablist" className="flex gap-1 mt-5 border-b border-gray-200">
+          {PESTANAS.map((t) => {
+            const activa = pestana === t.id;
+            const cantidad = t.id === 'productos' ? (error ? null : productos.length) : porRevisar;
+            return (
+              <button key={t.id} type="button" role="tab" aria-selected={activa} onClick={() => elegir(t.id)}
+                className={`flex items-center gap-2 px-4 py-2.5 -mb-px border-b-2 bg-transparent text-sm cursor-pointer transition-colors ${
+                  activa ? 'border-[#0a0a0a] text-[#0a0a0a] font-semibold' : 'border-transparent text-gray-500 hover:text-[#0a0a0a]'
+                }`}>
+                {t.titulo}
+                {cantidad !== null && (
+                  <span className={`text-[11px] font-medium rounded-full px-2 py-0.5 ${
+                    t.id === 'resenas' ? 'bg-[#e8ecff] text-[#2a3fb8]' : 'bg-[#fbe8da] text-[#8a3410]'
+                  }`}>
+                    {cantidad}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {pestana === 'resenas' ? (
+          <ResenasDenunciadas onCambioConteo={setPorRevisar} />
+        ) : (
+        <>
+        <p className="text-gray-500 mt-6 mb-0 text-sm">
           Lo que denunció la gente. Los productos siguen publicados hasta que decidas.
           Si varias personas denuncian el mismo producto, se agrupan acá.
         </p>
@@ -179,6 +237,8 @@ export default function DenunciasPage() {
         )}
 
         <VistaPreviaProducto previa={previa} onClose={() => setPrevia(null)} />
+        </>
+        )}
       </main>
     </>
   );

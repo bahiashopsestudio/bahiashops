@@ -27,6 +27,9 @@ function textoSegunNext(next) {
   if (next.startsWith('/checkout') || next.startsWith('/carrito')) {
     return 'Entrá para terminar tu compra. Después volvés al carrito, tal como lo dejaste.'
   }
+  if (next.startsWith('/mis-pedidos?resena=')) {
+    return 'Entrá con tu cuenta y te llevamos directo a tu pedido para dejar la reseña.'
+  }
   if (next.startsWith('/vendedor')) {
     return 'Entrá con tu cuenta y seguís directo con el alta de tu emprendimiento.'
   }

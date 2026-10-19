@@ -9,7 +9,8 @@ import MenuTakeover from '@/components/MenuTakeover'
 import AvatarApodo from '@/components/AvatarApodo'
 import EditorApodo from '@/components/EditorApodo'
 import PreguntaFuncion from '@/components/PreguntaFuncion'
-import { validarApodo, avisarApodoCambiado } from '@/lib/apodos'
+import { validarApodo, avisarApodoCambiado, cambioDeApodo } from '@/lib/apodos'
+import { fechaLarga } from '@/lib/fechas'
 import { cerrarSesion } from '@/lib/datosDelNavegador'
 
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage']
@@ -50,6 +51,9 @@ export default function PerfilPage() {
   const [apodoElegido, setApodoElegido] = useState('')
   const [guardandoApodo, setGuardandoApodo] = useState(false)
   const [errorApodo, setErrorApodo] = useState('')
+  // Una vez cada 30 días (lo decide /api/cuenta/apodo; acá solo se avisa). Se
+  // calcula al cargar y al guardar, no al dibujar.
+  const [limiteApodo, setLimiteApodo] = useState({ puede: true })
   const [vendedorSlug, setVendedorSlug] = useState(null)
   const [esVendedor, setEsVendedor] = useState(false)
   const [cargando, setCargando] = useState(true)
@@ -74,10 +78,11 @@ export default function PerfilPage() {
       // La propia fila de usuarios: la policy deja leer sólo la de uno.
       const { data: cuenta } = await supabase
         .from('usuarios')
-        .select('nombre, apellido, nombre_usuario, es_admin')
+        .select('nombre, apellido, nombre_usuario, es_admin, apodo_actualizado_en')
         .eq('id', user.id)
         .maybeSingle()
       setCuenta(cuenta)
+      setLimiteApodo(cambioDeApodo(cuenta?.apodo_actualizado_en, Date.now()))
       if (cuenta?.es_admin) setEsAdmin(true)
 
       // Cargar slug del vendedor si tiene cuenta
@@ -129,7 +134,8 @@ export default function PerfilPage() {
         setGuardandoApodo(false)
         return
       }
-      setCuenta((actual) => ({ ...actual, nombre_usuario: data.nombre_usuario }))
+      setCuenta((actual) => ({ ...actual, nombre_usuario: data.nombre_usuario, apodo_actualizado_en: data.apodo_actualizado_en ?? actual?.apodo_actualizado_en ?? null }))
+      setLimiteApodo(cambioDeApodo(data.apodo_actualizado_en, Date.now()))
       // Los íconos de cuenta del Navbar muestran el apodo nuevo sin recargar.
       avisarApodoCambiado(data.nombre_usuario)
       setEditandoApodo(false)
@@ -191,10 +197,17 @@ export default function PerfilPage() {
                 {user?.email}
               </p>
               {!editandoApodo && (
-                <button type="button" onClick={abrirEditorApodo}
-                  className="mt-3 text-sm text-[#4164fe] font-medium underline underline-offset-2 cursor-pointer">
-                  Cambiar apodo
-                </button>
+                <>
+                  <button type="button" onClick={abrirEditorApodo} disabled={!limiteApodo.puede}
+                    className="mt-3 text-sm text-[#4164fe] font-medium underline underline-offset-2 cursor-pointer disabled:text-[#0a0a0a]/30 disabled:no-underline disabled:cursor-not-allowed">
+                    Cambiar apodo
+                  </button>
+                  <p className="m-0 mt-1.5 text-xs text-[#0a0a0a]/40 font-light text-center max-w-xs">
+                    {limiteApodo.puede
+                      ? 'El apodo se puede cambiar una vez cada 30 días.'
+                      : `Lo cambiaste el ${fechaLarga(limiteApodo.cambiadoEl)}: vas a poder cambiarlo de nuevo desde el ${fechaLarga(limiteApodo.desde)}.`}
+                  </p>
+                </>
               )}
             </div>
 

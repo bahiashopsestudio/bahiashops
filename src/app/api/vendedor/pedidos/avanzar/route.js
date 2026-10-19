@@ -17,7 +17,8 @@
 // estado y nunca lo deshacen:
 //   · despachado  el mail de despacho
 //   · listo       «Tu pedido está listo para retirar», una sola vez por pedido
-//   · entregado   ninguno (marca entregado_at)
+//   · entregado   «¿Cómo te fue?», para dejar la reseña, una sola vez por
+//                 pedido (marca entregado_at)
 //
 // Un pedido por correo no se puede marcar como despachado sin la empresa y el
 // número de seguimiento: van en el mail de despacho y en Mis pedidos.
@@ -26,7 +27,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getServiceRoleClient } from '@/lib/supabase/admin';
 import { validarAvance, ESTADO_PIDE_FRANJA, FRANJAS_VALIDAS, ESTADO_ENTREGADO } from '@/lib/pedidos';
-import { avisarDespacho, avisarListo } from '@/lib/mailsPedidos';
+import { avisarDespacho, avisarListo, avisarResena } from '@/lib/mailsPedidos';
 import { tipoEntregaDe, validarSeguimiento } from '@/lib/metodosEntrega';
 
 export async function POST(request) {
@@ -146,6 +147,8 @@ export async function POST(request) {
     aviso = await avisarDespacho({ admin, pedidoId });
   } else if (actualizado.estado === 'listo') {
     aviso = await avisarListo({ admin, pedidoId });
+  } else if (actualizado.estado === ESTADO_ENTREGADO) {
+    aviso = await avisarResena({ admin, pedidoId });
   }
 
   return NextResponse.json({ pedido: actualizado, aviso });

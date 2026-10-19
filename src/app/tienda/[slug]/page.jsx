@@ -2,15 +2,20 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { getServiceRoleClient, verificarAdmin } from '@/lib/supabase/admin'
 import { soloVendedoresConFicha, tiendaPausada } from '@/lib/vendedoresPublicos'
+import { resenasPublicadas } from '@/lib/resenasServidor'
+import { puntajeDe } from '@/lib/resenas'
 import TiendaContent from './TiendaContent'
 import TiendaPausada from './TiendaPausada'
 
+// puntaje: cantidad y promedio de las reseñas publicadas (migración 037,
+// lectura pública). Sin reseñas, la tienda no tiene fila y llega null.
 const CAMPOS = `
   id, nombre_negocio, slug, descripcion_corta, descripcion_larga,
   logo_url, portada_url, instagram, direccion_visible, direccion,
   horarios_texto_libre, estado_validacion, bloqueado, pausada_en, mensaje_pausa,
   barrio:barrios(nombre),
-  categoria:categorias(nombre, slug)
+  categoria:categorias(nombre, slug),
+  puntaje:puntajes_tiendas(cantidad, promedio)
 `
 
 // ── SEO ──
@@ -124,6 +129,21 @@ export default async function TiendaPage({ params, searchParams }) {
     .order('creado_en', { ascending: false })
   if (errorProductos) console.error('[tienda/productos]', errorProductos.message)
 
+  // Las primeras reseñas, por el servidor (resenas no tiene permisos para el
+  // navegador): solo el apodo de hoy, las estrellas, el texto y la fecha.
+  // Si falla, la página lo dice en la sección (no una lista vacía).
+  const puntaje = puntajeDe(vendedor.puntaje)
+  let resenas = { resenas: [], hayMas: false, error: false }
+  if (puntaje.cantidad > 0) {
+    const lista = await resenasPublicadas(getServiceRoleClient(), vendedor.id)
+    if (lista.error) {
+      console.error('[tienda/resenas]', vendedor.id, lista.error.message)
+      resenas = { resenas: [], hayMas: false, error: true }
+    } else {
+      resenas = { resenas: lista.resenas, hayMas: lista.hayMas, error: false }
+    }
+  }
+
   return (
     <>
       {esPrevisualizacion && (
@@ -143,6 +163,8 @@ export default async function TiendaPage({ params, searchParams }) {
       <TiendaContent
         vendedor={vendedor}
         productos={productos || []}
+        puntaje={puntaje}
+        resenas={resenas}
       />
     </>
   )

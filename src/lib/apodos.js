@@ -64,6 +64,24 @@ const RE_CARACTERES = /^[\p{L}\p{N} .'_-]+$/u
 const RE_LINK_GENERICO = /(https?:|www\.|\.(com|ar|net|org|io|app|me|link)\b)/i
 const RE_ANIMALES = new RegExp(`(^|\\s)(${ANIMALES_APODO.join('|')})(?=\\s|$)`, 'giu')
 
+// ── Una vez cada 30 días ─────────────────────────────────────────────────────
+//
+// Las reseñas se firman con el apodo de hoy (no con una copia): el límite
+// evita cambiarlo para despegarse de lo que se escribió. Lo decide el
+// servidor (/api/cuenta/apodo) con usuarios.apodo_actualizado_en (migración
+// 037). No cuentan el apodo que asigna la base al crear la cuenta ni el
+// primero que se elige (mientras bienvenida_vista_en es null).
+export const DIAS_ENTRE_CAMBIOS_APODO = 30
+
+// { puede: true } o { puede: false, cambiadoEl, desde } (Date).
+export function cambioDeApodo(apodoActualizadoEn, ahoraMs = Date.now()) {
+  const ultimo = Date.parse(apodoActualizadoEn)
+  if (!Number.isFinite(ultimo)) return { puede: true }
+  const desde = ultimo + DIAS_ENTRE_CAMBIOS_APODO * 24 * 60 * 60 * 1000
+  if (ahoraMs >= desde) return { puede: true }
+  return { puede: false, cambiadoEl: new Date(ultimo), desde: new Date(desde) }
+}
+
 // Devuelve { ok: true, apodo } (recortado) o { ok: false, motivo }.
 export function validarApodo(valor) {
   const apodo = String(valor ?? '').trim().replace(/\s+/g, ' ')

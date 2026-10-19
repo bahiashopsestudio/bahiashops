@@ -285,18 +285,23 @@ export default function AdminDashboard() {
         console.error('No se pudo contar la cola de moderación', err)
       }
 
-      // Productos con denuncias pendientes (la tabla solo la lee el servidor).
-      try {
-        const resDenuncias = await fetch('/api/admin/denuncias?conteo=1')
-        if (resDenuncias.ok) {
-          const { total } = await resDenuncias.json()
-          setDenunciasPendientes(total || 0)
-        } else {
-          console.error('No se pudieron contar las denuncias', resDenuncias.status)
+      // Productos con denuncias pendientes + reseñas por revisar (las dos
+      // tablas solo las lee el servidor). Si una cuenta falla, suma la otra.
+      async function contar(url, campo, que) {
+        try {
+          const res = await fetch(url)
+          if (res.ok) return (await res.json())[campo] || 0
+          console.error(`No se pudieron contar ${que}`, res.status)
+        } catch (err) {
+          console.error(`No se pudieron contar ${que}`, err)
         }
-      } catch (err) {
-        console.error('No se pudieron contar las denuncias', err)
+        return 0
       }
+      const [productosDenunciados, resenasPorRevisar] = await Promise.all([
+        contar('/api/admin/denuncias?conteo=1', 'total', 'las denuncias'),
+        contar('/api/admin/resenas?conteo=1', 'por_revisar', 'las reseñas por revisar'),
+      ])
+      setDenunciasPendientes(productosDenunciados + resenasPorRevisar)
 
       // El badge cuenta altas nuevas, no pendientes: desde que las tiendas se
       // publican solas ya no hay cola de revisión, y lo que interesa mirar es
@@ -417,7 +422,7 @@ export default function AdminDashboard() {
               iconoFondo="#fbe8da"
               iconoColor="#8a3410"
               titulo="Denuncias"
-              desc="Productos que denunció la gente."
+              desc="Productos que denunció la gente y reseñas para revisar."
               badge={denunciasPendientes > 0 ? `${denunciasPendientes} ${denunciasPendientes === 1 ? 'nueva' : 'nuevas'}` : null}
               badgeTipo="naranja"
               borde={denunciasPendientes > 0 ? '#ecd2bf' : null}

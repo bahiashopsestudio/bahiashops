@@ -12,6 +12,7 @@ import VolverAtras from '@/components/VolverAtras'
 import Buscador from '@/components/Buscador'
 import BotonFavorito from '@/components/BotonFavorito'
 import BarraFiltros from '@/components/BarraFiltros'
+import { textoPuntajeTarjeta } from '@/lib/resenas'
 
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage']
 
@@ -88,7 +89,7 @@ function BuscarContenido() {
     const { data: vendedores } = await soloVendedoresPublicados(
       supabase
         .from('vendedores')
-        .select('id, nombre_negocio, slug, logo_url, descripcion_corta')
+        .select('id, nombre_negocio, slug, logo_url, descripcion_corta, puntaje:puntajes_tiendas(cantidad, promedio)')
         .ilike('nombre_negocio', `%${termino}%`)
     ).limit(5)
 
@@ -190,6 +191,7 @@ function BuscarContenido() {
                         {t.descripcion_corta && (
                           <p className="text-xs text-[#0a0a0a]/30 font-light truncate">{t.descripcion_corta}</p>
                         )}
+                        <p className="text-xs text-[#0a0a0a]/50 font-medium truncate">{textoPuntajeTarjeta(t.puntaje)}</p>
                       </div>
                     </Link>
                   ))}

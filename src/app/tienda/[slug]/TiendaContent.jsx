@@ -5,6 +5,68 @@ import Link from 'next/link'
 import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
 import { createClient } from '@/lib/supabase/client'
+import { EstrellasFijas } from '@/components/Estrellas'
+import ListaResenas from '@/components/ListaResenas'
+import { textoPromedio, textoCantidadResenas, MINIMO_PARA_PROMEDIO } from '@/lib/resenas'
+
+// Debajo del nombre: con 5 o más reseñas, las estrellas, el promedio y la
+// cantidad (link a la sección); con menos, "Tienda nueva" y la cantidad; sin
+// ninguna, solo "Tienda nueva".
+function LineaPuntaje({ puntaje }) {
+  const { cantidad, promedio } = puntaje
+  const enlace = (
+    <a href="#resenas" className="text-[#0a0a0a]/55 underline underline-offset-2 hover:text-[#0a0a0a] font-light">
+      {textoCantidadResenas(cantidad)}
+    </a>
+  )
+  return (
+    <div className="flex flex-wrap items-center gap-2 mt-2 text-[13px]" style={{ fontFamily: "'Inter', sans-serif" }}>
+      {promedio !== null ? (
+        <>
+          <EstrellasFijas valor={promedio} tamano={14} />
+          <span className="text-[#0a0a0a]" style={{ fontWeight: 600 }}>{textoPromedio(promedio)}</span>
+        </>
+      ) : (
+        <span className="text-[11px] px-2.5 py-0.5 rounded-full" style={{ fontWeight: 600, backgroundColor: '#e8ecff', color: '#2a3fb8' }}>
+          Tienda nueva
+        </span>
+      )}
+      {cantidad > 0 && (
+        <>
+          <span className="text-[#0a0a0a]/30" aria-hidden="true">·</span>
+          {enlace}
+        </>
+      )}
+    </div>
+  )
+}
+
+// La sección "Reseñas". Sin reseñas no se muestra; si no se pudieron cargar,
+// lo dice.
+function SeccionResenas({ vendedorId, puntaje, resenas }) {
+  if (puntaje.cantidad === 0) return null
+  return (
+    <section id="resenas" className="mb-10 scroll-mt-24">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h3 className="text-lg m-0" style={{ fontFamily: 'Fraunces, serif', fontWeight: 500, color: '#0a0a0a' }}>Reseñas</h3>
+        <span className="text-xs text-[#0a0a0a]/40 font-light">Todas son de compras pagadas en Bahía Shops</span>
+      </div>
+      {puntaje.cantidad < MINIMO_PARA_PROMEDIO && (
+        <p className="m-0 mt-2 text-sm text-[#0a0a0a]/45 font-light leading-relaxed">
+          El puntaje promedio aparece cuando la tienda llega a 5 reseñas. Con menos, un solo número no dice mucho de cómo trabaja.
+        </p>
+      )}
+      <div className="mt-3">
+        {resenas.error ? (
+          <p className="m-0 text-sm text-[#dc2626] font-light">No pudimos cargar las reseñas. Probá de nuevo en un rato.</p>
+        ) : (
+          <ListaResenas inicial={resenas.resenas} hayMasInicial={resenas.hayMas}
+            urlPagina={(desde) => `/api/tiendas/${vendedorId}/resenas?desde=${desde}`} />
+        )}
+      </div>
+    </section>
+  )
+}
 
 // ═══════════════════════════════════════════════════════════
 // HELPERS
@@ -30,7 +92,7 @@ const MENU_CATEGORIAS = [
 // COMPONENTE PRINCIPAL
 // ═══════════════════════════════════════════════════════════
 
-export default function TiendaContent({ vendedor, productos }) {
+export default function TiendaContent({ vendedor, productos, puntaje = { cantidad: 0, promedio: null }, resenas = { resenas: [], hayMas: false, error: false } }) {
   const supabase = createClient()
   const [siguiendo, setSiguiendo] = useState(false)
   const [copiadoVisible, setCopiadoVisible] = useState(false)
@@ -211,6 +273,7 @@ export default function TiendaContent({ vendedor, productos }) {
                   </span>
                 )}
               </div>
+              <LineaPuntaje puntaje={puntaje} />
             </div>
           </div>
 
@@ -353,24 +416,8 @@ export default function TiendaContent({ vendedor, productos }) {
             </div>
           </div>
 
-          {/* ── Reseñas placeholder ── */}
-          <div className="bg-[#F5F2EC] rounded-2xl p-6 mb-10">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg" style={{ fontFamily: 'Fraunces, serif', fontWeight: 500, color: '#0a0a0a' }}>Reseñas</h3>
-              <span className="text-[10px] text-[#0a0a0a]/30 font-light px-2.5 py-1 rounded-full bg-[#0a0a0a]/5 tracking-wide">Próximamente</span>
-            </div>
-            <div className="flex items-center gap-1 mt-3">
-              {[1, 2, 3, 4, 5].map(star => (
-                <svg key={star} className="w-5 h-5 text-[#0a0a0a]/10" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                </svg>
-              ))}
-              <span className="text-xs text-[#0a0a0a]/20 ml-1 font-light">Sin reseñas aún</span>
-            </div>
-            <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 300, fontSize: '13.5px', color: 'rgba(10,10,10,0.4)', lineHeight: 1.6, marginTop: '12px' }}>
-              Las reseñas estarán disponibles próximamente. Los compradores podrán dejar su opinión después de cada compra.
-            </p>
-          </div>
+          {/* ── Reseñas ── */}
+          <SeccionResenas vendedorId={vendedor.id} puntaje={puntaje} resenas={resenas} />
         </div>
       </div>
     </>

@@ -14,7 +14,7 @@ export default async function MapaPage() {
   const { data: vendedores, error: errorVendedores } = await soloVendedoresPublicados(
     supabase
       .from('vendedores')
-      .select('id, nombre_negocio, slug, latitud, longitud, direccion_visible, barrio_id, logo_url, descripcion_corta')
+      .select('id, nombre_negocio, slug, latitud, longitud, direccion_visible, barrio_id, logo_url, descripcion_corta, puntaje:puntajes_tiendas(cantidad, promedio)')
       .not('latitud', 'is', null)
       .not('longitud', 'is', null)
   )

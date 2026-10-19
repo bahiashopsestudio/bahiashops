@@ -1,6 +1,7 @@
 // Mails de un pedido: el aviso de venta al vendedor, la confirmación a quien
 // compró (los dos cuando MercadoPago confirma el pago), el aviso de «listo para
-// retirar» (Retiro) y el aviso de despacho.
+// retirar» (Retiro), el aviso de despacho y «¿Cómo te fue?» (al marcarlo
+// entregado, para dejar la reseña).
 //
 // El de despacho vivía en /api/notificaciones/despacho, una ruta sin ninguna
 // verificación: alcanzaba con acertarle al número de pedido para dispararle a
@@ -27,7 +28,8 @@ import { normalizarTelefonoAR, formatearTelefonoAR, linkWhatsApp } from '@/lib/t
 import { inicialDeApodo, colorDeApodo } from '@/lib/apodos'
 import { metodoPideDireccion, tipoEntregaDe, zonaDe, textoCostoEnvio, seguimientoDe } from '@/lib/metodosEntrega'
 import { calleNumeroDepto, ciudadProvinciaCodigo } from '@/lib/direcciones'
-import { pedidoTuvoPago, formaDeEntrega } from '@/lib/pedidos'
+import { pedidoTuvoPago, formaDeEntrega, ESTADO_ENTREGADO } from '@/lib/pedidos'
+import { estadoDeResena } from '@/lib/resenas'
 
 // ── 1. Piezas propias de los mails de pedido ──────────────────────────────────
 
@@ -342,6 +344,51 @@ export function armarMailListo(datos) {
     textoCompra(compra),
     `QUÉ PASA AHORA\n${partesTexto(quePasa)}`,
     `Ver mis pedidos: ${linkPedidos}`,
+    PIE_COMPRADOR.join('\n'),
+  ].join('\n\n')
+
+  return { asunto, html: plantilla({ asunto, cuerpo }), texto }
+}
+
+// «¿Cómo te fue comprando en {tienda}?»: sale cuando la tienda marca el pedido
+// como entregado, una sola vez por pedido, con el botón para dejar la reseña.
+// Recibe { pedidoId, tienda, nombre, items, costoEnvio, total }.
+export function armarMailResena(datos) {
+  const { pedidoId, tienda, items, costoEnvio, total } = datos
+  const nombre = String(datos.nombre ?? '').trim()
+  const linkResena = `${SITIO_URL}/mis-pedidos?resena=${encodeURIComponent(pedidoId)}`
+
+  const asunto = `¿Cómo te fue comprando en ${tienda}?`
+  const titulo = '¿Cómo te fue?'
+  const compra = { etiqueta: 'LO QUE COMPRASTE', etiquetaTotal: 'Total', items, costoEnvio, total }
+
+  const presentacion = [
+    [nombre ? `Hola ${nombre}: tu pedido en ` : 'Tu pedido en '],
+    [tienda, true],
+    [' figura como entregado. Esperamos que todo haya salido bien.'],
+  ]
+  const pedido = 'Si tenés un minuto, contanos cómo fue. Son las estrellas y, si querés, un par de líneas.'
+  const firma = 'Tu reseña se firma con tu apodo, no con tu nombre. En una plataforma nueva, saber que alguien de la ciudad ya le compró a esa tienda es lo que hace que otra persona se anime.'
+
+  const cuerpo = [
+    lineaAzul(`Pedido #${pedidoId}`),
+    tituloImagen('titulo-resena.png', titulo),
+    parrafo(partesHtml(presentacion)),
+    tarjetaCompra(compra),
+    parrafo(escapar(pedido)),
+    boton('Dejar mi reseña', linkResena),
+    `<p style="margin:16px 0 0;font-family:${FUENTE_TEXTO};font-size:13px;font-weight:300;line-height:1.6;color:${GRIS};">${escapar(firma)}</p>`,
+    htmlPie(PIE_COMPRADOR),
+  ].join('\n')
+
+  const texto = [
+    `PEDIDO #${pedidoId}`,
+    titulo,
+    partesTexto(presentacion),
+    textoCompra(compra),
+    pedido,
+    `Dejar mi reseña: ${linkResena}`,
+    firma,
     PIE_COMPRADOR.join('\n'),
   ].join('\n\n')
 
@@ -869,6 +916,85 @@ export async function avisarListo({ admin, pedidoId }) {
     })
   } catch (err) {
     console.error(`Pedido ${pedidoId}: error en el mail de listo`, err)
+    return { enviado: false, motivo: 'excepcion' }
+  }
+}
+
+// «¿Cómo te fue?» a quien compró. Lo llama la ruta que avanza el pedido,
+// DESPUÉS de guardar 'entregado'. Una sola vez por pedido (reclama
+// pedidos.aviso_resena_en, migración 037): como el pedido no vuelve a
+// 'entregado', si Resend falla no se reintenta; queda en el log y el pedido
+// queda entregado igual. No sale si la cuenta de quien compró se eliminó, si
+// ya dejó la reseña (por los 14 días) o si la regla no deja reseñar
+// (estadoDeResena tiene que dar "puede"). Nunca lanza. Devuelve
+// { enviado, motivo }.
+//
+// 'admin' tiene que ser un cliente con service_role.
+export async function avisarResena({ admin, pedidoId }) {
+  try {
+    const { data: pedido, error } = await admin
+      .from('pedidos')
+      .select(`
+        id, estado, comprador_id, comprador_nombre, entregado_at, pagado_en,
+        costo_envio, total, vendedor_nombre,
+        vendedor:vendedores ( nombre_negocio ),
+        items:pedido_items ( id, nombre, variante, cantidad, precio )
+      `)
+      .eq('id', pedidoId)
+      .maybeSingle()
+
+    if (error || !pedido) {
+      console.error(`Pedido ${pedidoId}: mail de reseña no enviado — no se pudo leer el pedido.`, error?.message)
+      return { enviado: false, motivo: 'pedido_no_encontrado' }
+    }
+    if (pedido.estado !== ESTADO_ENTREGADO) {
+      console.error(`Pedido ${pedidoId}: mail de reseña no enviado — el pedido está en "${pedido.estado}".`)
+      return { enviado: false, motivo: 'no_corresponde' }
+    }
+
+    const { data: resena, error: errorResena } = await admin
+      .from('resenas')
+      .select('id')
+      .eq('pedido_id', pedidoId)
+      .maybeSingle()
+    if (errorResena) {
+      console.error(`Pedido ${pedidoId}: mail de reseña no enviado — no se pudo leer si ya tiene reseña: ${errorResena.message}`)
+      return { enviado: false, motivo: 'sin_datos' }
+    }
+    const estado = estadoDeResena({ pedido, resena, ahoraMs: Date.now() })
+    if (estado.estado !== 'puede') {
+      console.log(`Pedido ${pedidoId}: mail de reseña no enviado — la reseña está en "${estado.estado}".`)
+      return { enviado: false, motivo: 'no_corresponde' }
+    }
+
+    const { data: cuenta, error: errorCuenta } = await admin
+      .from('usuarios')
+      .select('email, cerrada_en')
+      .eq('id', pedido.comprador_id)
+      .maybeSingle()
+    if (errorCuenta) {
+      console.error(`Pedido ${pedidoId}: no se pudo leer la cuenta de quien compró para el mail de reseña — ${errorCuenta.message}`)
+    }
+    // Una cuenta eliminada no recibe mails: le queda un mail .invalid.
+    const para = cuenta && !cuenta.cerrada_en && !/.invalid$/i.test(cuenta.email || '') ? cuenta.email : null
+
+    return await enviarUnaVez({
+      admin,
+      pedidoId: pedido.id,
+      columna: 'aviso_resena_en',
+      destinatario: 'comprador (¿cómo te fue?)',
+      para,
+      armar: () => armarMailResena({
+        pedidoId: pedido.id,
+        tienda: pedido.vendedor_nombre || pedido.vendedor?.nombre_negocio || 'la tienda',
+        nombre: pedido.comprador_nombre,
+        items: [...(pedido.items || [])].sort((a, b) => a.id - b.id),
+        costoEnvio: pedido.costo_envio,
+        total: pedido.total,
+      }),
+    })
+  } catch (err) {
+    console.error(`Pedido ${pedidoId}: error en el mail de reseña`, err)
     return { enviado: false, motivo: 'excepcion' }
   }
 }
