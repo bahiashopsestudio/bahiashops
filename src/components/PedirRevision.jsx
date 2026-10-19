@@ -9,15 +9,24 @@
 //   sin pedir     el link gris "Pedir revisión" (despliega el formulario)
 //   en_revision   la etiqueta "En revisión"
 //   revisada      "Revisada: sigue publicada"
+//
+// Lo abre y lo cierra AccionesResena (la tarjeta de la reseña en el panel),
+// que también guarda en qué está la revisión (para que no se pierda si este
+// bloque se desmonta):
+//   estado         null | 'en_revision' | 'revisada'
+//   onPedida()     se pidió (o ya estaba pedida)
+//   abierto        si el formulario está desplegado
+//   onAbrir(bool)  abrirlo o cerrarlo
+//   onResponder    solo si la reseña no tiene respuesta: el recuadro celeste
+//                  "¿Ya probaste responderle?" con su link "Responder"
+//   soloLink       el link sin margen de arriba (va en la fila de "Responder")
 
 import { useState } from 'react';
 import { MOTIVOS_REVISION, LARGO_MAXIMO_COMENTARIO_REVISION, largoTexto, limpiarTexto } from '@/lib/resenas';
 
 const INTER = "'Inter', sans-serif";
 
-export default function PedirRevision({ resena }) {
-  const [estado, setEstado] = useState(resena.estado_revision || null);
-  const [abierto, setAbierto] = useState(false);
+export default function PedirRevision({ resena, estado, onPedida, abierto, onAbrir, onResponder = null, soloLink = false }) {
   const [motivo, setMotivo] = useState('');
   const [comentario, setComentario] = useState('');
   const [enviando, setEnviando] = useState(false);
@@ -30,7 +39,7 @@ export default function PedirRevision({ resena }) {
 
   if (estado === 'en_revision') {
     return (
-      <p className="m-0 mt-2">
+      <p className={`m-0 ${soloLink ? '' : 'mt-2'}`}>
         <span className="text-[11px] px-2.5 py-0.5 rounded-full" style={{ fontFamily: INTER, fontWeight: 600, backgroundColor: '#e8ecff', color: '#2a3fb8' }}>
           En revisión
         </span>
@@ -38,7 +47,7 @@ export default function PedirRevision({ resena }) {
     );
   }
   if (estado === 'revisada') {
-    return <p className="m-0 mt-2 text-xs text-[#0a0a0a]/45 font-light">Revisada: sigue publicada</p>;
+    return <p className={`m-0 ${soloLink ? '' : 'mt-2'} text-xs text-[#0a0a0a]/45 font-light`}>Revisada: sigue publicada</p>;
   }
 
   async function enviar() {
@@ -52,9 +61,12 @@ export default function PedirRevision({ resena }) {
         body: JSON.stringify({ motivo, comentario: limpiarTexto(comentario) }),
       });
       const datos = await res.json().catch(() => null);
-      if (res.ok) { setEstado('en_revision'); return; }
-      // Ya estaba pedida (otra pestaña): se muestra como pedida.
-      if (res.status === 409 && datos?.motivo === 'ya_pedida') { setEstado('en_revision'); return; }
+      if (res.ok || (res.status === 409 && datos?.motivo === 'ya_pedida')) {
+        // Ya estaba pedida (otra pestaña): se muestra como pedida.
+        onPedida();
+        onAbrir(false);
+        return;
+      }
       setError(datos?.error || 'No pudimos pedir la revisión. Probá de nuevo en un rato.');
     } catch {
       setError('No pudimos conectarnos. Revisá tu conexión y probá de nuevo.');
@@ -64,8 +76,8 @@ export default function PedirRevision({ resena }) {
 
   if (!abierto) {
     return (
-      <button type="button" onClick={() => setAbierto(true)}
-        className="mt-2 text-xs text-[#0a0a0a]/45 font-light underline underline-offset-2 bg-transparent border-0 p-0 cursor-pointer hover:text-[#0a0a0a]/70">
+      <button type="button" onClick={() => onAbrir(true)}
+        className={`${soloLink ? '' : 'mt-2'} text-xs text-[#0a0a0a]/45 font-light underline underline-offset-2 bg-transparent border-0 p-0 cursor-pointer hover:text-[#0a0a0a]/70`}>
         Pedir revisión
       </button>
     );
@@ -73,6 +85,16 @@ export default function PedirRevision({ resena }) {
 
   return (
     <div className="mt-3 border border-[#0a0a0a]/10 rounded-xl p-4">
+      {onResponder && (
+        <p className="m-0 mb-3 text-sm text-[#0a0a0a]/70 font-light leading-relaxed rounded-lg px-3.5 py-3 bg-[#eaf3ff] border border-[#d3e5fb]">
+          ¿Ya probaste responderle? Una respuesta tranquila suele decir más que la reseña.{' '}
+          <button type="button" onClick={onResponder}
+            className="text-[#2a3fb8] font-medium underline underline-offset-2 bg-transparent border-0 p-0 cursor-pointer">
+            Responder
+          </button>
+        </p>
+      )}
+
       <label htmlFor={idMotivo} className="block text-sm text-[#0a0a0a] mb-1.5" style={{ fontFamily: INTER, fontWeight: 600 }}>
         ¿Por qué querés que la revisemos?
       </label>
@@ -100,7 +122,7 @@ export default function PedirRevision({ resena }) {
           style={{ fontFamily: INTER, fontWeight: 500, fontSize: '14px', borderRadius: '4px', padding: '10px 20px' }}>
           {enviando ? 'Enviando…' : 'Pedir revisión'}
         </button>
-        <button type="button" onClick={() => { setAbierto(false); setError(''); }} disabled={enviando}
+        <button type="button" onClick={() => { onAbrir(false); setError(''); }} disabled={enviando}
           className="text-sm text-[#0a0a0a]/45 font-light bg-transparent border-none p-0 cursor-pointer hover:text-[#0a0a0a]/70 underline underline-offset-2">
           Cancelar
         </button>

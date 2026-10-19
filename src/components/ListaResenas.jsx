@@ -9,8 +9,10 @@
 //   hayMasInicial  si hay otra página
 //   urlPagina(n)   la URL que devuelve { resenas, hayMas } desde la n-ésima
 //   conPedido      muestra "Pedido #n" (solo el panel de la tienda)
+//   tienda         el nombre de la tienda: con él, debajo de cada reseña va la
+//                  respuesta de la tienda, si está publicada (página pública)
 //   extra(resena)  lo que va debajo de cada reseña (el panel de la tienda:
-//                  "Pedir revisión" y su estado)
+//                  su respuesta, "Responder" y "Pedir revisión")
 
 import { useState } from 'react'
 import Link from 'next/link'
@@ -19,7 +21,27 @@ import { EstrellasFijas } from '@/components/Estrellas'
 import { fechaCorta } from '@/lib/fechas'
 import { FIRMA_CUENTA_ELIMINADA } from '@/lib/resenas'
 
-export function ItemResena({ resena, conPedido = false, extra = null }) {
+// La respuesta de la tienda, debajo de la reseña: con sangría y una línea gris
+// de 2px a la izquierda (más chica en el celular). marca: lo que va al lado
+// de la fecha (en el panel, la etiqueta "Oculta").
+export function RespuestaPublica({ tienda, respuesta, marca = null }) {
+  return (
+    <div className="mt-3 ml-2 md:ml-8 pl-3 md:pl-4 border-l-2 border-[#0a0a0a]/10">
+      <p className="m-0 flex flex-wrap items-center gap-x-1.5 gap-y-1">
+        <span className="text-[#0a0a0a]" style={{ fontFamily: "'Inter', sans-serif", fontWeight: 600, fontSize: '13px' }}>
+          Respuesta de {tienda}
+        </span>
+        <span className="text-xs text-[#0a0a0a]/40 font-light">
+          · {fechaCorta(respuesta.creado_en)}{respuesta.editada ? ' · editada' : ''}
+        </span>
+        {marca}
+      </p>
+      <p className="m-0 mt-1 text-[14px] text-[#0a0a0a]/80 font-light leading-relaxed whitespace-pre-line break-words">{respuesta.texto}</p>
+    </div>
+  )
+}
+
+export function ItemResena({ resena, conPedido = false, tienda = null, extra = null }) {
   const eliminada = !resena.apodo
   return (
     <li className="py-4 border-t border-[#0a0a0a]/5 first:border-t-0 list-none">
@@ -47,12 +69,13 @@ export function ItemResena({ resena, conPedido = false, extra = null }) {
       ) : (
         <p className="m-0 mt-2 text-sm text-[#0a0a0a]/40 font-light italic">Dejó solo las estrellas.</p>
       )}
+      {tienda && resena.respuesta && <RespuestaPublica tienda={tienda} respuesta={resena.respuesta} />}
       {extra}
     </li>
   )
 }
 
-export default function ListaResenas({ inicial, hayMasInicial, urlPagina, conPedido = false, extra = null }) {
+export default function ListaResenas({ inicial, hayMasInicial, urlPagina, conPedido = false, tienda = null, extra = null }) {
   const [resenas, setResenas] = useState(inicial || [])
   const [hayMas, setHayMas] = useState(!!hayMasInicial)
   const [cargando, setCargando] = useState(false)
@@ -83,7 +106,7 @@ export default function ListaResenas({ inicial, hayMasInicial, urlPagina, conPed
   return (
     <>
       <ul className="m-0 p-0">
-        {resenas.map((r) => <ItemResena key={r.id} resena={r} conPedido={conPedido} extra={extra ? extra(r) : null} />)}
+        {resenas.map((r) => <ItemResena key={r.id} resena={r} conPedido={conPedido} tienda={tienda} extra={extra ? extra(r) : null} />)}
       </ul>
       {error && <p className="m-0 mt-2 text-sm text-[#dc2626] font-light">{error}</p>}
       {hayMas && (

@@ -1,6 +1,7 @@
 // Las reseñas de quien tiene la sesión.
 //
-//   GET                                   -> { resenas: [...], apodo }
+//   GET                                   -> { resenas: [...], apodo } (con la
+//                                            respuesta de la tienda, si se ve)
 //   POST { pedido_id, estrellas, texto }  -> { resena }
 //
 // Por qué una ruta: resenas no tiene permisos para el navegador (migración
@@ -22,13 +23,17 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getServiceRoleClient } from '@/lib/supabase/admin'
-import { validarResena, estadoDeResena, moderarTextoResena, ERROR_DE_ESTADO } from '@/lib/resenas'
+import { validarResena, estadoDeResena, moderarTextoResena, respuestaDe, ERROR_DE_ESTADO } from '@/lib/resenas'
+import { respuestaParaMostrar } from '@/lib/resenasServidor'
 
 const NO_SE_PUDO = 'No pudimos publicar tu reseña. Probá de nuevo en un rato.'
 const YA_EXISTE = 'Ya dejaste tu reseña de este pedido.'
 // Lo que ve quien compró de su propia reseña. El motivo de una oculta no
 // viaja: la pantalla dice que no cumple las reglas.
 const COLUMNAS_MIAS = 'id, pedido_id, estrellas, texto, estado, creado_en'
+// Para Mis pedidos, también la respuesta de la tienda: se muestra solo si la
+// reseña y la respuesta están publicadas (migración 039).
+const COLUMNAS_CON_RESPUESTA = `${COLUMNAS_MIAS}, respuesta:respuestas_resena ( texto, estado, creado_en, editada_en )`
 
 async function sesion() {
   const supabase = await createClient()
@@ -42,14 +47,18 @@ export async function GET() {
 
   const admin = getServiceRoleClient()
   const [{ data: resenas, error }, { data: cuenta, error: errorCuenta }] = await Promise.all([
-    admin.from('resenas').select(COLUMNAS_MIAS).eq('comprador_id', user.id),
+    admin.from('resenas').select(COLUMNAS_CON_RESPUESTA).eq('comprador_id', user.id),
     admin.from('usuarios').select('nombre_usuario').eq('id', user.id).maybeSingle(),
   ])
   if (error || errorCuenta) {
     console.error('[resenas/mias]', user.id, error?.message || errorCuenta?.message)
     return NextResponse.json({ error: 'No pudimos cargar tus reseñas.' }, { status: 500 })
   }
-  return NextResponse.json({ resenas: resenas || [], apodo: cuenta?.nombre_usuario || null })
+  const lista = (resenas || []).map(({ respuesta, ...r }) => ({
+    ...r,
+    respuesta: r.estado === 'publicada' ? respuestaParaMostrar(respuestaDe(respuesta)) : null,
+  }))
+  return NextResponse.json({ resenas: lista, apodo: cuenta?.nombre_usuario || null })
 }
 
 export async function POST(request) {

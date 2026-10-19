@@ -3,8 +3,10 @@
 // La pestaña "Reseñas" de /admin/denuncias (/api/admin/resenas). Dos vistas:
 //   Por revisar  publicadas que marcó el filtro (algo dudoso: posible
 //                teléfono, mención de una red, pedido de contacto) y/o que una
-//                tienda pidió revisar. Siguen publicadas. "Dar por revisada"
-//                o "Ocultar".
+//                tienda pidió revisar, y las que tienen una respuesta de la
+//                tienda marcada por el filtro. Siguen publicadas. "Dar por
+//                revisada", "Ocultar" u "Ocultar respuesta" (saca solo la
+//                respuesta).
 //   Ocultas      las que ocultó la moderación. "Volver a mostrar" y, desde
 //                los 45 días de ocultas, "Eliminar" (se borra el texto para
 //                siempre y la fila queda: no se puede volver a reseñar ese
@@ -92,12 +94,58 @@ function Eliminar({ enAccion, onConfirmar, onCancelar }) {
   );
 }
 
-function TarjetaResena({ r, ahora, enAccion, abierto, onAbrir, onActuar }) {
+// Un texto con lo que encontró el filtro resaltado en su contexto.
+function Fragmentos({ fragmentos }) {
+  return (
+    <div className="mt-2 flex flex-col gap-1.5">
+      {fragmentos.map((f, i) => (
+        <p key={i} className="m-0 text-sm text-gray-600 bg-[#f6f3ee] rounded-lg px-3 py-2 break-words">
+          {f.antes}
+          <mark className="bg-[#ffe7a8] text-[#0a0a0a] rounded px-0.5">{f.resaltado}</mark>
+          {f.despues}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+// La respuesta de la tienda, debajo de la reseña (migración 039).
+function RespuestaDeLaTienda({ respuesta, tienda }) {
+  const oculta = respuesta.estado === 'oculta_por_moderacion';
+  const tipos = [...new Set(respuesta.avisos.map((t) => ETIQUETAS_MODERACION[t] || t))];
+  return (
+    <div className="mt-3 ml-3 md:ml-6 pl-3 border-l-2 border-gray-200">
+      <p className="m-0 flex items-center gap-2 flex-wrap">
+        <span className="text-[13px] font-semibold text-[#0a0a0a]">Respuesta de {tienda}</span>
+        <span className="text-xs text-gray-400">{fechaCorta(respuesta.creado_en)}{respuesta.editada ? ' · editada' : ''}</span>
+        {respuesta.marcada_por_filtro && <span className={ETIQUETA_AZUL}>Respuesta marcada por el filtro</span>}
+        {tipos.map((t) => <span key={t} className="text-xs text-gray-500">{t}</span>)}
+        {oculta && <span className={ETIQUETA_NARANJA}>Respuesta oculta</span>}
+      </p>
+      {respuesta.marcada_por_filtro && respuesta.fragmentos.length > 0 ? (
+        <Fragmentos fragmentos={respuesta.fragmentos} />
+      ) : (
+        <p className="m-0 mt-2 text-sm text-gray-600 bg-[#f6f3ee] rounded-lg px-3 py-2 whitespace-pre-line break-words">“{respuesta.texto}”</p>
+      )}
+    </div>
+  );
+}
+
+// buscando: la tarjeta salió de la búsqueda por pedido (muestra todas las
+// acciones que correspondan, no solo las de "Por revisar").
+function TarjetaResena({ r, ahora, enAccion, abierto, onAbrir, onActuar, buscando = false }) {
   const oculta = r.estado === 'oculta_por_moderacion';
   const eliminada = !!r.eliminada_en;
   const eliminableMs = Date.parse(r.eliminable_desde);
   const puedeEliminar = oculta && !eliminada && Number.isFinite(eliminableMs) && ahora >= eliminableMs;
   const tipos = [...new Set(r.avisos.map((t) => ETIQUETAS_MODERACION[t] || t))];
+  const respuesta = r.respuesta;
+  const respuestaOculta = respuesta?.estado === 'oculta_por_moderacion';
+  const algoPorRevisar = r.por_revisar || !!respuesta?.por_revisar;
+  // Ocultar la reseña: si ella misma está por revisar, o buscando. Ocultar la
+  // respuesta: si está por revisar, o buscando (y la reseña se ve).
+  const ofrecerOcultar = !oculta && (r.por_revisar || buscando);
+  const ofrecerOcultarRespuesta = !oculta && !!respuesta && !respuestaOculta && (respuesta.por_revisar || buscando);
 
   let texto;
   if (eliminada) {
@@ -106,17 +154,7 @@ function TarjetaResena({ r, ahora, enAccion, abierto, onAbrir, onActuar }) {
     texto = <p className="mt-3 mb-0 text-sm text-gray-400 italic">Dejó solo las estrellas.</p>;
   } else if (r.marcada_por_filtro && r.fragmentos.length > 0) {
     // Lo que encontró el filtro, resaltado en su contexto.
-    texto = (
-      <div className="mt-3 flex flex-col gap-1.5">
-        {r.fragmentos.map((f, i) => (
-          <p key={i} className="m-0 text-sm text-gray-600 bg-[#f6f3ee] rounded-lg px-3 py-2 break-words">
-            {f.antes}
-            <mark className="bg-[#ffe7a8] text-[#0a0a0a] rounded px-0.5">{f.resaltado}</mark>
-            {f.despues}
-          </p>
-        ))}
-      </div>
-    );
+    texto = <div className="mt-1"><Fragmentos fragmentos={r.fragmentos} /></div>;
   } else {
     texto = <p className="mt-3 mb-0 text-sm text-gray-600 bg-[#f6f3ee] rounded-lg px-3 py-2 whitespace-pre-line break-words">“{r.texto}”</p>;
   }
@@ -131,7 +169,7 @@ function TarjetaResena({ r, ahora, enAccion, abierto, onAbrir, onActuar }) {
         <span className="flex items-center gap-1.5 flex-wrap">
           {oculta && !eliminada && <span className={ETIQUETA_NARANJA}>Oculta · {textoMotivoOcultar(r.oculta_motivo)}</span>}
           {eliminada && <span className={ETIQUETA_NARANJA}>Eliminada el {fechaCorta(r.eliminada_en)} · {textoMotivoOcultar(r.oculta_motivo)}</span>}
-          {!oculta && !r.por_revisar && <span className="text-[11px] font-medium text-gray-600 bg-gray-100 rounded-full px-2.5 py-0.5">Publicada</span>}
+          {!oculta && !algoPorRevisar && <span className="text-[11px] font-medium text-gray-600 bg-gray-100 rounded-full px-2.5 py-0.5">Publicada</span>}
         </span>
       </div>
       <p className="mt-0.5 mb-0 text-sm text-gray-500 flex items-center flex-wrap gap-x-1.5 gap-y-1">
@@ -161,17 +199,32 @@ function TarjetaResena({ r, ahora, enAccion, abierto, onAbrir, onActuar }) {
 
       {texto}
 
+      {respuesta && <RespuestaDeLaTienda respuesta={respuesta} tienda={r.tienda.nombre_negocio} />}
+
       {!eliminada && (
         <div className="flex gap-2 flex-wrap items-center mt-4">
-          {r.por_revisar && (
+          {algoPorRevisar && (
             <button type="button" disabled={enAccion} className={BOTON_NEGRO}
               onClick={() => onActuar({ accion: 'revisada' }, 'No se pudo dar por revisada')}>
               {enAccion && !abierto ? 'Guardando...' : 'Dar por revisada'}
             </button>
           )}
-          {!oculta && (
+          {ofrecerOcultar && (
             <button type="button" disabled={enAccion} className={BOTON_BORDE_NEGRO} onClick={() => onAbrir('ocultar')}>
               Ocultar
+            </button>
+          )}
+          {ofrecerOcultarRespuesta && (
+            <button type="button" disabled={enAccion} className={BOTON_BORDE_NEGRO}
+              onClick={() => onActuar({ accion: 'ocultar_respuesta' }, 'No se pudo ocultar la respuesta')}>
+              Ocultar respuesta
+            </button>
+          )}
+          {respuestaOculta && (
+            <button type="button" disabled={enAccion}
+              className="text-sm text-[#0a0a0a] underline underline-offset-2 bg-transparent border-0 p-0 cursor-pointer disabled:opacity-50"
+              onClick={() => onActuar({ accion: 'mostrar_respuesta' }, 'No se pudo volver a mostrar la respuesta')}>
+              Volver a mostrar respuesta
             </button>
           )}
           {oculta && (
@@ -193,6 +246,9 @@ function TarjetaResena({ r, ahora, enAccion, abierto, onAbrir, onActuar }) {
             </>
           )}
         </div>
+      )}
+      {!eliminada && ofrecerOcultarRespuesta && (
+        <p className="m-0 mt-2 text-xs text-gray-400">«Ocultar respuesta» saca solo la respuesta; la reseña sigue publicada.</p>
       )}
 
       {abierto === 'ocultar' && !oculta && (
@@ -296,7 +352,7 @@ export default function ResenasDenunciadas({ onCambioConteo }) {
   return (
     <>
       <p className="text-gray-500 mt-6 mb-0 text-sm">
-        Las reseñas que marcó el filtro o que una tienda pidió revisar. Siguen publicadas hasta que decidas.
+        Las reseñas y respuestas que marcó el filtro, y las que una tienda pidió revisar. Siguen publicadas hasta que decidas.
       </p>
 
       <form onSubmit={buscar} className="mt-4 flex flex-wrap items-center gap-2" role="search">
@@ -344,7 +400,7 @@ export default function ResenasDenunciadas({ onCambioConteo }) {
       ) : (
         <div className="mt-6 flex flex-col gap-4">
           {resenas.map((r) => (
-            <TarjetaResena key={r.id} r={r} ahora={ahora}
+            <TarjetaResena key={r.id} r={r} ahora={ahora} buscando={buscando}
               enAccion={procesando === r.id}
               abierto={abierto?.id === r.id ? abierto.que : null}
               onAbrir={(que) => setAbierto(que ? { id: r.id, que } : null)}

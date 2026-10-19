@@ -6,7 +6,9 @@
 // vuelve a revisar el servidor al publicar (/api/resenas).
 
 import { useState } from 'react'
+import Link from 'next/link'
 import AvatarApodo from '@/components/AvatarApodo'
+import { RespuestaPublica } from '@/components/ListaResenas'
 import { ElegirEstrellas, EstrellasFijas } from '@/components/Estrellas'
 import { ETIQUETAS_MODERACION } from '@/lib/moderacion'
 import {
@@ -56,7 +58,8 @@ export function TextoEstadoResena({ estado }) {
   return <p className="m-0 mt-2 text-xs text-[#0a0a0a]/50 font-light leading-relaxed">{texto}</p>
 }
 
-// Lo que dejó quien compró. Una oculta por la moderación lo dice.
+// Lo que dejó quien compró, con la respuesta de la tienda si se ve. Una
+// oculta por la moderación lo dice (y no muestra la respuesta).
 export function TuResena({ resena, apodo, tienda }) {
   const oculta = resena.estado === 'oculta_por_moderacion'
   return (
@@ -67,6 +70,7 @@ export function TuResena({ resena, apodo, tienda }) {
       {resena.texto && (
         <p className="m-0 mt-2 text-sm text-[#0a0a0a]/80 font-light leading-relaxed whitespace-pre-line break-words">{resena.texto}</p>
       )}
+      {!oculta && resena.respuesta && <RespuestaPublica tienda={tienda} respuesta={resena.respuesta} />}
       <p className={`m-0 mt-3 text-xs font-light leading-relaxed ${oculta ? 'text-[#8a3410]' : 'text-[#0a0a0a]/45'}`}>
         {oculta
           ? `No se muestra en la página de ${tienda} porque no cumple las reglas de las reseñas.`
@@ -77,12 +81,13 @@ export function TuResena({ resena, apodo, tienda }) {
 }
 
 // Lo que encontró el filtro: el mismo cartel que en el alta de productos.
-function CartelBloqueo({ bloqueos }) {
+// explicacion: el texto de arriba de la lista (reseñas o respuestas).
+export function CartelBloqueo({ bloqueos, explicacion = 'Las reseñas no pueden tener datos de contacto ni insultos. Sacá esto de tu comentario:' }) {
   return (
     <div role="alert" className="mt-3 p-3.5 bg-red-50 border border-red-200 rounded-lg text-red-800">
       <p className="m-0 font-semibold text-[0.92rem]">No vas a poder publicar con esto</p>
       <p className="mt-1 mb-2.5 text-sm">
-        Las reseñas no pueden tener datos de contacto ni insultos. Sacá esto de tu comentario:
+        {explicacion}
       </p>
       <ul className="m-0 pl-5 text-sm">
         {bloqueos.map((b, i) => (
@@ -183,6 +188,11 @@ export function FormularioResena({ pedidoId, tienda, apodo, via, onPublicada, on
           Se publica firmada como <strong className="font-semibold text-[#0a0a0a]">{apodo || 'tu apodo'}</strong>, no con tu nombre. Una vez publicada no se puede editar ni borrar.
         </p>
       </div>
+      <p className="m-0 mt-2">
+        <Link href="/resenas" target="_blank" className="text-xs text-[#0a0a0a]/45 font-light underline underline-offset-2 hover:text-[#0a0a0a]/70">
+          Cómo funcionan las reseñas
+        </Link>
+      </p>
 
       {error && <p className="m-0 mt-3 text-sm text-[#dc2626] font-light leading-relaxed">{error}</p>}
 

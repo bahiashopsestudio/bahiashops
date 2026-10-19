@@ -43,13 +43,16 @@ function LineaPuntaje({ puntaje }) {
 
 // La sección "Reseñas". Sin reseñas no se muestra; si no se pudieron cargar,
 // lo dice.
-function SeccionResenas({ vendedorId, puntaje, resenas }) {
+function SeccionResenas({ vendedorId, tienda, puntaje, resenas }) {
   if (puntaje.cantidad === 0) return null
   return (
     <section id="resenas" className="mb-10 scroll-mt-24">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h3 className="text-lg m-0" style={{ fontFamily: 'Fraunces, serif', fontWeight: 500, color: '#0a0a0a' }}>Reseñas</h3>
-        <span className="text-xs text-[#0a0a0a]/40 font-light">Todas son de compras pagadas en Bahía Shops</span>
+        <span className="text-xs text-[#0a0a0a]/40 font-light">
+          Todas son de compras pagadas en Bahía Shops ·{' '}
+          <Link href="/resenas" className="text-[#0a0a0a]/55 underline underline-offset-2 hover:text-[#0a0a0a]">Cómo funcionan</Link>
+        </span>
       </div>
       {puntaje.cantidad < MINIMO_PARA_PROMEDIO && (
         <p className="m-0 mt-2 text-sm text-[#0a0a0a]/45 font-light leading-relaxed">
@@ -60,7 +63,7 @@ function SeccionResenas({ vendedorId, puntaje, resenas }) {
         {resenas.error ? (
           <p className="m-0 text-sm text-[#dc2626] font-light">No pudimos cargar las reseñas. Probá de nuevo en un rato.</p>
         ) : (
-          <ListaResenas inicial={resenas.resenas} hayMasInicial={resenas.hayMas}
+          <ListaResenas inicial={resenas.resenas} hayMasInicial={resenas.hayMas} tienda={tienda}
             urlPagina={(desde) => `/api/tiendas/${vendedorId}/resenas?desde=${desde}`} />
         )}
       </div>
@@ -417,7 +420,7 @@ export default function TiendaContent({ vendedor, productos, puntaje = { cantida
           </div>
 
           {/* ── Reseñas ── */}
-          <SeccionResenas vendedorId={vendedor.id} puntaje={puntaje} resenas={resenas} />
+          <SeccionResenas vendedorId={vendedor.id} tienda={vendedor.nombre_negocio} puntaje={puntaje} resenas={resenas} />
         </div>
       </div>
     </>

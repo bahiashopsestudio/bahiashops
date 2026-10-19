@@ -2,8 +2,8 @@
 
 // Las reseñas de la tienda (/api/vendedor/resenas): el puntaje como lo ve la
 // gente, cuántas tiene, cuántas llegaron en los últimos 7 días, y la lista
-// igual que la pública, con el pedido de cada una y "Pedir revisión"
-// (PedirRevision). Las que ocultó la moderación no aparecen: si alguna se
+// igual que la pública, con el pedido de cada una, su respuesta y "Pedir
+// revisión" (AccionesResena). Las que ocultó la moderación no aparecen: si alguna se
 // ocultó después de pedirla, una línea lo dice, sin el texto. Responder
 // llega más adelante.
 
@@ -14,8 +14,9 @@ import Navbar from '@/components/Navbar';
 import MenuTakeover from '@/components/MenuTakeover';
 import VolverAtras from '@/components/VolverAtras';
 import ListaResenas from '@/components/ListaResenas';
-import PedirRevision from '@/components/PedirRevision';
-import { textoPromedio } from '@/lib/resenas';
+import Link from 'next/link';
+import AccionesResena from '@/components/RespuestaResena';
+import { textoPromedio, textoSinResponder } from '@/lib/resenas';
 
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage'];
 
@@ -34,6 +35,8 @@ export default function MisResenasPage() {
 
   const [cargando, setCargando] = useState(true);
   const [datos, setDatos] = useState(null);
+  // Las que faltan responder: baja al publicar una respuesta.
+  const [sinResponder, setSinResponder] = useState(0);
   const [error, setError] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [categorias, setCategorias] = useState([]);
@@ -47,6 +50,7 @@ export default function MisResenasPage() {
         setError(cuerpo?.error || 'No pudimos cargar tus reseñas. Probá de nuevo en un rato.');
       } else {
         setDatos(cuerpo);
+        setSinResponder(cuerpo.sinResponder || 0);
       }
     } catch {
       setError('No pudimos conectarnos. Revisá tu conexión y probá de nuevo.');
@@ -114,6 +118,12 @@ export default function MisResenasPage() {
                 </div>
 
                 <div className="mt-8">
+                  {puntaje.cantidad > 0 && (
+                    <p className="m-0 mb-2 text-xs text-[#0a0a0a]/45 font-light">
+                      {textoSinResponder(sinResponder)}{' '}
+                      <Link href="/resenas" className="text-[#0a0a0a]/60 underline underline-offset-2 hover:text-[#0a0a0a]">Cómo funcionan las reseñas</Link>
+                    </p>
+                  )}
                   {datos.ocultadasPedidas > 0 && (
                     <p className="m-0 mb-3 text-xs text-[#0a0a0a]/45 font-light">
                       {datos.ocultadasPedidas === 1
@@ -129,7 +139,10 @@ export default function MisResenasPage() {
                     </div>
                   ) : (
                     <ListaResenas inicial={datos.resenas} hayMasInicial={datos.hayMas} conPedido
-                      extra={(r) => <PedirRevision resena={r} />}
+                      extra={(r) => (
+                        <AccionesResena resena={r} tienda={datos.tienda}
+                          onRespondida={() => setSinResponder((n) => Math.max(0, n - 1))} />
+                      )}
                       urlPagina={(desde) => `/api/vendedor/resenas?desde=${desde}`} />
                   )}
                 </div>

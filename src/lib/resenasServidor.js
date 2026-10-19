@@ -7,7 +7,7 @@
 // ids, como en el panel de pedidos. Una cuenta cerrada (o una reseña sin
 // dueño) sale con apodo null: "Cuenta eliminada".
 
-import { estadoRevisionTienda } from '@/lib/resenas'
+import { estadoRevisionTienda, respuestaDe, edicionRespuesta } from '@/lib/resenas'
 
 export const RESENAS_POR_PAGINA = 10
 
@@ -25,15 +25,38 @@ export async function apodosDe(admin, ids) {
   return { apodos, error: null }
 }
 
+// La respuesta tal como se muestra. En público, solo una publicada: {
+// texto, creado_en, editada }. En el panel de la tienda, también una oculta,
+// con su estado (la tienda la ve marcada) y cuántos días le quedan para
+// editarla (0: ya no se puede). Los días los calcula el servidor.
+export function diasDeEdicion(respuesta) {
+  const e = edicionRespuesta(respuesta)
+  return e.puede ? e.diasRestantes : 0
+}
+
+export function respuestaParaMostrar(respuesta, { conEstado = false } = {}) {
+  if (!respuesta) return null
+  if (!conEstado && respuesta.estado !== 'publicada') return null
+  return {
+    texto: respuesta.texto,
+    creado_en: respuesta.creado_en,
+    editada: !!respuesta.editada_en,
+    ...(conEstado ? { estado: respuesta.estado, dias_edicion: diasDeEdicion(respuesta) } : {}),
+  }
+}
+
 // Las publicadas de una tienda, la más nueva primero, de a RESENAS_POR_PAGINA.
 // Devuelve { resenas, hayMas } o { error } (nunca una lista vacía que
-// esconda un error). conPedido: suma pedido_id y en qué está el pedido de
-// revisión de la tienda (solo el panel de la propia tienda).
+// esconda un error). conPedido: suma pedido_id, en qué está el pedido de
+// revisión de la tienda y la respuesta en cualquier estado (solo el panel de
+// la propia tienda). Sin conPedido (la página pública), la respuesta va solo
+// si está publicada, y sin nada de su moderación.
 export async function resenasPublicadas(admin, vendedorId, { desde = 0, conPedido = false } = {}) {
   const inicio = Math.max(0, Number(desde) || 0)
   const { data, error } = await admin
     .from('resenas')
-    .select('id, pedido_id, comprador_id, estrellas, texto, creado_en, revision_pedida_en, revision_pendiente_desde')
+    .select(`id, pedido_id, comprador_id, estrellas, texto, creado_en, revision_pedida_en, revision_pendiente_desde,
+      respuesta:respuestas_resena ( texto, estado, creado_en, editada_en )`)
     .eq('vendedor_id', vendedorId)
     .eq('estado', 'publicada')
     .order('creado_en', { ascending: false })
@@ -50,6 +73,7 @@ export async function resenasPublicadas(admin, vendedorId, { desde = 0, conPedid
 
   const resenas = filas.slice(0, RESENAS_POR_PAGINA).map((r) => ({
     id: r.id,
+    respuesta: respuestaParaMostrar(respuestaDe(r.respuesta), { conEstado: conPedido }),
     apodo: r.comprador_id ? (apodos.get(r.comprador_id) ?? null) : null,
     estrellas: r.estrellas,
     texto: r.texto,

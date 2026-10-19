@@ -249,6 +249,72 @@ export function moderarTextoResena(texto) {
   return { nivel, bloqueos, avisos }
 }
 
+// ── La respuesta de la tienda (migración 039) ────────────────────────────────
+//
+// Una por reseña, de la tienda dueña, sobre una reseña publicada. Se edita
+// durante 7 días desde que se publicó; después queda fija. La base lo vuelve
+// a comprobar todo (respuestas_resena).
+export const LARGO_MAXIMO_RESPUESTA = 500
+export const DIAS_EDICION_RESPUESTA = 7
+
+// Devuelve { ok: true, texto } o { ok: false, error }.
+export function validarRespuesta(cuerpo) {
+  if (typeof cuerpo?.texto !== 'string') return { ok: false, error: 'Escribí tu respuesta.' }
+  const texto = limpiarTexto(cuerpo.texto)
+  if (!texto) return { ok: false, error: 'Escribí tu respuesta.' }
+  if (largoTexto(texto) > LARGO_MAXIMO_RESPUESTA) {
+    return { ok: false, error: `La respuesta puede tener hasta ${LARGO_MAXIMO_RESPUESTA} caracteres.` }
+  }
+  return { ok: true, texto }
+}
+
+// ¿Se puede editar todavía? { puede: true, diasRestantes } o { puede: false }.
+// Una oculta no se edita.
+export function edicionRespuesta(respuesta, ahoraMs = Date.now()) {
+  if (!respuesta || respuesta.estado !== 'publicada') return { puede: false }
+  const creada = Date.parse(respuesta.creado_en)
+  if (!Number.isFinite(creada)) return { puede: false }
+  const hasta = creada + DIAS_EDICION_RESPUESTA * DIA_MS
+  if (ahoraMs > hasta) return { puede: false }
+  return { puede: true, diasRestantes: Math.max(1, Math.ceil((hasta - ahoraMs) / DIA_MS)) }
+}
+
+// "Te quedan 5 días" / "Te queda 1 día"
+export function textoDiasEdicion(dias) {
+  return dias === 1 ? 'Te queda 1 día' : `Te quedan ${dias} días`
+}
+
+// "Tenés 3 reseñas sin responder." / "Tenés 1 reseña sin responder." /
+// "Respondiste todas tus reseñas."
+export function textoSinResponder(n) {
+  if (n === 0) return 'Respondiste todas tus reseñas.'
+  return n === 1 ? 'Tenés 1 reseña sin responder.' : `Tenés ${n} reseñas sin responder.`
+}
+
+// La respuesta embebida (respuesta:respuestas_resena(...)): un objeto, null,
+// o una lista de una fila según cómo la devuelva la API.
+export function respuestaDe(fila) {
+  const r = Array.isArray(fila) ? fila[0] : fila
+  return r && typeof r === 'object' ? r : null
+}
+
+// El filtro de las respuestas: el de las reseñas, más estricto con el
+// contacto. Una tienda que pone su contacto en una respuesta está esquivando
+// la plataforma, así que también bloquean el pedido de contacto ("WhatsApp",
+// "escribime", "llamame") y la mención de una red (Instagram, TikTok,
+// Facebook, Telegram), aunque sea inocente: el cartel dice qué sacar. Lo
+// dudoso (un posible teléfono) se publica y queda para revisar.
+const BLOQUEAN_RESPUESTA = new Set([...BLOQUEAN_RESENA, 'contacto_intencion', 'mencion_redes'])
+
+export function moderarTextoRespuesta(texto) {
+  const revision = moderarTextoResena(texto)
+  const todos = [...revision.bloqueos, ...revision.avisos]
+  const bloqueos = todos.filter((h) => BLOQUEAN_RESPUESTA.has(h.tipo))
+  const avisos = todos.filter((h) => !BLOQUEAN_RESPUESTA.has(h.tipo))
+  const nivel = bloqueos.length ? 'bloqueo' : avisos.length ? 'aviso' : 'limpio'
+  return { nivel, bloqueos, avisos }
+}
+
 // ── El puntaje ────────────────────────────────────────────────────────────────
 
 // El puntaje embebido (puntaje:puntajes_tiendas(cantidad, promedio)): un
