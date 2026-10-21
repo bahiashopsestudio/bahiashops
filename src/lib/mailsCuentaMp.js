@@ -11,7 +11,7 @@
 // mail que falla no las deshace).
 
 import { SITIO_URL } from '@/lib/sitio'
-import { EMAIL_CONTACTO, REMITENTE_NO_REPLY } from '@/lib/contacto'
+import { EMAIL_CONTACTO, EMAIL_NOTIFICACIONES, REMITENTE_NO_REPLY } from '@/lib/contacto'
 import {
   GRIS, BORDE, FUENTE_TEXTO, TABLA,
   escapar, pesos, negrita, plantilla, lineaAzul, tituloTexto, parrafo, tarjeta, boton, filaMonto, enviarPorResend,
@@ -199,6 +199,106 @@ export async function enviarMailCuentaCambiada({ para, ...datos }) {
       mail: armarMailCuentaCambiada(datos),
       desde: REMITENTE_NO_REPLY,
       responderA: EMAIL_CONTACTO,
+    })
+    if (!resultado.ok) {
+      console.error(`${etiqueta} falló: ${sinMails(resultado.motivo)}`)
+      return { enviado: false, motivo: 'resend_error' }
+    }
+    console.log(`${etiqueta}: enviado.`)
+    return { enviado: true }
+  } catch (err) {
+    console.error(`${etiqueta} falló —`, sinMails(err?.message || err))
+    return { enviado: false, motivo: 'excepcion' }
+  }
+}
+
+// ── La renovación del permiso falló (tarea diaria, migración 040) ─────────────
+//
+// Uno a la tienda (a la dirección de su cuenta) y uno interno a
+// notificaciones@. Salen una sola vez por falla: la tarea reclama
+// mercadopago_cuentas.aviso_renovacion_en antes de mandar.
+
+const PIE_VENDEDOR = `<table ${TABLA} width="100%" style="margin:28px 0 0;"><tr><td style="border-top:1px solid ${BORDE};padding:16px 0 0;font-family:${FUENTE_TEXTO};font-size:12px;font-weight:300;line-height:1.6;color:${GRIS};">Te llegó este mail porque vendés en Bahía Shops. Bahía Blanca, Argentina.</td></tr></table>`
+
+export function armarMailRenovacionFallida({ tienda }) {
+  const nombreTienda = String(tienda ?? '').trim() || 'tu tienda'
+  const linkPanel = `${SITIO_URL}/vendedor/perfil`
+  const asunto = `Volvé a conectar Mercado Pago en ${nombreTienda}`
+  const explicacion = ['No pudimos renovar la conexión de tu cuenta de Mercado Pago con ', [nombreTienda], '. Tus productos siguen publicados, pero para que puedan pagarte tenés que volver a conectarla.']
+
+  const cuerpo = [
+    lineaAzul('Mercado Pago'),
+    parrafo('Hola,'),
+    parrafoHtml(explicacion),
+    boton('Conectar Mercado Pago', linkPanel),
+    PIE_VENDEDOR,
+  ].join('\n')
+
+  const texto = ['Hola,', parrafoTexto(explicacion), `Conectar Mercado Pago: ${linkPanel}`].join('\n\n')
+
+  return { asunto, html: plantilla({ asunto, cuerpo }), texto }
+}
+
+// El interno: tienda, id, cuenta de MP, vencimiento y el error (sin tokens).
+export function armarMailRenovacionFallidaInterno({ tienda, vendedorId, cuenta, venceEn, error }) {
+  const nombreTienda = String(tienda ?? '').trim() || `Tienda ${vendedorId}`
+  const asunto = `⚠️ No se pudo renovar MP — ${nombreTienda}`
+  const titulo = 'No se pudo renovar Mercado Pago'
+  const explicacion = 'La tarea diaria no pudo renovar el permiso de esta tienda. La cuenta sigue conectada (no se borró ni se desconectó) y la tienda recibió un mail para volver a conectarla.'
+  const vence = Date.parse(venceEn)
+  const datos = [
+    ['Tienda', nombreTienda],
+    ['Id de la tienda', String(vendedorId)],
+    ['Cuenta de MP', cuenta ? `N° ${cuenta}` : 'Sin número'],
+    ['Vence', Number.isFinite(vence)
+      ? new Date(vence).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', dateStyle: 'long', timeStyle: 'short' })
+      : 'Sin fecha'],
+    ['Error', sinMails(error) || 'Sin detalle'],
+  ]
+
+  const cuerpo = [
+    tituloTexto(titulo),
+    parrafo(escapar(explicacion)),
+    tarjeta('La cuenta', `<table ${TABLA} width="100%">${datos.map(([e, v]) => filaMonto(escapar(e), escapar(v))).join('\n')}</table>`),
+  ].join('\n')
+
+  const texto = [titulo, explicacion, datos.map(([e, v]) => `${e}: ${v}`).join('\n')].join('\n\n')
+
+  return { asunto, html: plantilla({ asunto, cuerpo }), texto }
+}
+
+// Nunca lanzan. Devuelven { enviado, motivo? }.
+export async function enviarMailRenovacionFallida({ para, tienda }) {
+  return enviarConEtiqueta(`Mail de renovación fallida de MercadoPago a la tienda (${tienda ?? 'sin nombre'})`, {
+    para,
+    mail: () => armarMailRenovacionFallida({ tienda }),
+  })
+}
+
+export async function enviarMailRenovacionFallidaInterno(datos) {
+  return enviarConEtiqueta(`Mail interno de renovación fallida de MercadoPago (tienda ${datos.vendedorId})`, {
+    para: EMAIL_NOTIFICACIONES,
+    mail: () => armarMailRenovacionFallidaInterno(datos),
+    desde: REMITENTE_NO_REPLY,
+    responderA: EMAIL_NOTIFICACIONES,
+  })
+}
+
+async function enviarConEtiqueta(etiqueta, { para, mail, desde, responderA }) {
+  try {
+    if (!para) {
+      console.error(`${etiqueta} no enviado: no hay dirección.`)
+      return { enviado: false, motivo: 'sin_destinatario' }
+    }
+    if (!process.env.RESEND_API_KEY) {
+      console.error(`${etiqueta} no enviado: RESEND_API_KEY no configurada.`)
+      return { enviado: false, motivo: 'sin_configurar' }
+    }
+    const resultado = await enviarPorResend({
+      para,
+      mail: mail(),
+      ...(desde ? { desde } : {}),
+      ...(responderA ? { responderA } : {}),
     })
     if (!resultado.ok) {
       console.error(`${etiqueta} falló: ${sinMails(resultado.motivo)}`)

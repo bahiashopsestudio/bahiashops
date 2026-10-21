@@ -49,6 +49,8 @@
     "probar:037": "node scripts/probar-037.mjs",
     "probar:038": "node scripts/probar-038.mjs",
     "probar:039": "node scripts/probar-039.mjs",
+    "probar:040": "node scripts/probar-040.mjs",
+    "tarea-diaria": "node scripts/correr-tarea-diaria.mjs",
     "probar:denuncias": "node scripts/probar-denuncias.mjs",
     "probar:datos-pedido": "node scripts/probar-datos-pedido.mjs",
     "probar:cuenta": "node scripts/probar-eliminar-cuenta.mjs"

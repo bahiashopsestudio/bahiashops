@@ -23,10 +23,14 @@ export function resolve(especificador, contexto, siguiente) {
 `
 register('data:text/javascript,' + encodeURIComponent(alias))
 
-const { armarMailVenta, armarMailCompra, armarMailListo, armarMailDespacho, armarMailPagoTardio, armarMailResena } =
-  await import('../src/lib/mailsPedidos.js')
+const {
+  armarMailVenta, armarMailCompra, armarMailListo, armarMailDespacho, armarMailPagoTardio, armarMailResena,
+  armarMailAviso14Dias, armarMailRecordatorioResena,
+} = await import('../src/lib/mailsPedidos.js')
 const { armarMailCuentaEliminada } = await import('../src/lib/mailsCuenta.js')
-const { armarMailCuentaCambiada, armarMailCuentaMp } = await import('../src/lib/mailsCuentaMp.js')
+const {
+  armarMailCuentaCambiada, armarMailCuentaMp, armarMailRenovacionFallida, armarMailRenovacionFallidaInterno,
+} = await import('../src/lib/mailsCuentaMp.js')
 const { armarMailPausa } = await import('../src/lib/mailsPausa.js')
 
 const base = {
@@ -161,6 +165,20 @@ mails['cuenta-mp-vendedor-cambio-con-cancelados'] = armarMailCuentaMp({ tipo: 'c
 mails.resena = armarMailResena({ ...casos.envio, pedidoId: 1047 })
 mails['resena-sin-nombre'] = armarMailResena({ ...casos.retiro, pedidoId: 1048, nombre: null })
 mails['resena-escapado'] = armarMailResena({ ...casos.escapado, pedidoId: 1049 })
+// La tarea diaria (040): el aviso de los 14 días y el recordatorio, con
+// nombre, sin nombre y escapados; la renovación fallida de MercadoPago, a la
+// tienda y el interno.
+mails['aviso-14-dias'] = armarMailAviso14Dias({ pedidoId: 1050, tienda: 'Cerámica del Puerto', nombre: 'Lucía' })
+mails['aviso-14-dias-sin-nombre'] = armarMailAviso14Dias({ pedidoId: 1051, tienda: 'Cerámica del Puerto', nombre: null })
+mails['aviso-14-dias-escapado'] = armarMailAviso14Dias({ pedidoId: 1052, tienda: '<b>Lo de "Pepa" & Co</b>', nombre: 'Ana <i>María</i>' })
+mails['recordatorio-resena'] = armarMailRecordatorioResena({ pedidoId: 1050, tienda: 'Cerámica del Puerto', nombre: 'Lucía' })
+mails['recordatorio-resena-escapado'] = armarMailRecordatorioResena({ pedidoId: 1052, tienda: '<b>Lo de "Pepa" & Co</b>', nombre: null })
+mails['renovacion-mp-tienda'] = armarMailRenovacionFallida({ tienda: 'Cerámica del Puerto' })
+mails['renovacion-mp-tienda-escapado'] = armarMailRenovacionFallida({ tienda: '<b>Lo de "Pepa" & Co</b>' })
+mails['interno-renovacion-mp'] = armarMailRenovacionFallidaInterno({
+  tienda: 'Cerámica del Puerto', vendedorId: 18, cuenta: '161947825',
+  venceEn: '2026-11-03T15:30:00Z', error: 'MercadoPago respondió 400: invalid_grant · error validating grant',
+})
 // Pausar la tienda: con y sin mensaje para el público.
 mails['tienda-pausada'] = armarMailPausa({ tienda: 'Cerámica del Puerto', mensaje: 'Estamos de vacaciones, volvemos el 15 de febrero.' })
 mails['tienda-pausada-sin-mensaje'] = armarMailPausa({ tienda: 'Cerámica del Puerto' })

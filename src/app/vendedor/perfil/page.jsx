@@ -102,7 +102,8 @@ export default function PerfilVendedorPage() {
   const [categorias, setCategorias] = useState([]);
 
   const [resultadoMp, setResultadoMp] = useState(null);
-  // La cuenta de MercadoPago conectada: { id, nickname, conectado_en, dias_restantes }.
+  // La cuenta de MercadoPago conectada: { id, nickname, conectado_en, dias_restantes,
+  // renovacion_fallida, vence_en }.
   const [cuentaMp, setCuentaMp] = useState(null);
   const [antesDeConectar, setAntesDeConectar] = useState(false);
   const [confirmarDesconexion, setConfirmarDesconexion] = useState(false);
@@ -556,6 +557,25 @@ export default function PerfilVendedorPage() {
                       Activo
                     </span>
                   </div>
+                  {/* La renovación del permiso falló (migración 040). Se va
+                      sola cuando se renueva o se vuelve a conectar. */}
+                  {cuentaMp?.renovacion_fallida && (
+                    <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-900 font-light leading-relaxed">
+                      <p className="m-0">
+                        {cuentaMp.vence_en
+                          ? `No pudimos renovar la conexión con Mercado Pago. Volvé a conectarla antes del ${new Date(cuentaMp.vence_en).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', timeZone: 'America/Argentina/Buenos_Aires' })} para seguir cobrando.`
+                          : 'No pudimos renovar la conexión con Mercado Pago. Volvé a conectarla para seguir cobrando.'}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={abrirAntesDeConectar}
+                        className="mt-3 inline-block bg-[#009ee3] text-white border-none cursor-pointer hover:bg-[#008dd0] transition-colors"
+                        style={{ fontFamily: "'Inter', sans-serif", fontWeight: 500, fontSize: '14px', borderRadius: '4px', padding: '10px 20px' }}
+                      >
+                        Conectar Mercado Pago
+                      </button>
+                    </div>
+                  )}
                   <button
                     type="button"
                     onClick={abrirDesconexion}

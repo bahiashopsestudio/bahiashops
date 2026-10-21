@@ -17,6 +17,7 @@ import { calleNumeroDepto, ciudadProvinciaCodigo } from '@/lib/direcciones';
 import {
   pestanaEnElPanel, siguientePaso, pasosDe, formaDeEntrega, NOMBRE_PASO, ESTADO_ENTREGADO, ESTADO_REEMBOLSADO,
 } from '@/lib/pedidos';
+import { diasSinMarcarEntregado, textoPedidosSinMarcar } from '@/lib/resenas';
 
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage'];
 
@@ -480,8 +481,14 @@ export default function VendedorPedidosPage() {
   const actual = PESTANAS.find((t) => t.clave === pestana) || PESTANAS[0];
   const lista = porPestana[actual.clave];
 
+  // Los pagados hace 14 días o más que la tienda no marcó entregados (el mismo
+  // criterio del aviso de los 14 días a quien compró). Se calcula al mostrar.
+  const sinMarcar = textoPedidosSinMarcar(
+    porPestana.nuevos.filter((p) => diasSinMarcarEntregado(p, ahora) !== null).length
+  );
+
   const tarjeta = (p) => (
-    <PedidoCard key={p.id} pedido={p} abierto={abierto === p.id}
+    <PedidoCard key={p.id} pedido={p} abierto={abierto === p.id} ahora={ahora}
       items={p.items || []} avanzando={avanzando === p.id}
       confirmando={confirmando === p.id}
       onToggle={() => toggleDetalle(p.id)} onAvanzar={() => iniciarAvance(p)}
@@ -505,6 +512,9 @@ export default function VendedorPedidosPage() {
             <p className="text-sm text-[#0a0a0a]/30 font-light m-0 mb-6">
               {totalPedidos} {totalPedidos === 1 ? 'pedido' : 'pedidos'} en total
             </p>
+            {sinMarcar && (
+              <p className="text-[13px] text-[#0a0a0a]/45 font-light m-0 -mt-4 mb-6">{sinMarcar}</p>
+            )}
 
             {!hayAlgo ? (
               <div className="border border-dashed border-[#0a0a0a]/10 rounded-2xl px-8 py-12 text-center">
@@ -747,10 +757,12 @@ function Etiqueta({ children }) {
 }
 
 function PedidoCard({
-  pedido, abierto, items, avanzando, confirmando,
+  pedido, abierto, ahora, items, avanzando, confirmando,
   onToggle, onAvanzar, onConfirmarEntrega, onCancelarEntrega, onCorregirSeguimiento,
 }) {
   const p = pedido;
+  // Pagado hace 14 días o más y sin marcar entregado: los días, o null.
+  const diasSinMarcar = diasSinMarcarEntregado(p, ahora);
   const accion = accionDe(p);
   const direccion = direccionDe(p);
   const seguimiento = seguimientoDe(p);
@@ -780,6 +792,7 @@ function PedidoCard({
             <ChipForma metodoEnvio={p.metodo_envio} />
             <span className="truncate" style={{ fontWeight: 500, fontSize: '12.5px', color: reembolsado ? '#dc2626' : '#0a0a0a' }}>
               #{p.id} · {textoPaso(p)}
+              {!abierto && diasSinMarcar !== null && <span className="text-amber-700"> · ¿Ya lo entregaste?</span>}
             </span>
           </span>
         </span>
@@ -879,6 +892,13 @@ function PedidoCard({
             <div className="mb-4">
               <BarraPasos pasos={pasosDe(p)} estado={p.estado} />
             </div>
+
+            {!entregado && diasSinMarcar !== null && (
+              <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-900 font-light leading-relaxed">
+                Este pedido se pagó hace {diasSinMarcar} días y todavía no figura como entregado. Si ya lo entregaste, marcalo.
+                {' '}Desde el día 14, {apodoDe(p)} ya puede dejarte una reseña.
+              </div>
+            )}
 
             {entregado ? (
               <p className="m-0 text-sm font-medium" style={{ color: VERDE }}>

@@ -59,7 +59,7 @@ export async function GET() {
     .select(`
       id, estado, metodo_envio, zona_envio, subtotal_productos, costo_envio, total,
       envio_empresa, envio_empresa_otra, envio_seguimiento,
-      comision_plataforma, turno_preferido, franja_horaria, creado_en, actualizado_en, entregado_at,
+      comision_plataforma, turno_preferido, franja_horaria, creado_en, actualizado_en, entregado_at, pagado_en,
       vence_en, efectivo_vence_en, cancelado_motivo, mp_payment_id,
       recordatorio_enviado_en,
       comprador_id,

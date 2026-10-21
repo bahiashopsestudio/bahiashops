@@ -1,7 +1,8 @@
 // Mails de un pedido: el aviso de venta al vendedor, la confirmación a quien
 // compró (los dos cuando MercadoPago confirma el pago), el aviso de «listo para
 // retirar» (Retiro), el aviso de despacho y «¿Cómo te fue?» (al marcarlo
-// entregado, para dejar la reseña).
+// entregado, para dejar la reseña), y los dos de reseña de la tarea diaria
+// (el aviso de los 14 días y el recordatorio).
 //
 // El de despacho vivía en /api/notificaciones/despacho, una ruta sin ninguna
 // verificación: alcanzaba con acertarle al número de pedido para dispararle a
@@ -29,7 +30,7 @@ import { inicialDeApodo, colorDeApodo } from '@/lib/apodos'
 import { metodoPideDireccion, tipoEntregaDe, zonaDe, textoCostoEnvio, seguimientoDe } from '@/lib/metodosEntrega'
 import { calleNumeroDepto, ciudadProvinciaCodigo } from '@/lib/direcciones'
 import { pedidoTuvoPago, formaDeEntrega, ESTADO_ENTREGADO } from '@/lib/pedidos'
-import { estadoDeResena } from '@/lib/resenas'
+import { estadoDeResena, ESTADOS_PARA_RESENAR } from '@/lib/resenas'
 
 // ── 1. Piezas propias de los mails de pedido ──────────────────────────────────
 
@@ -395,6 +396,87 @@ export function armarMailResena(datos) {
   return { asunto, html: plantilla({ asunto, cuerpo }), texto }
 }
 
+// Los dos mails de reseña de la tarea diaria (src/lib/tareaDiaria.js). Llevan
+// la línea azul del pedido y el texto, sin título. Reciben { pedidoId, tienda,
+// nombre }.
+function saludo(nombre) {
+  const limpio = String(nombre ?? '').trim()
+  return limpio ? `Hola ${limpio},` : 'Hola,'
+}
+
+function notaGris(texto) {
+  return `<p style="margin:16px 0 0;font-family:${FUENTE_TEXTO};font-size:13px;font-weight:300;line-height:1.6;color:${GRIS};">${escapar(texto)}</p>`
+}
+
+// El aviso de los 14 días: pagado hace dos semanas y la tienda no lo marcó
+// entregado. Es la invitación a reseñar (si la tienda lo marca después, el
+// «¿Cómo te fue?» ya no sale).
+export function armarMailAviso14Dias({ pedidoId, tienda, nombre }) {
+  const linkPedido = `${SITIO_URL}/mis-pedidos?resena=${encodeURIComponent(pedidoId)}`
+  const asunto = `¿Te llegó tu compra de ${tienda}?`
+  const presentacion = [
+    [`Hace dos semanas pagaste tu pedido #${pedidoId} en `],
+    [tienda, true],
+    [', y la tienda todavía no lo marcó como entregado.'],
+  ]
+  const pedido = 'Si ya lo tenés, contanos cómo te fue. Si todavía no te llegó, también podés decirlo en tu reseña, o escribirle a la tienda con «Reclamar» desde Mis pedidos.'
+  const firma = 'Tu reseña se firma con tu apodo, no con tu nombre.'
+
+  const cuerpo = [
+    lineaAzul(`Pedido #${pedidoId}`),
+    parrafo(escapar(saludo(nombre))),
+    parrafo(partesHtml(presentacion)),
+    parrafo(escapar(pedido)),
+    boton('Ver mi pedido', linkPedido),
+    notaGris(firma),
+    htmlPie(PIE_COMPRADOR),
+  ].join('\n')
+
+  const texto = [
+    `PEDIDO #${pedidoId}`,
+    saludo(nombre),
+    partesTexto(presentacion),
+    pedido,
+    `Ver mi pedido: ${linkPedido}`,
+    firma,
+    PIE_COMPRADOR.join('\n'),
+  ].join('\n\n')
+
+  return { asunto, html: plantilla({ asunto, cuerpo }), texto }
+}
+
+// El recordatorio: uno solo por pedido, a los 7 días de la invitación.
+export function armarMailRecordatorioResena({ pedidoId, tienda, nombre }) {
+  const linkResena = `${SITIO_URL}/mis-pedidos?resena=${encodeURIComponent(pedidoId)}`
+  const asunto = `Tu reseña de ${tienda}, último recordatorio`
+  const presentacion = [
+    ['Te escribimos una vez más por tu compra en '],
+    [tienda, true],
+    [', por si se te pasó.'],
+  ]
+  const cierre = 'Si preferís no dejar reseña, no hay problema: no te vamos a volver a escribir por este pedido.'
+
+  const cuerpo = [
+    lineaAzul(`Pedido #${pedidoId}`),
+    parrafo(escapar(saludo(nombre))),
+    parrafo(partesHtml(presentacion)),
+    boton('Dejar mi reseña', linkResena),
+    notaGris(cierre),
+    htmlPie(PIE_COMPRADOR),
+  ].join('\n')
+
+  const texto = [
+    `PEDIDO #${pedidoId}`,
+    saludo(nombre),
+    partesTexto(presentacion),
+    `Dejar mi reseña: ${linkResena}`,
+    cierre,
+    PIE_COMPRADOR.join('\n'),
+  ].join('\n\n')
+
+  return { asunto, html: plantilla({ asunto, cuerpo }), texto }
+}
+
 // Recibe { pedido: { id, metodo_envio, subtotal_productos, costo_envio, total,
 // envio_empresa, envio_empresa_otra, envio_seguimiento }, nombreVendedor,
 // direccion, franja }.
@@ -469,7 +551,13 @@ export function armarMailDespacho({ pedido, nombreVendedor, direccion, franja })
 // sólo si estaba en null: si dos avisos de MercadoPago llegan a la vez, uno
 // solo se lleva la fila. Si Resend falla, la columna vuelve a null.
 // Nunca lanza.
-async function enviarUnaVez({ admin, pedidoId, columna, destinatario, para, armar, desde, responderA }) {
+//
+// marcas: otras columnas que se escriben junto con la marca (la via de la
+// invitación, migración 040; la base la vuelve a null con la marca).
+// acotar: condiciones de más para reclamar, (consulta) => consulta: si el
+// pedido ya no las cumple (por ejemplo, lo marcaron entregado mientras tanto),
+// no se lleva la fila y no se manda nada.
+async function enviarUnaVez({ admin, pedidoId, columna, destinatario, para, armar, desde, responderA, marcas = {}, acotar = (q) => q }) {
   const etiqueta = `Pedido ${pedidoId}: mail al ${destinatario}`
   try {
     if (!para) {
@@ -484,11 +572,11 @@ async function enviarUnaVez({ admin, pedidoId, columna, destinatario, para, arma
     // Se arma antes de reclamar: si el armado falla, no queda nada marcado.
     const mail = armar()
 
-    const { data: reclamo, error: errorReclamo } = await admin
+    const { data: reclamo, error: errorReclamo } = await acotar(admin
       .from('pedidos')
-      .update({ [columna]: new Date().toISOString() })
+      .update({ ...marcas, [columna]: new Date().toISOString() })
       .eq('id', pedidoId)
-      .is(columna, null)
+      .is(columna, null))
       .select('id')
       .maybeSingle()
 
@@ -497,7 +585,7 @@ async function enviarUnaVez({ admin, pedidoId, columna, destinatario, para, arma
       return { enviado: false, motivo: 'reclamo_fallido' }
     }
     if (!reclamo) {
-      console.log(`${etiqueta} ya se había mandado; no se repite.`)
+      console.log(`${etiqueta} ya se había mandado (o el pedido ya no corresponde); no se repite.`)
       return { enviado: false, motivo: 'ya_enviado' }
     }
 
@@ -929,6 +1017,11 @@ export async function avisarListo({ admin, pedidoId }) {
 // (estadoDeResena tiene que dar "puede"). Nunca lanza. Devuelve
 // { enviado, motivo }.
 //
+// La marca es la de la invitación, compartida con el aviso de los 14 días
+// (avisarResena14Dias, migración 040): si ese aviso ya salió, aviso_resena_en
+// está ocupada y el «¿Cómo te fue?» no sale (cada pedido recibe una sola
+// invitación). La base completa aviso_resena_via = 'entregado'.
+//
 // 'admin' tiene que ser un cliente con service_role.
 export async function avisarResena({ admin, pedidoId }) {
   try {
@@ -936,7 +1029,7 @@ export async function avisarResena({ admin, pedidoId }) {
       .from('pedidos')
       .select(`
         id, estado, comprador_id, comprador_nombre, entregado_at, pagado_en,
-        costo_envio, total, vendedor_nombre,
+        aviso_resena_en, aviso_resena_via, costo_envio, total, vendedor_nombre,
         vendedor:vendedores ( nombre_negocio ),
         items:pedido_items ( id, nombre, variante, cantidad, precio )
       `)
@@ -950,6 +1043,11 @@ export async function avisarResena({ admin, pedidoId }) {
     if (pedido.estado !== ESTADO_ENTREGADO) {
       console.error(`Pedido ${pedidoId}: mail de reseña no enviado — el pedido está en "${pedido.estado}".`)
       return { enviado: false, motivo: 'no_corresponde' }
+    }
+    if (pedido.aviso_resena_en) {
+      const cual = pedido.aviso_resena_via === '14_dias' ? 'el aviso de los 14 días' : 'el «¿Cómo te fue?»'
+      console.log(`Pedido ${pedidoId}: mail de reseña no enviado — ya recibió la invitación (${cual}).`)
+      return { enviado: false, motivo: 'ya_enviado' }
     }
 
     const { data: resena, error: errorResena } = await admin
@@ -997,6 +1095,41 @@ export async function avisarResena({ admin, pedidoId }) {
     console.error(`Pedido ${pedidoId}: error en el mail de reseña`, err)
     return { enviado: false, motivo: 'excepcion' }
   }
+}
+
+// Los dos mails de reseña de la tarea diaria. Quién los recibe lo decide
+// src/lib/tareaDiaria.js (con los datos ya leídos: pedido, tienda, nombre,
+// para); acá se reclama la marca con las condiciones que pueden cambiar
+// entre la lectura y el envío, y se manda. Nunca lanzan. Devuelven
+// { enviado, motivo }.
+//
+// El aviso de los 14 días es la invitación: reclama aviso_resena_en (con via
+// '14_dias') solo si sigue sin invitación y sin entregar. Si la tienda lo
+// marcó entregado un segundo antes, no sale (le llega el «¿Cómo te fue?»).
+export async function avisarResena14Dias({ admin, pedidoId, tienda, nombre, para }) {
+  return enviarUnaVez({
+    admin,
+    pedidoId,
+    columna: 'aviso_resena_en',
+    marcas: { aviso_resena_via: '14_dias' },
+    acotar: (q) => q.is('entregado_at', null).in('estado', ESTADOS_PARA_RESENAR),
+    destinatario: 'comprador (aviso de los 14 días)',
+    para,
+    armar: () => armarMailAviso14Dias({ pedidoId, tienda, nombre }),
+  })
+}
+
+// El recordatorio, uno solo: reclama recordatorio_resena_en.
+export async function recordarResena({ admin, pedidoId, tienda, nombre, para }) {
+  return enviarUnaVez({
+    admin,
+    pedidoId,
+    columna: 'recordatorio_resena_en',
+    acotar: (q) => q.not('aviso_resena_en', 'is', null).in('estado', ESTADOS_PARA_RESENAR),
+    destinatario: 'comprador (recordatorio de reseña)',
+    para,
+    armar: () => armarMailRecordatorioResena({ pedidoId, tienda, nombre }),
+  })
 }
 
 // Avisa al comprador que su pedido salió. Nunca lanza: el pedido ya quedó

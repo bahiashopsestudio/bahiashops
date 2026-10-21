@@ -6,7 +6,7 @@
 // puede romperse nunca: una reseña por pedido, las estrellas, el largo del
 // texto, que no se edite.
 
-import { ESTADOS_PARA_RECLAMAR } from './pedidos.js'
+import { ESTADOS_PARA_RECLAMAR, ESTADO_ENTREGADO } from './pedidos.js'
 import { revisarPublicacion } from './moderacion.js'
 
 const DIA_MS = 24 * 60 * 60 * 1000
@@ -169,6 +169,29 @@ export function estadoDeResena({ pedido, resena = null, ahoraMs = Date.now() }) 
     hasta: ventana.hasta,
     diasRestantes: Math.max(1, Math.ceil((ventana.hasta - ahoraMs) / DIA_MS)),
   }
+}
+
+// ── Pagado hace 14 días y sin marcar entregado (migración 040) ───────────────
+//
+// El mismo criterio del aviso de los 14 días de la tarea diaria, para el
+// panel de la tienda (se calcula al mostrar): un pedido en curso (pagado, sin
+// entregar ni reembolsar), sin entregado_at, pagado hace 14 días o más.
+// Devuelve los días desde el pago, o null si no corresponde.
+export function diasSinMarcarEntregado(pedido, ahoraMs = Date.now()) {
+  if (!pedido || pedido.estado === ESTADO_ENTREGADO || !ESTADOS_PARA_RESENAR.includes(pedido.estado)) return null
+  if (ms(pedido.entregado_at) !== null) return null
+  const pago = ms(pedido.pagado_en)
+  if (pago === null) return null
+  const dias = Math.floor((ahoraMs - pago) / DIA_MS)
+  return dias >= DIAS_SIN_ENTREGA ? dias : null
+}
+
+// La línea gris de arriba del panel. null con 0 (no se muestra).
+export function textoPedidosSinMarcar(cantidad) {
+  if (!cantidad) return null
+  return cantidad === 1
+    ? 'Tenés 1 pedido pagado hace más de 14 días sin marcar como entregado.'
+    : `Tenés ${cantidad} pedidos pagados hace más de 14 días sin marcar como entregados.`
 }
 
 // "Te quedan 12 días para dejarla." / "Te queda 1 día para dejarla."

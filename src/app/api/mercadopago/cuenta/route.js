@@ -4,8 +4,9 @@
 // Por qué una ruta: mercadopago_cuentas guarda los tokens y el navegador no la
 // puede leer. Acá la tienda sale de la sesión (nunca de un parámetro) y solo
 // viaja lo que se puede mostrar: el nombre y el número de la cuenta, desde
-// cuándo está conectada, cuándo vence el permiso y cuántos pedidos pendientes
-// se cancelarían si la desconectara o cambiara (para el cartel). Nunca los tokens.
+// cuándo está conectada, cuándo vence el permiso, si falló su renovación y
+// cuántos pedidos pendientes se cancelarían si la desconectara o cambiara (para
+// el cartel). Nunca los tokens.
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
@@ -38,7 +39,7 @@ export async function GET() {
 
   const { data: cuenta, error } = await admin
     .from('mercadopago_cuentas')
-    .select('mp_user_id, mp_nickname, conectado_en, token_expira_en')
+    .select('mp_user_id, mp_nickname, conectado_en, token_expira_en, renovacion_fallida_en')
     .eq('vendedor_id', vendedor.id)
     .maybeSingle();
   if (error) {
@@ -57,6 +58,11 @@ export async function GET() {
     nickname: cuenta.mp_nickname || null,
     conectado_en: cuenta.conectado_en || null,
     dias_restantes: Number.isFinite(vence) ? Math.floor((vence - Date.now()) / MS_POR_DIA) : null,
+    // La renovación del permiso falló (migración 040): el panel muestra el
+    // aviso para volver a conectar, con la fecha en que vence. Se va solo
+    // cuando la base limpia la marca (se renovó o se reconectó).
+    renovacion_fallida: !!cuenta.renovacion_fallida_en,
+    vence_en: Number.isFinite(vence) ? cuenta.token_expira_en : null,
     // null si no se pudo contar: el cartel avisa sin el número.
     pendientes: await contarPendientesPorCuentaMp(admin, vendedor.id),
   });
