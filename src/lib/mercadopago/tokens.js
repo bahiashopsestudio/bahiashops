@@ -8,7 +8,7 @@
 // (src/lib/tareaDiaria.js). Solo con el token ya vencido se desconecta, como
 // antes.
 
-import { MP_CLIENT_SECRET } from './config';
+import { MP_CLIENT_ID, MP_CLIENT_SECRET } from './config';
 
 // Margen de seguridad: si faltan menos de 7 días para que venza, renovamos.
 const MARGEN_DIAS = 7;
@@ -106,7 +106,10 @@ export async function renovarToken({ admin, vendedorId, refreshToken }) {
     respuesta = await fetch('https://api.mercadopago.com/oauth/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      // MercadoPago pide las dos credenciales de la aplicación, como en el
+      // canje del callback: sin client_id responde 400 invalid_client.
       body: JSON.stringify({
+        client_id: MP_CLIENT_ID,
         client_secret: MP_CLIENT_SECRET,
         grant_type: 'refresh_token',
         refresh_token: refreshToken,

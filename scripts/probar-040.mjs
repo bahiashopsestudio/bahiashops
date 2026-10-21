@@ -30,6 +30,9 @@ export function resolve(esp, ctx, sig) {
 register('data:text/javascript,' + encodeURIComponent(loader))
 
 process.env.RESEND_API_KEY = 'prueba'
+// Las credenciales de la aplicación de MercadoPago (config.js las lee al importar).
+process.env.MP_CLIENT_ID = 'id-de-la-app'
+process.env.MP_CLIENT_SECRET = 'secreto-de-la-app'
 const T = await import('../src/lib/tareaDiaria.js')
 const R = await import('../src/lib/resenas.js')
 const M = await import('../src/lib/mailsPedidos.js')
@@ -260,6 +263,8 @@ const admin = adminSobre(db)
 let mails = []
 const resendFalla = new Set()
 let mpCaido = false
+// Cada pedido de renovación que llega a MercadoPago, tal cual.
+const pedidosMp = []
 globalThis.fetch = async (url, init) => {
   const cuerpo = JSON.parse(init.body)
   const resp = (status, json) => ({ ok: status < 300, status, json: async () => json, text: async () => JSON.stringify(json) })
@@ -269,6 +274,7 @@ globalThis.fetch = async (url, init) => {
     return resp(200, { id: 'm' })
   }
   if (String(url).includes('api.mercadopago.com/oauth/token')) {
+    pedidosMp.push(cuerpo)
     if (mpCaido) throw new Error('fetch failed')
     if (String(cuerpo.refresh_token).startsWith('RT-OK')) {
       return resp(200, { access_token: `AT-NUEVO-${cuerpo.refresh_token}`, refresh_token: `RT-OK-NUEVO-${Math.random()}`, expires_in: 15552000 })
@@ -439,6 +445,11 @@ ok((await q(`select aviso_renovacion_en from mercadopago_cuentas where vendedor_
 
 // ── 6. La renovación al comprar ──────────────────────────────────────────────
 console.log('6. La renovación al comprar (getCuentaValida)')
+// Sin client_id, MercadoPago responde 400 invalid_client a TODA renovación
+// (pasó hasta el 21/10/2026: la prueba con refresh_tokens inválidos no lo veía).
+ok(pedidosMp.length > 0 && pedidosMp.every((c) => c.client_id === 'id-de-la-app' && c.client_secret === 'secreto-de-la-app'
+  && c.grant_type === 'refresh_token' && typeof c.refresh_token === 'string' && c.refresh_token !== ''),
+  'cada pedido de renovación lleva client_id, client_secret, grant_type y el refresh_token')
 await db.exec(`delete from mercadopago_cuentas; insert into mercadopago_cuentas values (18, 'VIGENTE', 'RT-MALO', now() + interval '3 days', '1818', null)`)
 mails = []
 let cuenta = await getCuentaValida(18, admin)
