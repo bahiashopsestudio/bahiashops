@@ -11,7 +11,7 @@
 // navegador.
 
 import { pedidoTienePago, pagableHasta, vencimientoDeLinkNuevo } from '@/lib/vencimientoPago'
-import { camposDeVencimiento, SIN_MEDIOS_EN_EFECTIVO } from '@/lib/mercadopago/preferencias'
+import { camposDeVencimiento, SIN_MEDIOS_EN_EFECTIVO, idItemMp } from '@/lib/mercadopago/preferencias'
 import { vendedorVendible, MOTIVOS_NO_VENDIBLE } from '@/lib/vendedorVendible'
 
 function rechazo(status, codigo, error) {
@@ -101,7 +101,7 @@ function centavos(valor) {
 export function armarPreferenciaNueva({ pedido, items, emailComprador, sitioUrl, notificationUrl, venceLinkMs, ahoraMs = Date.now() }) {
   const mpItems = (items || []).map((it) => {
     const mpItem = {
-      id: String(it.producto_id ?? it.id),
+      id: idItemMp(it.producto_id ?? it.id, it.variante),
       title: it.nombre + (it.variante ? ` (${it.variante})` : ''),
       description: it.nombre,
       quantity: it.cantidad,

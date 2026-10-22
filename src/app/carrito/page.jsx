@@ -4,7 +4,9 @@ import { useState, useEffect } from 'react'
 import { useCarrito } from '@/context/CarritoContext'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { idsDisponibles } from '@/lib/disponibilidad'
+import { idsDisponibles, productosQuePidenVariante } from '@/lib/disponibilidad'
+import { claveLinea, lineasSinVariante } from '@/lib/carrito'
+import ElegirVariante from '@/components/ElegirVariante'
 import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
 import VolverAtras from '@/components/VolverAtras'
@@ -18,7 +20,7 @@ const MENU_CATEGORIAS = [
 ]
 
 export default function PaginaCarrito() {
-  const { locales, cambiarCantidad, quitar, subtotalLocal, listo } = useCarrito()
+  const { locales, cambiarCantidad, quitar, elegirVariante, subtotalLocal, listo } = useCarrito()
   const router = useRouter()
   const supabase = createClient()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -26,17 +28,25 @@ export default function PaginaCarrito() {
   // Ids que ya no se pueden comprar. Se marcan acá para que nadie llegue al
   // checkout sin enterarse; quien decide de verdad es /api/pedidos/crear.
   const [idsCaidos, setIdsCaidos] = useState([])
+  // Productos que piden elegir talle (u otra variante): id → { nombre,
+  // valores }. Una línea sin elegir de uno de estos no puede ir al checkout de
+  // su tienda; el talle se elige ahí mismo, en la línea.
+  const [piden, setPiden] = useState(null)
 
-  const firmaCarrito = locales.flatMap((l) => l.items.map((it) => it.productoId)).join(',')
+  const firmaCarrito = locales.flatMap((l) => l.items.map(claveLinea)).join(',')
 
   useEffect(() => {
     if (!listo) return
     let cancelado = false
     async function revisar() {
       const todosLosIds = locales.flatMap((l) => l.items.map((it) => it.productoId))
-      const disponibles = await idsDisponibles(supabase, todosLosIds)
-      if (cancelado || !disponibles) return
-      setIdsCaidos(todosLosIds.map(Number).filter((id) => !disponibles.has(id)))
+      const [disponibles, quePiden] = await Promise.all([
+        idsDisponibles(supabase, todosLosIds),
+        productosQuePidenVariante(supabase, todosLosIds),
+      ])
+      if (cancelado) return
+      if (quePiden) setPiden(quePiden)
+      if (disponibles) setIdsCaidos(todosLosIds.map(Number).filter((id) => !disponibles.has(id)))
     }
     revisar()
     return () => { cancelado = true }
@@ -66,6 +76,14 @@ export default function PaginaCarrito() {
   function formatearPrecio(valor) {
     return Number(valor).toLocaleString('es-AR')
   }
+
+  // Las líneas sin talle de un local (sin contar las que ya no están: esas se
+  // sacan de todos modos).
+  const sinElegir = (local) =>
+    lineasSinVariante(local.items, piden).filter((it) => !idsCaidos.includes(Number(it.productoId)))
+  // Con un solo local, "Comprar" va directo a su checkout: con una línea sin
+  // talle no se avanza. Con varios, el checkout del local elegido la frena.
+  const unSoloLocalSinElegir = locales.length === 1 && sinElegir(locales[0]).length > 0
 
   const menuCats = MENU_CATEGORIAS
     .map(slug => categorias.find(c => c.slug === slug))
@@ -135,9 +153,14 @@ export default function PaginaCarrito() {
 
                     {local.items.map((item) => {
                       const caido = idsCaidos.includes(Number(item.productoId))
+                      const clave = claveLinea(item)
+                      // Sin talle elegido en un producto que lo pide: se elige acá mismo.
+                      const opcionFaltante = !caido && lineasSinVariante([item], piden).length > 0
+                        ? piden.get(Number(item.productoId))
+                        : null
                       return (
                       <div
-                        key={item.productoId}
+                        key={clave}
                         className="flex items-center gap-3 py-3 border-t border-[#0a0a0a]/5"
                       >
                         <div className={`w-14 h-14 rounded-xl bg-[#ECEAE3] shrink-0 overflow-hidden ${caido ? 'opacity-40' : ''}`}>
@@ -158,6 +181,12 @@ export default function PaginaCarrito() {
                             >
                               Ya no está disponible
                             </span>
+                          ) : opcionFaltante ? (
+                            <ElegirVariante
+                              opcion={opcionFaltante}
+                              productoId={item.productoId}
+                              onElegir={(valor) => elegirVariante(local.vendedorId, clave, valor)}
+                            />
                           ) : (
                             <p className="text-sm text-[#0a0a0a]/60 mt-0.5">${formatearPrecio(item.precio)}</p>
                           )}
@@ -167,14 +196,14 @@ export default function PaginaCarrito() {
                         <div className="flex items-center gap-3 border border-[#0a0a0a]/10 rounded-full px-3 py-1">
                           <button
                             type="button"
-                            onClick={() => cambiarCantidad(local.vendedorId, item.productoId, item.cantidad - 1)}
+                            onClick={() => cambiarCantidad(local.vendedorId, clave, item.cantidad - 1)}
                             className="text-[#0a0a0a]/40 hover:text-[#0a0a0a] transition cursor-pointer text-base"
                             aria-label="Restar"
                           >−</button>
                           <span className="text-sm min-w-[16px] text-center">{item.cantidad}</span>
                           <button
                             type="button"
-                            onClick={() => cambiarCantidad(local.vendedorId, item.productoId, item.cantidad + 1)}
+                            onClick={() => cambiarCantidad(local.vendedorId, clave, item.cantidad + 1)}
                             className="text-[#0a0a0a]/40 hover:text-[#0a0a0a] transition cursor-pointer text-base"
                             aria-label="Sumar"
                           >+</button>
@@ -183,7 +212,7 @@ export default function PaginaCarrito() {
 
                         <button
                           type="button"
-                          onClick={() => quitar(local.vendedorId, item.productoId)}
+                          onClick={() => quitar(local.vendedorId, clave)}
                           className="text-[#0a0a0a]/20 hover:text-[#dc2626] transition cursor-pointer p-1"
                           aria-label="Quitar"
                         >
@@ -205,11 +234,19 @@ export default function PaginaCarrito() {
                         Sacá lo que ya no está disponible para poder terminar la compra de este local.
                       </p>
                     )}
+
+                    {sinElegir(local).length > 0 && (
+                      <p className="text-xs text-[#0a0a0a]/45 font-light mt-3 mb-0 leading-relaxed">
+                        Falta elegir el {piden.get(Number(sinElegir(local)[0].productoId))?.nombre || 'talle'} para poder
+                        terminar la compra de este local.
+                      </p>
+                    )}
                   </div>
                 ))}
 
                 <button
                   type="button"
+                  disabled={unSoloLocalSinElegir}
                   onClick={() => {
                     if (locales.length === 1) {
                       router.push(`/checkout?vendedor=${locales[0].vendedorId}`)
@@ -217,7 +254,7 @@ export default function PaginaCarrito() {
                       router.push('/carrito/elegir')
                     }
                   }}
-                  className="w-full bg-[#0a0a0a] text-white border border-[#0a0a0a] hover:bg-transparent hover:text-[#0a0a0a] transition-colors cursor-pointer mt-2"
+                  className="w-full bg-[#0a0a0a] text-white border border-[#0a0a0a] hover:bg-transparent hover:text-[#0a0a0a] transition-colors cursor-pointer mt-2 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-[#0a0a0a] disabled:hover:text-white"
                   style={{ fontFamily: "'Inter', sans-serif", fontWeight: 500, fontSize: '14px', borderRadius: '4px', padding: '14px 28px' }}
                 >
                   Comprar

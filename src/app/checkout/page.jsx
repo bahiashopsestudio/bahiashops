@@ -3,7 +3,8 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { idsDisponibles, itemsNoDisponibles } from '@/lib/disponibilidad'
+import { idsDisponibles, itemsNoDisponibles, productosQuePidenVariante } from '@/lib/disponibilidad'
+import { claveLinea, lineasSinVariante } from '@/lib/carrito'
 import {
   METODOS, ORDEN_METODOS, metodosParaComprador, metodosConfigurados,
   metodoPideDireccion, etiquetaMetodo, textoCostoEnvio,
@@ -16,6 +17,7 @@ import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
 import VolverAtras from '@/components/VolverAtras'
 import FormularioDireccion from '@/components/FormularioDireccion'
+import ElegirVariante from '@/components/ElegirVariante'
 import { rutaInterna } from '@/lib/rutas'
 import { normalizarTelefonoAR, separarTelefonoAR, formatearTelefonoAR } from '@/lib/telefono'
 import { CAMPOS_COMPRA_RECIENTE, VENTANA_COMPRA_RECIENTE_MS, compraEnCursoDeLaTienda } from '@/lib/compraReciente'
@@ -72,10 +74,10 @@ function CheckoutContenido() {
   const supabase = createClient()
   const vendedorId = Number(searchParams.get('vendedor'))
 
-  const { locales, subtotalLocal, quitar, actualizarPrecios, listo: carritoListo } = useCarrito()
+  const { locales, subtotalLocal, quitar, elegirVariante, actualizarPrecios, listo: carritoListo } = useCarrito()
   const local = locales.find((l) => l.vendedorId === vendedorId)
   // Firma de los items del local: cambia cuando se agrega o se saca algo.
-  const firmaItems = (local?.items || []).map((it) => it.productoId).join(',')
+  const firmaItems = (local?.items || []).map(claveLinea).join(',')
 
   const [paso, setPaso] = useState(PASO_DATOS)
 
@@ -104,6 +106,10 @@ function CheckoutContenido() {
   // Ids del carrito que ya no se pueden comprar. Salen de la base al entrar y
   // se rehacen si el servidor rechaza el pago.
   const [idsCaidos, setIdsCaidos] = useState([])
+  // Productos que piden elegir talle (u otra variante): id → { nombre, valores }. Salen de
+  // la base al entrar y se suma el que devuelva el servidor con FALTA_VARIANTE.
+  // Una línea sin elegir de uno de estos frena el checkout.
+  const [piden, setPiden] = useState(null)
   const [revisandoStock, setRevisandoStock] = useState(true)
   const [errorPago, setErrorPago] = useState('')
   // Aviso de que cambió un precio o el envío: no es un error, es que hay que
@@ -265,9 +271,14 @@ function CheckoutContenido() {
       // Sin local no hay nada que revisar: la pantalla de "no está en tu
       // carrito" se encarga.
       if (local) {
-        const disponibles = await idsDisponibles(supabase, local.items.map((it) => it.productoId))
+        const ids = local.items.map((it) => it.productoId)
+        const [disponibles, quePiden] = await Promise.all([
+          idsDisponibles(supabase, ids),
+          productosQuePidenVariante(supabase, ids),
+        ])
         if (cancelado) return
         setIdsCaidos(itemsNoDisponibles(local.items, disponibles).map((it) => Number(it.productoId)))
+        if (quePiden) setPiden(quePiden)
       }
       if (!cancelado) setRevisandoStock(false)
     }
@@ -434,6 +445,19 @@ function CheckoutContenido() {
         return
       }
 
+      // A una línea le falta el talle (un carrito viejo, o la tienda le cargó
+      // talles después): la misma pantalla que al entrar, con ese producto.
+      // Se vuelven a leer sus talles para elegirlos ahí; si la lectura falla,
+      // la pastilla lleva a la ficha.
+      if (data?.codigo === 'FALTA_VARIANTE' && data.producto_id) {
+        const id = Number(data.producto_id)
+        const leidos = await productosQuePidenVariante(supabase, [id])
+        const opcion = leidos?.get(id) || { nombre: data.variante_nombre || 'opción', valores: [] }
+        setPiden((actual) => new Map(actual || []).set(id, opcion))
+        setPagando(false)
+        return
+      }
+
       if (data?.codigo === 'PRECIO_CAMBIO') {
         await aplicarCambiosDePrecio(data)
         setPagando(false)
@@ -484,10 +508,19 @@ function CheckoutContenido() {
   // Saca del carrito lo que ya no está y sigue con el resto. Si no queda nada
   // de este local, no hay checkout que hacer: vuelve al carrito.
   function quitarCaidos() {
-    const quedan = local.items.filter((it) => !idsCaidos.includes(Number(it.productoId)))
-    idsCaidos.forEach((id) => quitar(local.vendedorId, id))
+    const caidos = local.items.filter((it) => idsCaidos.includes(Number(it.productoId)))
+    caidos.forEach((it) => quitar(local.vendedorId, claveLinea(it)))
     setIdsCaidos([])
-    if (quedan.length === 0) router.push('/carrito')
+    if (caidos.length === local.items.length) router.push('/carrito')
+  }
+
+  // Las líneas sin talle de un producto que lo pide.
+  const sinElegir = local ? lineasSinVariante(local.items, piden) : []
+
+  // Saca las líneas sin talle y sigue con el resto (o vuelve al carrito).
+  function quitarSinElegir() {
+    sinElegir.forEach((it) => quitar(local.vendedorId, claveLinea(it)))
+    if (sinElegir.length === local.items.length) router.push('/carrito')
   }
 
   const menuCats = MENU_CATEGORIAS.map(s => categorias.find(c => c.slug === s)).filter(Boolean)
@@ -615,7 +648,7 @@ function CheckoutContenido() {
 
               <div className="rounded-2xl border border-[#0a0a0a]/5 overflow-hidden mb-6">
                 {caidos.map((item) => (
-                  <div key={item.productoId} className="flex items-center gap-3 p-4 border-b border-[#0a0a0a]/5 last:border-b-0">
+                  <div key={claveLinea(item)} className="flex items-center gap-3 p-4 border-b border-[#0a0a0a]/5 last:border-b-0">
                     <div className="w-14 h-14 rounded-xl bg-[#ECEAE3] shrink-0 overflow-hidden opacity-40">
                       {item.foto && <img src={item.foto} alt="" className="w-full h-full object-cover" />}
                     </div>
@@ -642,6 +675,83 @@ function CheckoutContenido() {
                 >
                   {todos
                     ? (caidos.length === 1 ? 'Quitarlo del carrito' : 'Quitarlos del carrito')
+                    : 'Quitar y seguir con el resto'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => router.push('/carrito')}
+                  className="bg-white text-[#0a0a0a] border border-[#0a0a0a]/15 hover:border-[#0a0a0a] transition-colors cursor-pointer"
+                  style={{ fontFamily: "'Inter', sans-serif", fontWeight: 500, fontSize: '14px', borderRadius: '4px', padding: '14px 28px' }}
+                >
+                  Volver al carrito
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  // ═══ FALTA ELEGIR EL TALLE ═══
+  // Una línea sin talle de un producto que lo pide (un carrito viejo, o la
+  // tienda le cargó talles después). Reemplaza al checkout: sin talle la
+  // tienda no sabe qué preparar. Se elige acá mismo, con las mismas pastillas
+  // que en el carrito; cuando no queda ninguna, sigue el checkout.
+  if (sinElegir.length > 0) {
+    const todos = sinElegir.length === local.items.length
+    const opcion = piden.get(Number(sinElegir[0].productoId))?.nombre || 'opción'
+
+    return (
+      <>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&display=swap" />
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,100..900&family=Poppins:wght@300;400;500&display=swap" />
+
+        <div className="min-h-screen bg-white" style={{ fontFamily: "'Inter', sans-serif" }}>
+          {menuOpen && <MenuTakeover categorias={menuCats} onClose={() => setMenuOpen(false)} />}
+          <Navbar onToggleMenu={() => setMenuOpen(!menuOpen)} variant="solid" />
+
+          <div className="pt-20 pb-24 px-4 md:px-8">
+            <div className="max-w-xl mx-auto">
+              <VolverAtras href="/carrito" texto="Volver al carrito" />
+
+              <h1 className="text-[24px] md:text-[28px]" style={{ fontFamily: 'Fraunces, serif', fontWeight: 500, color: '#0a0a0a', marginTop: '8px', marginBottom: '8px' }}>
+                Falta elegir el {opcion}
+              </h1>
+              <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 300, fontSize: '14px', color: 'rgba(10,10,10,0.5)', lineHeight: 1.7, marginBottom: '24px' }}>
+                {sinElegir.length === 1
+                  ? `Este producto está en tu carrito sin ${opcion} elegido y la tienda no sabría qué prepararte. Elegilo para seguir con la compra.`
+                  : `Estos productos están en tu carrito sin ${opcion} elegido y la tienda no sabría qué prepararte. Elegilo en cada uno para seguir con la compra.`}
+              </p>
+
+              <div className="rounded-2xl border border-[#0a0a0a]/5 overflow-hidden mb-6">
+                {sinElegir.map((item) => (
+                  <div key={claveLinea(item)} className="flex items-center gap-3 p-4 border-b border-[#0a0a0a]/5 last:border-b-0">
+                    <div className="w-14 h-14 rounded-xl bg-[#ECEAE3] shrink-0 overflow-hidden">
+                      {item.foto && <img src={item.foto} alt="" className="w-full h-full object-cover" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-[#0a0a0a] truncate m-0">{item.nombre}</p>
+                      <p className="text-xs text-[#0a0a0a]/40 font-light mt-0.5 m-0">× {item.cantidad}</p>
+                      <ElegirVariante
+                        opcion={piden.get(Number(item.productoId))}
+                        productoId={item.productoId}
+                        onElegir={(valor) => elegirVariante(local.vendedorId, claveLinea(item), valor)}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex gap-3 flex-wrap">
+                <button
+                  type="button"
+                  onClick={quitarSinElegir}
+                  className="bg-[#0a0a0a] text-white border border-[#0a0a0a] hover:bg-transparent hover:text-[#0a0a0a] transition-colors cursor-pointer"
+                  style={{ fontFamily: "'Inter', sans-serif", fontWeight: 500, fontSize: '14px', borderRadius: '4px', padding: '14px 28px' }}
+                >
+                  {todos
+                    ? (sinElegir.length === 1 ? 'Quitarlo del carrito' : 'Quitarlos del carrito')
                     : 'Quitar y seguir con el resto'}
                 </button>
                 <button
@@ -1029,7 +1139,7 @@ function CheckoutContenido() {
                 <div className="rounded-2xl border border-[#0a0a0a]/5 p-5 mb-3">
                   <div className="font-medium text-sm text-[#0a0a0a] mb-3">{local.vendedorNombre}</div>
                   {local.items.map((item) => (
-                    <div key={item.productoId + (item.variante || '')} className="flex justify-between py-2 border-t border-[#0a0a0a]/5 text-sm">
+                    <div key={claveLinea(item)} className="flex justify-between py-2 border-t border-[#0a0a0a]/5 text-sm">
                       <span className="text-[#0a0a0a]/50 font-light">{item.nombre}{item.variante ? ` · ${item.variante}` : ''} × {item.cantidad}</span>
                       <span className="text-[#0a0a0a]">${fmt(item.precio * item.cantidad)}</span>
                     </div>

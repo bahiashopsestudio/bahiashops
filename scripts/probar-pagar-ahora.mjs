@@ -214,5 +214,24 @@ okv(v({ estado: 'cancelado', cancelado_motivo: 'pago_vencido' }) === false, 'can
 okv(v({ estado: 'cancelado', cancelado_motivo: 'pago_vencido', mp_payment_id: '501', efectivo_vence_en: iso(ahoraMs - DIA) }) === true, 'cupón que venció sin pagarse: se ve, para que sepa qué pasó')
 okv(v({ estado: 'cancelado', cancelado_motivo: 'cuenta_eliminada' }) === false, 'cancelado por otra razón: no se ve')
 
+mostrar('\n7. Dos talles del mismo producto')
+{
+  const { armarPreferenciaNueva } = await import('../src/lib/pagarAhora.js')
+  const armada = armarPreferenciaNueva({
+    pedido: { ...PEDIDO, total: 21000, costo_envio: 0 },
+    items: [
+      { producto_id: 9, nombre: 'Remera PRUEBA TALLES', variante: 'S', precio: 7000, cantidad: 2, foto_url: null },
+      { producto_id: 9, nombre: 'Remera PRUEBA TALLES', variante: 'M', precio: 7000, cantidad: 1, foto_url: null },
+    ],
+    emailComprador: 'compradora@correo.test', sitioUrl: 'https://bahiashops.com.ar',
+    notificationUrl: 'https://bahiashops.com.ar/api/mercadopago/webhook', venceLinkMs: ahoraMs + 2 * HORA, ahoraMs,
+  })
+  const its = armada.cuerpo?.items || []
+  okv(armada.ok && its.length === 2, 'dos ítems, uno por talle')
+  okv(its[0].id === '9-S' && its[1].id === '9-M', 'cada uno con su id (producto-talle), no el mismo id repetido')
+  okv(its[0].title === 'Remera PRUEBA TALLES (S)' && its[0].quantity === 2 && its[1].title === 'Remera PRUEBA TALLES (M)' && its[1].quantity === 1,
+    'cada talle con su título y su cantidad')
+}
+
 mostrar(fallas === 0 ? '\nTODO OK' : `\n${fallas} FALLAS`)
 process.exit(fallas ? 1 : 0)

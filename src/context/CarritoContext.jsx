@@ -1,7 +1,9 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { sinElLocal, guardarCarrito } from '@/lib/carrito';
+import {
+  sinElLocal, guardarCarrito, normalizarCarrito, agregarLinea, cambiarCantidadLinea, quitarLinea, asignarVariante,
+} from '@/lib/carrito';
 import { comprasRecientes, sinLoYaComprado } from '@/lib/compraReciente';
 import { createClient } from '@/lib/supabase/client';
 
@@ -19,7 +21,7 @@ export function CarritoProvider({ children }) {
   useEffect(() => {
     try {
       const guardado = localStorage.getItem(CLAVE);
-      if (guardado) setLocales(JSON.parse(guardado));
+      if (guardado) setLocales(normalizarCarrito(JSON.parse(guardado)));
     } catch (e) {
       console.error('No se pudo leer el carrito', e);
     }
@@ -59,53 +61,27 @@ export function CarritoProvider({ children }) {
   // Agrega un producto al local que corresponde. Nunca borra otros locales.
   // agregadoEn: cuándo se eligió por última vez. Con eso, el cruce contra los
   // pedidos saca solo lo que estaba antes de una compra, no lo que vino después.
+  // Cada talle es una línea aparte: la identidad es producto + variante
+  // (claveLinea, src/lib/carrito.js).
   function agregar(producto, vendedor) {
     const agregadoEn = Date.now();
-    setLocales((actual) => {
-      const copia = actual.map((l) => ({ ...l, items: [...l.items] }));
-      let local = copia.find((l) => l.vendedorId === vendedor.id);
-
-      if (!local) {
-        local = { vendedorId: vendedor.id, vendedorNombre: vendedor.nombre, items: [] };
-        copia.push(local);
-      }
-
-      const i = local.items.findIndex((it) => it.productoId === producto.productoId);
-      if (i >= 0) {
-        local.items[i] = { ...local.items[i], cantidad: local.items[i].cantidad + producto.cantidad, agregadoEn };
-      } else {
-        local.items.push({ ...producto, agregadoEn });
-      }
-      return copia;
-    });
+    setLocales((actual) => agregarLinea(actual, producto, vendedor, agregadoEn));
   }
 
-  function cambiarCantidad(vendedorId, productoId, cantidad) {
-    setLocales((actual) =>
-      actual.map((l) =>
-        l.vendedorId !== vendedorId
-          ? l
-          : {
-              ...l,
-              items: l.items.map((it) =>
-                it.productoId === productoId ? { ...it, cantidad: Math.max(1, cantidad) } : it
-              ),
-            }
-      )
-    );
+  // 'clave' es claveLinea(item): cambia UNA línea, no todos los talles.
+  function cambiarCantidad(vendedorId, clave, cantidad) {
+    setLocales((actual) => cambiarCantidadLinea(actual, vendedorId, clave, cantidad));
   }
 
-  // Quita un producto. Si un local se queda sin productos, desaparece de la canasta.
-  function quitar(vendedorId, productoId) {
-    setLocales((actual) =>
-      actual
-        .map((l) =>
-          l.vendedorId !== vendedorId
-            ? l
-            : { ...l, items: l.items.filter((it) => it.productoId !== productoId) }
-        )
-        .filter((l) => l.items.length > 0)
-    );
+  // Quita una línea. Si un local se queda sin productos, desaparece de la canasta.
+  function quitar(vendedorId, clave) {
+    setLocales((actual) => quitarLinea(actual, vendedorId, clave));
+  }
+
+  // Elige el talle de una línea que no lo tenía (asignarVariante: si ya había
+  // una línea con ese talle, se juntan).
+  function elegirVariante(vendedorId, clave, variante) {
+    setLocales((actual) => asignarVariante(actual, vendedorId, clave, variante));
   }
 
   // Pone los precios que confirmó el servidor. Se usa cuando el checkout
@@ -156,6 +132,7 @@ export function CarritoProvider({ children }) {
         locales,
         agregar,
         quitar,
+        elegirVariante,
         cambiarCantidad,
         actualizarPrecios,
         vaciarLocal,

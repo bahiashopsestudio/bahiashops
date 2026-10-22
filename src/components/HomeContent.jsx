@@ -13,6 +13,16 @@ import SomosBahia from '@/components/SomosBahia'
 import ValoresCompra from '@/components/ValoresCompra'
 import ColeccionesDestacadas from '@/components/ColeccionesDestacadas'
 import { useDragScroll } from '@/hooks/useDragScroll'
+import { pideVariante, nombreVariante } from '@/lib/variantes'
+
+const ESTILO_BOTON_RAPIDO = {
+  fontFamily: "'Inter', sans-serif",
+  fontSize: '12px',
+  fontWeight: 500,
+  borderRadius: '4px',
+  padding: '8px 16px',
+  marginTop: '10px',
+}
 
 
 // ═══════════════════════════════════════════════════════════
@@ -331,21 +341,25 @@ export default function HomeContent({ categorias, recientes, elegidos, vendedore
                             </p>
                           </div>
                         </Link>
-                        <button
-                          type="button"
-                          onClick={() => agregarElegidoAlCarrito(prod)}
-                          className="w-full bg-[#0a0a0a] text-white border border-[#0a0a0a] hover:bg-transparent hover:text-[#0a0a0a] transition-colors cursor-pointer"
-                          style={{
-                            fontFamily: "'Inter', sans-serif",
-                            fontSize: '12px',
-                            fontWeight: 500,
-                            borderRadius: '4px',
-                            padding: '8px 16px',
-                            marginTop: '10px',
-                          }}
-                        >
-                          Agregar al carrito
-                        </button>
+                        {/* Con talles no se agrega desde acá: se elige en la ficha. */}
+                        {pideVariante(prod, prod.variantes) ? (
+                          <Link
+                            href={`/producto/${prod.id}`}
+                            className="block text-center w-full bg-[#0a0a0a] text-white border border-[#0a0a0a] hover:bg-transparent hover:text-[#0a0a0a] transition-colors"
+                            style={ESTILO_BOTON_RAPIDO}
+                          >
+                            Elegir {nombreVariante(prod)}
+                          </Link>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => agregarElegidoAlCarrito(prod)}
+                            className="w-full bg-[#0a0a0a] text-white border border-[#0a0a0a] hover:bg-transparent hover:text-[#0a0a0a] transition-colors cursor-pointer"
+                            style={ESTILO_BOTON_RAPIDO}
+                          >
+                            Agregar al carrito
+                          </button>
+                        )}
                         <div className="absolute top-2 right-2">
                           <BotonFavorito
                             productoId={prod.id}

@@ -17,6 +17,7 @@
 import {
   METODOS, normalizarMetodo, metodosParaComprador, zonaDe, precioDeZona,
 } from '@/lib/metodosEntrega'
+import { pideVariante, nombreVariante } from '@/lib/variantes'
 
 // Qué métodos hay, cuáles piden dirección y cuáles se ofrecen a quien compra
 // lo dice src/lib/metodosEntrega.js. Acá sólo se ponen los precios.
@@ -134,7 +135,11 @@ export function calcularPedido({
   const porId = new Map((productos || []).map((p) => [Number(p.id), p]))
 
   // ── 1. Cada ítem: qué se compra. Todo lo que sea inválido corta acá. ──
+  // Una línea es producto + variante: dos talles del mismo producto son dos
+  // líneas. Si llegan dos ítems de la misma línea (el carrito no los manda
+  // así, pero el navegador propone), se juntan sumando la cantidad.
   const lineas = []
+  const lineaDe = new Map()
 
   for (const item of items) {
     const productoId = Number(item?.productoId)
@@ -159,15 +164,17 @@ export function calcularPedido({
     // ── Variante ──
     const variante = typeof item?.variante === 'string' ? item.variante.trim() : ''
 
-    if (producto.tiene_variantes) {
+    // Mismo criterio que la ficha y el carrito (src/lib/variantes.js): con
+    // tiene_variantes y ninguna cargada, se compra sin elegir.
+    const suyas = (variantes || []).filter((v) => Number(v.producto_id) === productoId)
+    if (pideVariante(producto, suyas)) {
       if (!variante) {
-        return rechazo(400, 'FALTA_VARIANTE', `Elegí una opción de "${producto.nombre}".`, {
+        return rechazo(400, 'FALTA_VARIANTE', `Elegí ${nombreVariante(producto)} de "${producto.nombre}".`, {
           producto_id: productoId,
+          variante_nombre: nombreVariante(producto),
         })
       }
-      const existe = (variantes || []).some(
-        (v) => Number(v.producto_id) === productoId && v.propiedad_1_valor === variante
-      )
+      const existe = suyas.some((v) => v.propiedad_1_valor === variante)
       if (!existe) {
         return rechazo(400, 'VARIANTE_INVALIDA', `Esa opción de "${producto.nombre}" ya no está disponible.`, {
           producto_id: productoId,
@@ -186,7 +193,19 @@ export function calcularPedido({
       })
     }
 
-    lineas.push({
+    const clave = `${productoId}|${variante}`
+    const repetida = lineaDe.get(clave)
+    if (repetida) {
+      repetida.cantidad += cantidad
+      if (!Number.isSafeInteger(repetida.cantidad)) {
+        return rechazo(400, 'CANTIDAD_INVALIDA', 'La cantidad tiene que ser un número entero de 1 o más.', {
+          producto_id: productoId,
+        })
+      }
+      continue
+    }
+
+    const linea = {
       productoId,
       // Nombre y foto salen de la base: son los que se guardan en el pedido y
       // los que viajan a MercadoPago.
@@ -197,7 +216,9 @@ export function calcularPedido({
       foto: fotoDe(medias, productoId),
       // Lo que la persona tenía en pantalla, sólo para comparar.
       precioVisto: item?.precio,
-    })
+    }
+    lineas.push(linea)
+    lineaDe.set(clave, linea)
   }
 
   // ── 2. El envío. También puede cortar. ──

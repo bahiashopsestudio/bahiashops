@@ -82,6 +82,16 @@ const casos = {
     turno: 'Mañana',
   },
   'sin-apodo': { ...base, metodoEnvio: 'retiro', apodo: null },
+  // Dos talles del mismo producto: dos líneas, cada una con su talle.
+  talles: {
+    ...base, metodoEnvio: 'retiro',
+    items: [
+      { nombre: 'Remera PRUEBA TALLES', variante: 'S', cantidad: 2, precio: 7000 },
+      { nombre: 'Remera PRUEBA TALLES', variante: 'M', cantidad: 1, precio: 7000 },
+      { nombre: 'Taza esmaltada', variante: null, cantidad: 1, precio: 6500 },
+    ],
+    total: 27500, comision: 1375,
+  },
   correo: {
     ...base, metodoEnvio: 'correo', zonaEnvio: 1, costoEnvio: 4200, total: 27000,
     direccion: { ...direccion, piso_depto: null, ciudad: 'Bahía Blanca', provincia: 'Buenos Aires', codigo_postal: '8000' }, turno: null,

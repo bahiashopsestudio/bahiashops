@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { getCuentaValida } from '@/lib/mercadopago/tokens';
-import { camposDeVencimiento, vencerPreferencia } from '@/lib/mercadopago/preferencias';
+import { camposDeVencimiento, vencerPreferencia, idItemMp } from '@/lib/mercadopago/preferencias';
 import { calcularVencimiento, calcularVencimientoCupon } from '@/lib/vencimientoPago';
 import { urlParaMercadoPago } from '@/lib/sitio';
 import { calcularPedido } from '@/lib/precioPedido';
@@ -158,7 +158,7 @@ export async function POST(request) {
 
   const { data: vigentes, error: errorProductos } = await admin
     .from('productos')
-    .select('id, nombre, precio, tiene_variantes')
+    .select('id, nombre, precio, tiene_variantes, propiedad_1_nombre')
     .in('id', idsPedidos)
     .eq('vendedor_id', vendedorId)
     .eq('estado', 'activo');
@@ -527,7 +527,7 @@ export async function POST(request) {
   // el nombre y la imagen que quisiera en la pantalla de pago.
   const mpItems = calculo.lineas.map((linea) => {
     const mpItem = {
-      id: String(linea.productoId),
+      id: idItemMp(linea.productoId, linea.variante),
       title: linea.nombre + (linea.variante ? ` (${linea.variante})` : ''),
       description: linea.nombre,
       quantity: linea.cantidad,

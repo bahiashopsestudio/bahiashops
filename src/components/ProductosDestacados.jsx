@@ -5,8 +5,18 @@ import Link from 'next/link'
 import { useCarrito } from '@/context/CarritoContext'
 import BarraScrollCustom from '@/components/BarraScrollCustom'
 import { useDragScroll } from '@/hooks/useDragScroll'
+import { pideVariante, nombreVariante } from '@/lib/variantes'
 
 const MAX_POR_CATEGORIA = 10
+
+const ESTILO_BOTON = {
+  fontFamily: "'Inter', sans-serif",
+  fontSize: '12px',
+  fontWeight: 500,
+  borderRadius: '4px',
+  padding: '8px 16px',
+  marginTop: '10px',
+}
 
 function getFoto(media) {
   if (!media?.length) return null
@@ -171,21 +181,25 @@ export default function ProductosDestacados({ categorias, productos }) {
                   ${Number(p.precio).toLocaleString('es-AR')}
                 </p>
               </Link>
-              <button
-                type="button"
-                onClick={() => handleAgregar(p)}
-                className="w-full bg-[#0a0a0a] text-white border border-[#0a0a0a] hover:bg-transparent hover:text-[#0a0a0a] transition-colors cursor-pointer"
-                style={{
-                  fontFamily: "'Inter', sans-serif",
-                  fontSize: '12px',
-                  fontWeight: 500,
-                  borderRadius: '4px',
-                  padding: '8px 16px',
-                  marginTop: '10px',
-                }}
-              >
-                Agregar al carrito
-              </button>
+              {/* Con talles no se agrega desde acá: se elige en la ficha. */}
+              {pideVariante(p, p.variantes) ? (
+                <Link
+                  href={`/producto/${p.id}`}
+                  className="block text-center w-full bg-[#0a0a0a] text-white border border-[#0a0a0a] hover:bg-transparent hover:text-[#0a0a0a] transition-colors"
+                  style={ESTILO_BOTON}
+                >
+                  Elegir {nombreVariante(p)}
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleAgregar(p)}
+                  className="w-full bg-[#0a0a0a] text-white border border-[#0a0a0a] hover:bg-transparent hover:text-[#0a0a0a] transition-colors cursor-pointer"
+                  style={ESTILO_BOTON}
+                >
+                  Agregar al carrito
+                </button>
+              )}
             </div>
           )
         })}

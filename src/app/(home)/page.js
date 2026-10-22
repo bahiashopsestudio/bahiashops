@@ -49,7 +49,8 @@ export default async function Home() {
     supabase
       .from('productos')
       .select(`
-        id, nombre, precio, precio_anterior,
+        id, nombre, precio, precio_anterior, tiene_variantes, propiedad_1_nombre,
+        variantes:producto_variantes(id),
         vendedor:vendedores!inner(id, nombre_negocio, slug, barrio_id, estado_validacion, bloqueado),
         media:producto_media(url, es_principal, orden)
       `)
@@ -73,7 +74,8 @@ export default async function Home() {
     supabase
       .from('productos')
       .select(`
-        id, nombre, precio, categoria_id, creado_en,
+        id, nombre, precio, categoria_id, creado_en, tiene_variantes, propiedad_1_nombre,
+        variantes:producto_variantes(id),
         vendedor:vendedores!inner(id, nombre_negocio, barrio_id, estado_validacion, bloqueado),
         media:producto_media(url, es_principal, orden)
       `)

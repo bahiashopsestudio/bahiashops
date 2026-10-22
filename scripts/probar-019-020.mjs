@@ -542,6 +542,40 @@ console.log("\n8. Lo que guarda el vendedor")
   ok(!L.entregaConfigurada({ metodos_entrega_default: ["flash_pedidos"], costos_envio_zona: {} }), "una tienda vieja con flash y sin precios sí lo ve")
 }
 
+console.log("\n9. Talles: cada talle es una línea")
+{
+  const v = { metodos_entrega_default: ["retiro"], costos_envio_zona: {} }
+  const remera = { id: 9, nombre: "Remera PRUEBA TALLES", precio: 7000, tiene_variantes: true, propiedad_1_nombre: "Talle" }
+  const talles = [{ producto_id: 9, propiedad_1_valor: "S" }, { producto_id: 9, propiedad_1_valor: "M" }]
+  const pedir = (items, extra = {}) => calcularPedido({
+    items, productos: [remera], variantes: talles, medias: [], vendedor: v, metodoEnvio: "retiro", costoEnvioVisto: 0, ...extra,
+  })
+
+  let r = pedir([{ productoId: 9, variante: "S", cantidad: 1, precio: 7000 }, { productoId: 9, variante: "M", cantidad: 1, precio: 7000 }])
+  ok(r.ok && r.lineas.length === 2, "S y M del mismo producto: dos líneas")
+  ok(r.lineas[0].variante === "S" && r.lineas[1].variante === "M" && r.lineas.every((l) => l.cantidad === 1), "cada una con su talle y su cantidad")
+  ok(r.subtotal === 14000 && r.total === 14000, "el subtotal suma las dos")
+
+  r = pedir([{ productoId: 9, variante: "S", cantidad: 1, precio: 7000 }, { productoId: 9, variante: " S ", cantidad: 2, precio: 7000 }])
+  ok(r.ok && r.lineas.length === 1 && r.lineas[0].cantidad === 3, "dos ítems del mismo talle: se juntan en una línea (3 × S)")
+
+  r = pedir([{ productoId: 9, variante: "S", cantidad: 1, precio: 6000 }, { productoId: 9, variante: "M", cantidad: 1, precio: 6000 }])
+  ok(r.codigo === "PRECIO_CAMBIO" && r.cambios.length === 1 && r.cambios[0].precio_nuevo === 7000, "cambió el precio: un solo aviso por producto, no uno por talle")
+
+  r = pedir([{ productoId: 9, variante: null, cantidad: 1, precio: 7000 }])
+  ok(r.codigo === "FALTA_VARIANTE" && r.producto_id === 9 && r.variante_nombre === "talle", "sin talle: FALTA_VARIANTE, con el producto y qué falta elegir")
+  r = pedir([{ productoId: 9, variante: "XL", cantidad: 1, precio: 7000 }])
+  ok(r.codigo === "VARIANTE_INVALIDA", "un talle que no existe: rechazo")
+  r = pedir([{ productoId: 9, variante: "S", cantidad: 1, precio: 7000 }], { variantes: [{ producto_id: 10, propiedad_1_valor: "S" }] })
+  ok(r.codigo === "VARIANTE_INVALIDA", "el talle de OTRO producto no vale para este")
+
+  // tiene_variantes sin ninguna cargada: se compra sin elegir (si no, sería imposible).
+  r = pedir([{ productoId: 9, variante: null, cantidad: 1, precio: 7000 }], { variantes: [] })
+  ok(r.ok && r.lineas[0].variante === null, "con tiene_variantes y ninguna cargada: se compra sin talle")
+  r = pedir([{ productoId: 9, variante: "S", cantidad: 1, precio: 7000 }], { variantes: [] })
+  ok(r.codigo === "VARIANTE_INVALIDA", "y con un talle que ya no existe: rechazo")
+}
+
 console.log(fallas === 0 ? "\nTODO OK" : `\n${fallas} FALLAS`)
 // exitCode y no exit(): con el cargador del alias registrado, exit() corta un hilo
 // a mitad de cerrarse y Node avisa con un "Assertion failed" en Windows.

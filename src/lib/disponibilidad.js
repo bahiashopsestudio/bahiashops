@@ -9,6 +9,7 @@
 // sitio, tampoco se puede comprar.
 
 import { soloProductosPublicados } from '@/lib/vendedoresPublicos'
+import { pideVariante, nombreVariante } from '@/lib/variantes'
 
 // Devuelve un Set con los ids que SIGUEN disponibles, o null si no se pudo
 // averiguar. null no es "no disponible": ante un error de red no le vamos a
@@ -28,6 +29,32 @@ export async function idsDisponibles(supabase, productoIds) {
 
   if (error) return null
   return new Set((data || []).map((p) => p.id))
+}
+
+// De esos productos, los que piden elegir una variante (src/lib/variantes.js):
+// un Map de id a { nombre, valores }: cómo se llama lo que hay que elegir
+// ("talle") y las opciones cargadas, en el orden en que la tienda las cargó
+// (para elegirlas ahí mismo en el carrito). null si no se pudo averiguar: no
+// acusamos a nadie de nada; el servidor lo vuelve a mirar.
+export async function productosQuePidenVariante(supabase, productoIds) {
+  const ids = [...new Set((productoIds || []).map(Number).filter(Boolean))]
+  if (ids.length === 0) return new Map()
+
+  const { data, error } = await supabase
+    .from('productos')
+    .select('id, tiene_variantes, propiedad_1_nombre, variantes:producto_variantes(id, propiedad_1_valor)')
+    .in('id', ids)
+    .eq('tiene_variantes', true)
+
+  if (error) return null
+  return new Map(
+    (data || [])
+      .filter((p) => pideVariante(p, p.variantes))
+      .map((p) => [p.id, {
+        nombre: nombreVariante(p),
+        valores: [...p.variantes].sort((a, b) => a.id - b.id).map((v) => v.propiedad_1_valor),
+      }])
+  )
 }
 
 // Los items de un local del carrito que ya no se pueden comprar.

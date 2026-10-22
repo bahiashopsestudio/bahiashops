@@ -37,6 +37,14 @@ export const SIN_MEDIOS_EN_EFECTIVO = {
   excluded_payment_types: [{ id: 'ticket' }, { id: 'atm' }],
 }
 
+// El id de un ítem de la preferencia: el producto y, si tiene, la variante.
+// Dos talles del mismo producto son dos ítems con id distinto. Sin variante
+// queda el id del producto, como siempre.
+export function idItemMp(productoId, variante) {
+  const texto = typeof variante === 'string' ? variante.trim() : ''
+  return texto ? `${productoId}-${texto}` : String(productoId)
+}
+
 // Vence el link de pago de un pedido. Mejor esfuerzo: nunca lanza.
 // Primero con una fecha ya pasada; si la API no la acepta, con un minuto de
 // margen. Si MercadoPago dejara pagar igual una preferencia vencida, el aviso

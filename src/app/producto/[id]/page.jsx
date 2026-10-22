@@ -10,6 +10,7 @@ import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
 import VolverAtras from '@/components/VolverAtras'
 import { textoPuntajeCorto } from '@/lib/resenas'
+import { pideVariante, nombreVariante } from '@/lib/variantes'
 import BotonFavorito from '@/components/BotonFavorito'
 import ModalDenuncia from '@/components/ModalDenuncia'
 
@@ -288,7 +289,7 @@ export default function PaginaProducto() {
                   </p>
                 )}
 
-                {variantes.length > 0 && producto.propiedad_1_nombre && (
+                {pideVariante(producto, variantes) && (
                   <div className="mb-6">
                     <label className="block text-sm font-medium text-[#0a0a0a]/60 mb-2">
                       {producto.propiedad_1_nombre}
@@ -315,8 +316,10 @@ export default function PaginaProducto() {
                 <button
                   type="button"
                   onClick={() => {
-                    if (variantes.length > 0 && producto.propiedad_1_nombre && !varianteElegida) {
-                      alert(`Elegí ${producto.propiedad_1_nombre.toLowerCase()} antes de agregar.`)
+                    // El mismo criterio que el servidor (FALTA_VARIANTE).
+                    const conVariante = pideVariante(producto, variantes)
+                    if (conVariante && !varianteElegida) {
+                      alert(`Elegí ${nombreVariante(producto)} antes de agregar.`)
                       return
                     }
 
@@ -325,7 +328,7 @@ export default function PaginaProducto() {
                       nombre: producto.nombre,
                       precio: Number(producto.precio),
                       foto: fotos.length > 0 ? fotos[0].url : null,
-                      variante: varianteElegida || null,
+                      variante: conVariante ? varianteElegida : null,
                       cantidad: 1,
                     }
 
