@@ -42,7 +42,7 @@ export default function PrivacidadPage() {
               Política de Privacidad
             </h1>
             <p className="text-sm text-[#0a0a0a]/40 mb-10">
-              Última actualización: julio 2026
+              Última actualización: octubre 2026
             </p>
 
             {/* Intro */}
@@ -69,7 +69,14 @@ export default function PrivacidadPage() {
               </p>
 
               <h3 className="font-semibold text-[#0a0a0a] mt-4 mb-1.5">Datos de registro</h3>
-              <p>Nombre, apellido, nombre de usuario, dirección de email. Si te registrás con Google, recibimos tu nombre y email asociados a tu cuenta de Google.</p>
+              <p>Nombre, apellido, nombre de usuario, dirección de email.</p>
+
+              <h3 className="font-semibold text-[#0a0a0a] mt-4 mb-1.5">Si entrás con Google</h3>
+              <p>Cuando elegís «Continuar con Google», Google nos comparte los datos básicos de tu cuenta: nombre, apellido, email y foto de perfil. No pedimos acceso a tu Gmail, tu Drive, tus contactos ni a ningún otro servicio de Google, y no guardamos tu contraseña ni credenciales de Google.</p>
+              <p><strong className="text-[#0a0a0a]">Qué usamos y para qué.</strong> Guardamos tu nombre, tu apellido y tu email para crear tu cuenta, identificarte cuando entrás y mandarte los mails de tus compras. Tu foto de perfil no se usa en ningún lugar del sitio: en Bahía Shops te ven con un apodo y un avatar propio, nunca con tu nombre real ni tu foto.</p>
+              <p><strong className="text-[#0a0a0a]">Con quién se comparten.</strong> Solo cuando comprás: la tienda recibe tu nombre y apellido para preparar el pedido, y Mercado Pago recibe tu nombre, apellido y email para procesar el pago. Los datos que cargás vos al comprar, como teléfono y dirección, se explican en la sección 4. No vendemos estos datos ni los usamos para publicidad.</p>
+              <p><strong className="text-[#0a0a0a]">Dónde se guardan.</strong> En nuestra base de datos, en Supabase, que también gestiona el inicio de sesión y conserva el identificador de tu cuenta de Google y los datos que Google compartió mientras tu cuenta exista.</p>
+              <p><strong className="text-[#0a0a0a]">Cómo se borran.</strong> Desde <Link href="/perfil/eliminar-cuenta" className="underline underline-offset-2 hover:text-[#4164fe]">«Eliminar mi cuenta»</Link>, en el pie del sitio. Si no tenés compras ni tienda, se borra todo. Si tenés compras, se borran tu email y los datos de Google, y tus pedidos quedan sin datos que te identifiquen (ver sección 8). También podés quitarle el acceso a Bahía Shops desde tu cuenta de Google, en Seguridad › Conexiones con apps y servicios de terceros.</p>
 
               <h3 className="font-semibold text-[#0a0a0a] mt-4 mb-1.5">Datos de compra</h3>
               <p>Direcciones de entrega (calle, número, piso, departamento, barrio, ciudad, código postal), teléfono de contacto para la entrega, historial de pedidos.</p>

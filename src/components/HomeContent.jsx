@@ -244,7 +244,7 @@ export default function HomeContent({ categorias, recientes, elegidos, vendedore
                 lineHeight: 1.6,
               }}
             >
-              Podés ingresar con tu cuenta de Google. Solo usamos tu nombre, correo y foto de perfil para crear tu cuenta.{' '}
+              Podés ingresar con tu cuenta de Google. Solo usamos tu nombre y tu mail para crear tu cuenta.{' '}
               <Link
                 href="/privacidad"
                 style={{
