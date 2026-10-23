@@ -28,6 +28,7 @@
     "plantillas-auth": "node scripts/armar-plantillas-auth.mjs",
     "probar:plantillas-auth": "node scripts/probar-plantillas-auth.mjs",
     "probar:limpieza-sesion": "node scripts/probar-limpieza-sesion.mjs",
+    "probar:retiro": "node scripts/probar-retiro.mjs",
     "probar:confirmar": "node scripts/probar-confirmar.mjs",
     "probar:url-mp": "node scripts/probar-url-mp.mjs",
     "probar:025": "node scripts/probar-025.mjs",

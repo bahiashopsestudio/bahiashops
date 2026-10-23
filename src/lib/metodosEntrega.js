@@ -166,13 +166,18 @@ export function seguimientoDe(pedido) {
 // tipoEntrega: cómo llega el pedido. De ahí sale su secuencia de pasos
 // (formaDeEntrega y SECUENCIAS, en pedidos.js).
 // chip: la etiqueta corta y sus colores, para la franja cerrada de un pedido.
+
+// El retiro de una tienda que no muestra su dirección (checkout, Mis pedidos,
+// la página de compra y los mails). Ver direccionDeRetiro, más abajo.
+export const RETIRO_POR_WHATSAPP = 'La tienda te va a pasar la dirección por WhatsApp.'
+
 export const METODOS = {
   retiro: {
     id: 'retiro',
     comprador: 'Retiro en el local',
     compradorSinDireccion: 'Retiro',
-    detalleComprador: 'Retirás en la dirección de la tienda',
-    detalleCompradorSinDireccion: 'Coordinás con la tienda dónde y cuándo',
+    detalleComprador: 'Retirás en la dirección de la tienda. Te va a llegar por mail cuando se confirme el pago, y la vas a ver en Mis pedidos.',
+    detalleCompradorSinDireccion: RETIRO_POR_WHATSAPP,
     vendedor: 'Retiro',
     admin: 'Retiro',
     pideDireccion: false,
@@ -278,6 +283,22 @@ export function etiquetaMetodo(valor, para = 'comprador', { direccionVisible } =
     return metodo.compradorSinDireccion
   }
   return metodo[para] || metodo.comprador
+}
+
+// Dónde se retira un pedido, para quien lo compró (Mis pedidos y los mails de
+// compra y de «listo para retirar»). La dirección de la tienda no se muestra en
+// su página: el sitio se la da a quien tiene un pedido de retiro pagado, y la
+// lee el servidor. (La base igual deja leer vendedores.direccion con la clave
+// pública, y el pin exacto del mapa la ubica: esto no la vuelve privada.)
+// vendedor: la fila de vendedores con direccion_visible, direccion y
+// barrio { nombre }. Devuelve "Colón 123, Centro", o null si la tienda no
+// muestra su dirección (o no la cargó): ahí va RETIRO_POR_WHATSAPP.
+export function direccionDeRetiro(vendedor) {
+  if (!vendedor?.direccion_visible) return null
+  const direccion = String(vendedor.direccion ?? '').trim()
+  if (!direccion) return null
+  const barrio = String(vendedor.barrio?.nombre ?? '').trim()
+  return barrio ? `${direccion}, ${barrio}` : direccion
 }
 
 // La lista de métodos guardada en la tienda, traducida, sin repetidos y en el

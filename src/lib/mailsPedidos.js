@@ -27,7 +27,9 @@ import {
 } from '@/lib/mailBase'
 import { normalizarTelefonoAR, formatearTelefonoAR, linkWhatsApp } from '@/lib/telefono'
 import { inicialDeApodo, colorDeApodo } from '@/lib/apodos'
-import { metodoPideDireccion, tipoEntregaDe, zonaDe, textoCostoEnvio, seguimientoDe } from '@/lib/metodosEntrega'
+import {
+  metodoPideDireccion, tipoEntregaDe, zonaDe, textoCostoEnvio, seguimientoDe, direccionDeRetiro, RETIRO_POR_WHATSAPP,
+} from '@/lib/metodosEntrega'
 import { calleNumeroDepto, ciudadProvinciaCodigo } from '@/lib/direcciones'
 import { pedidoTuvoPago, formaDeEntrega, ESTADO_ENTREGADO } from '@/lib/pedidos'
 import { estadoDeResena, ESTADOS_PARA_RESENAR } from '@/lib/resenas'
@@ -134,11 +136,26 @@ function partesTexto(partes) {
   return partes.map(([parte]) => parte).join('')
 }
 
+// Dónde se retira, en partes: "Lo retirás en Colón 123, Centro." o que la
+// tienda la pasa por WhatsApp. direccionRetiro sale de direccionDeRetiro().
+function partesRetiro(direccionRetiro) {
+  return direccionRetiro
+    ? [['Lo retirás en '], [direccionRetiro, true], ['.']]
+    : [[RETIRO_POR_WHATSAPP]]
+}
+
+// El segundo párrafo de "Qué pasa ahora" (la línea del retiro).
+function parrafoSiguienteHtml(partes) {
+  return `<p style="margin:12px 0 0;font-family:${FUENTE_TEXTO};font-size:15px;font-weight:300;line-height:1.6;color:${TEXTO};">${partesHtml(partes)}</p>`
+}
+
 // ── 2. Armado ───────────────────────────────────────────────────────────────
 //
 // Los dos mails del pago reciben el mismo objeto:
 //   pedidoId, tienda, metodoEnvio (el literal de la base), zonaEnvio,
 //   direccionVisible (de la tienda: si no, el retiro se coordina),
+//   direccionRetiro (direccionDeRetiro(): dónde se retira, solo en el mail
+//   de quien compró; null si la tienda la pasa por WhatsApp),
 //   nombre, apellido, telefono, apodo,
 //   items [{ nombre, variante, cantidad, precio }],
 //   costoEnvio, total, comision,
@@ -248,7 +265,7 @@ export function armarMailCompra(datos) {
   // salen la versión HTML (escapada) y la de texto.
   const finales = {
     retiro: datos.direccionVisible === false
-      ? [[' para coordinar dónde y cuándo lo retirás.']]
+      ? [[' para coordinar cuándo lo retirás.']]
       : [[' cuando esté listo para que lo pases a buscar.']],
     envio: destino
       ? [[' para avisarte en qué franja horaria llega a '], [destino, true], ['.']]
@@ -264,6 +281,7 @@ export function armarMailCompra(datos) {
     ...(telefono ? [[' al '], [telefono, true]] : []),
     ...finales[tipo],
   ]
+  const retiro = tipo === 'retiro' ? partesRetiro(datos.direccionRetiro) : null
 
   const saludo = nombre ? `Hola ${nombre}: ` : ''
   const pie = PIE_COMPRADOR
@@ -282,7 +300,8 @@ export function armarMailCompra(datos) {
           ? `<span style="white-space:nowrap;">${negrita(escapar(parte))}</span>`
           : negrita(escapar(parte))
       }).join('') +
-      '</p>'
+      '</p>' +
+      (retiro ? parrafoSiguienteHtml(retiro) : '')
     ),
     boton('Ver mis pedidos', linkPedidos),
     `<p style="margin:28px 0 0;font-family:${FUENTE_TEXTO};font-size:12px;font-weight:300;line-height:1.6;color:${GRIS};">${pie.map(escapar).join('<br>')}</p>`,
@@ -293,7 +312,7 @@ export function armarMailCompra(datos) {
     '¡Tu compra está confirmada!',
     `${saludo}MercadoPago confirmó tu pago y ya le avisamos a ${tienda}.`,
     textoCompra(compra),
-    `QUÉ PASA AHORA\n${quePasa.map(([parte]) => parte).join('')}`,
+    `QUÉ PASA AHORA\n${quePasa.map(([parte]) => parte).join('')}${retiro ? `\n${partesTexto(retiro)}` : ''}`,
     `Ver mis pedidos: ${linkPedidos}`,
     pie.join('\n'),
   ].join('\n\n')
@@ -304,7 +323,7 @@ export function armarMailCompra(datos) {
 // «Tu pedido está listo para retirar»: sale cuando un pedido de Retiro pasa a
 // 'listo', una sola vez por pedido. Recibe
 //   { pedidoId, tienda, nombre, telefono (el de quien compró), items,
-//     costoEnvio, total }
+//     costoEnvio, total, direccionRetiro (direccionDeRetiro(), o null) }
 // El teléfono es el de quien compró: la tienda le va a escribir a ese número.
 export function armarMailListo(datos) {
   const { pedidoId, tienda, items, costoEnvio, total } = datos
@@ -323,6 +342,7 @@ export function armarMailListo(datos) {
     ...(telefono ? [[' al '], [telefono, true]] : []),
     [' para coordinar cuándo pasás a buscarlo.'],
   ]
+  const retiro = partesRetiro(datos.direccionRetiro)
 
   const cuerpo = [
     lineaAzul(`Pedido #${pedidoId}`),
@@ -332,7 +352,8 @@ export function armarMailListo(datos) {
     tarjeta('QUÉ PASA AHORA',
       `<p style="margin:0;font-family:${FUENTE_TEXTO};font-size:15px;font-weight:300;line-height:1.6;color:${TEXTO};">` +
       partesHtml(quePasa, telefono) +
-      '</p>'
+      '</p>' +
+      parrafoSiguienteHtml(retiro)
     ),
     boton('Ver mis pedidos', linkPedidos),
     htmlPie(PIE_COMPRADOR),
@@ -343,7 +364,7 @@ export function armarMailListo(datos) {
     titulo,
     partesTexto(presentacion),
     textoCompra(compra),
-    `QUÉ PASA AHORA\n${partesTexto(quePasa)}`,
+    `QUÉ PASA AHORA\n${partesTexto(quePasa)}\n${partesTexto(retiro)}`,
     `Ver mis pedidos: ${linkPedidos}`,
     PIE_COMPRADOR.join('\n'),
   ].join('\n\n')
@@ -654,7 +675,7 @@ export async function avisarPago({ admin, pedidoId }) {
 
     const { data: vendedor, error: errorVendedor } = await admin
       .from('vendedores')
-      .select('nombre_negocio, usuario_id, direccion_visible')
+      .select('nombre_negocio, usuario_id, direccion_visible, direccion, barrio:barrios(nombre)')
       .eq('id', pedido.vendedor_id)
       .maybeSingle()
 
@@ -704,6 +725,7 @@ export async function avisarPago({ admin, pedidoId }) {
       metodoEnvio: pedido.metodo_envio,
       zonaEnvio: pedido.zona_envio,
       direccionVisible: vendedor.direccion_visible,
+      direccionRetiro: tipoEntrega(pedido.metodo_envio) === 'retiro' ? direccionDeRetiro(vendedor) : null,
       nombre: pedido.comprador_nombre,
       apellido: pedido.comprador_apellido,
       telefono: pedido.comprador_telefono,
@@ -960,7 +982,7 @@ export async function avisarListo({ admin, pedidoId }) {
       .select(`
         id, estado, metodo_envio, comprador_id, comprador_nombre, comprador_telefono,
         costo_envio, total, vendedor_nombre,
-        vendedor:vendedores ( nombre_negocio ),
+        vendedor:vendedores ( nombre_negocio, direccion_visible, direccion, barrio:barrios ( nombre ) ),
         items:pedido_items ( id, nombre, variante, cantidad, precio )
       `)
       .eq('id', pedidoId)
@@ -1000,6 +1022,7 @@ export async function avisarListo({ admin, pedidoId }) {
         items: [...(pedido.items || [])].sort((a, b) => a.id - b.id),
         costoEnvio: pedido.costo_envio,
         total: pedido.total,
+        direccionRetiro: direccionDeRetiro(pedido.vendedor),
       }),
     })
   } catch (err) {

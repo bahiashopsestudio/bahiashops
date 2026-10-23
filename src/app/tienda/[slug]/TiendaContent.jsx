@@ -97,15 +97,8 @@ const MENU_CATEGORIAS = [
 
 export default function TiendaContent({ vendedor, productos, puntaje = { cantidad: 0, promedio: null }, resenas = { resenas: [], hayMas: false, error: false } }) {
   const supabase = createClient()
-  const [siguiendo, setSiguiendo] = useState(false)
-  const [copiadoVisible, setCopiadoVisible] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [categorias, setCategorias] = useState([])
-
-  const instagramHandle = vendedor.instagram?.replace('@', '')
-  // La dirección, solo si eligió mostrarla. De quien eligió "No" no se
-  // muestra ningún texto de calles: solo el barrio, que va arriba.
-  const lugarVisible = vendedor.direccion_visible ? vendedor.direccion : null
 
   useEffect(() => {
     if (menuOpen) {
@@ -128,40 +121,6 @@ export default function TiendaContent({ vendedor, productos, puntaje = { cantida
     cargarCats()
   }, [])
 
-  useEffect(() => {
-    try {
-      const seguidos = JSON.parse(localStorage.getItem('vendedores_seguidos') || '[]')
-      setSiguiendo(seguidos.includes(vendedor.id))
-    } catch {}
-  }, [vendedor.id])
-
-  function toggleSeguir() {
-    try {
-      const seguidos = JSON.parse(localStorage.getItem('vendedores_seguidos') || '[]')
-      let nuevos
-      if (siguiendo) {
-        nuevos = seguidos.filter(id => id !== vendedor.id)
-      } else {
-        nuevos = [...seguidos, vendedor.id]
-      }
-      localStorage.setItem('vendedores_seguidos', JSON.stringify(nuevos))
-      setSiguiendo(!siguiendo)
-    } catch {}
-  }
-
-  async function compartir() {
-    const url = window.location.href
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: vendedor.nombre_negocio, url })
-      } else {
-        await navigator.clipboard.writeText(url)
-        setCopiadoVisible(true)
-        setTimeout(() => setCopiadoVisible(false), 2000)
-      }
-    } catch {}
-  }
-
   const menuCats = MENU_CATEGORIAS
     .map(slug => categorias.find(c => c.slug === slug))
     .filter(Boolean)
@@ -179,7 +138,7 @@ export default function TiendaContent({ vendedor, productos, puntaje = { cantida
 
         <Navbar onToggleMenu={() => setMenuOpen(!menuOpen)} variant="solid" />
 
-        {/* ── Portada con botones flotantes ── */}
+        {/* ── Portada con el botón Volver ── */}
         <div className="relative h-56 md:h-80 overflow-hidden mt-20">
           {vendedor.portada_url ? (
             <img
@@ -201,40 +160,6 @@ export default function TiendaContent({ vendedor, productos, puntaje = { cantida
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
               </svg>
-            </button>
-          </div>
-
-          <div className="absolute top-4 right-4 flex items-center gap-2">
-            <button
-              onClick={compartir}
-              className="w-10 h-10 flex items-center justify-center rounded-full bg-black/30 backdrop-blur-md text-white hover:bg-black/50 transition cursor-pointer relative"
-              aria-label="Compartir"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 1 0 0 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 1 0 3.935 2.186 2.25 2.25 0 0 0-3.935-2.186Zm0-12.814a2.25 2.25 0 1 0 3.933-2.185 2.25 2.25 0 0 0-3.933 2.185Z" />
-              </svg>
-              {copiadoVisible && (
-                <span className="absolute -bottom-9 left-1/2 -translate-x-1/2 bg-[#0a0a0a] text-white text-[10px] px-2.5 py-1 rounded-full whitespace-nowrap shadow-lg">
-                  Enlace copiado
-                </span>
-              )}
-            </button>
-
-            <button
-              onClick={toggleSeguir}
-              className="backdrop-blur-md transition-colors cursor-pointer"
-              style={{
-                fontFamily: "'Inter', sans-serif",
-                fontWeight: 500,
-                fontSize: '13px',
-                borderRadius: '4px',
-                padding: '9px 20px',
-                border: '1px solid #ffffff',
-                backgroundColor: siguiendo ? '#ffffff' : 'rgba(0,0,0,0.25)',
-                color: siguiendo ? '#0a0a0a' : '#ffffff',
-              }}
-            >
-              {siguiendo ? '✓ Siguiendo' : 'Seguir'}
             </button>
           </div>
         </div>
@@ -332,11 +257,10 @@ export default function TiendaContent({ vendedor, productos, puntaje = { cantida
           </section>
 
 
-          {/* ── Tarjetas de info ── */}
-          <div className="grid md:grid-cols-2 gap-4 mb-8">
-
-            <div className="bg-[#F5F2EC] rounded-2xl p-6">
-              <h3 className="text-lg mb-3" style={{ fontFamily: 'Fraunces, serif', fontWeight: 500, color: '#0a0a0a' }}>Sobre {vendedor.nombre_negocio}</h3>
+          {/* ── Sobre la tienda ── */}
+          <div className="bg-[#F5F2EC] rounded-2xl p-6 mb-8">
+            <h3 className="text-lg mb-3" style={{ fontFamily: 'Fraunces, serif', fontWeight: 500, color: '#0a0a0a' }}>Sobre {vendedor.nombre_negocio}</h3>
+            <div className="max-w-3xl">
               <p style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 300, fontSize: '13.5px', color: 'rgba(10,10,10,0.5)', lineHeight: 1.65 }}>
                 {vendedor.descripcion_corta}
               </p>
@@ -345,78 +269,16 @@ export default function TiendaContent({ vendedor, productos, puntaje = { cantida
                   {vendedor.descripcion_larga}
                 </p>
               )}
-
-              <div className="flex flex-col gap-3 mt-5 pt-4 border-t border-[#0a0a0a]/5">
-                {instagramHandle && (
-                  <a
-                    href={`https://instagram.com/${instagramHandle}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-between text-sm text-[#0a0a0a]/40 hover:text-[#0a0a0a] transition group font-light"
-                  >
-                    <span className="flex items-center gap-2.5">
-                      <svg className="w-4 h-4 text-[#0a0a0a]/25 group-hover:text-[#0a0a0a] transition" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/>
-                      </svg>
-                      @{instagramHandle}
-                    </span>
-                    <svg className="w-4 h-4 text-[#0a0a0a]/15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
-                    </svg>
-                  </a>
-                )}
-                {lugarVisible && (
-                  <div className="flex items-center gap-2.5 text-sm text-[#0a0a0a]/40 font-light">
-                    <svg className="w-4 h-4 text-[#0a0a0a]/25 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
-                    </svg>
-                    <span>{lugarVisible}</span>
-                  </div>
-                )}
-                {vendedor.horarios_texto_libre && (
-                  <div className="flex items-center gap-2.5 text-sm text-[#0a0a0a]/40 font-light">
-                    <svg className="w-4 h-4 text-[#0a0a0a]/25 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                    </svg>
-                    <span>{vendedor.horarios_texto_libre}</span>
-                  </div>
-                )}
-              </div>
             </div>
 
-            <div className="bg-[#F5F2EC] rounded-2xl p-6 flex flex-col">
-              <h3 className="text-lg mb-4" style={{ fontFamily: 'Fraunces, serif', fontWeight: 500, color: '#0a0a0a' }}>Políticas</h3>
-              <div className="flex flex-col flex-1">
-                <Link
-                  href="/privacidad"
-                  className="flex items-center justify-between py-3 border-b border-[#0a0a0a]/5 text-sm text-[#0a0a0a]/40 hover:text-[#0a0a0a] transition group font-light"
-                >
-                  <span>Política de privacidad</span>
-                  <svg className="w-4 h-4 text-[#0a0a0a]/15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-                  </svg>
-                </Link>
-                <Link
-                  href="/terminos"
-                  className="flex items-center justify-between py-3 border-b border-[#0a0a0a]/5 text-sm text-[#0a0a0a]/40 hover:text-[#0a0a0a] transition group font-light"
-                >
-                  <span>Política de devoluciones</span>
-                  <svg className="w-4 h-4 text-[#0a0a0a]/15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-                  </svg>
-                </Link>
-                <Link
-                  href="/terminos"
-                  className="flex items-center justify-between py-3 text-sm text-[#0a0a0a]/40 hover:text-[#0a0a0a] transition group font-light"
-                >
-                  <span>Política de envío</span>
-                  <svg className="w-4 h-4 text-[#0a0a0a]/15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-                  </svg>
-                </Link>
+            {vendedor.horarios_texto_libre && (
+              <div className="flex items-center gap-2.5 mt-5 pt-4 border-t border-[#0a0a0a]/5 text-sm text-[#0a0a0a]/40 font-light">
+                <svg className="w-4 h-4 text-[#0a0a0a]/25 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                </svg>
+                <span>{vendedor.horarios_texto_libre}</span>
               </div>
-            </div>
+            )}
           </div>
 
           {/* ── Reseñas ── */}

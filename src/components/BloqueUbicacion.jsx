@@ -246,7 +246,7 @@ export default function BloqueUbicacion({ localidades = [], barrios = [], inicia
               <span className="text-sm">
                 No, prefiero mostrar una zona
                 <span className={`block ${ayudaClasses} text-[#0a0a0a]/50`} style={fuenteAyuda}>
-                  En Bahía Shops se ve una zona de unas cuadras alrededor, nunca tu dirección.
+                  En el mapa se ve una zona de unas cuadras alrededor, nunca tu dirección. Si alguien te compra con retiro, le pasás la dirección por WhatsApp.
                 </span>
               </span>
             </label>
@@ -254,9 +254,9 @@ export default function BloqueUbicacion({ localidades = [], barrios = [], inicia
               <input type="radio" name="direccion_visible" checked={direccionVisible}
                 onChange={() => { setDireccionVisible(true); empezarDeNuevo() }} className="accent-[#0a0a0a] mt-1" />
               <span className="text-sm">
-                Sí, mostrar mi dirección
+                Sí, mostrar el punto exacto
                 <span className={`block ${ayudaClasses} text-[#0a0a0a]/50`} style={fuenteAyuda}>
-                  Tu dirección se va a ver en tu tienda y el mapa va a mostrar el punto exacto.
+                  En el mapa se ve el punto exacto de tu local. Tu dirección escrita no aparece en tu tienda: quien te compra con retiro la ve en su pedido y en sus mails.
                 </span>
               </span>
             </label>

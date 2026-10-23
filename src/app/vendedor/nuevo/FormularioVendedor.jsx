@@ -507,7 +507,7 @@ export default function FormularioVendedor({ userId }) {
           <label className="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" checked={usarOtroEmail} onChange={(e) => setUsarOtroEmail(e.target.checked)}
               className="accent-[#0a0a0a]" />
-            <span className="text-sm text-[#0a0a0a]/60 font-light">Usar otro email (diferente al del registro) para contacto público</span>
+            <span className="text-sm text-[#0a0a0a]/60 font-light">Usar otro email (diferente al del registro) para que Bahía Shops te contacte</span>
           </label>
 
           {usarOtroEmail && (

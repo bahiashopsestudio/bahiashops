@@ -54,8 +54,8 @@ const base = {
 const direccion = { calle: 'Alsina', numero: '235', piso_depto: '2B', barrio: 'Centro' }
 
 const casos = {
-  retiro: { ...base, metodoEnvio: 'retiro', direccionVisible: true },
-  'retiro-sin-direccion': { ...base, metodoEnvio: 'retiro', direccionVisible: false },
+  retiro: { ...base, metodoEnvio: 'retiro', direccionVisible: true, direccionRetiro: 'Brown 412, Centro' },
+  'retiro-sin-direccion': { ...base, metodoEnvio: 'retiro', direccionVisible: false, direccionRetiro: null },
   envio: {
     ...base, metodoEnvio: 'envio_tienda', zonaEnvio: 2, costoEnvio: 2500, total: 25300, direccion, turno: 'Tarde',
   },
@@ -113,6 +113,7 @@ for (const [caso, datos] of Object.entries(casos)) {
 // Listo para retirar (Retiro): con y sin teléfono de quien compró, y escapado.
 mails.listo = armarMailListo({ ...casos.retiro, pedidoId: 1045 })
 mails['listo-sin-telefono'] = armarMailListo({ ...casos.retiro, pedidoId: 1046, telefono: null, nombre: null })
+mails['listo-sin-direccion'] = armarMailListo({ ...casos['retiro-sin-direccion'], pedidoId: 1047 })
 mails['listo-escapado'] = armarMailListo({ ...casos.escapado, metodoEnvio: 'retiro', costoEnvio: 0, total: 14500 })
 mails.despacho = armarMailDespacho({
   pedido: { id: 1042, metodo_envio: 'envio_tienda', subtotal_productos: 22800, costo_envio: 2500, total: 25300 },

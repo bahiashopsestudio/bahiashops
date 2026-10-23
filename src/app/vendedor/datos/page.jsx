@@ -433,7 +433,7 @@ export default function MisDatosVendedorPage() {
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={usarOtroEmail}
                   onChange={(e) => setUsarOtroEmail(e.target.checked)} className="accent-[#0a0a0a]" />
-                <span className={labelClasses}>Usar otro email (diferente al del registro) para contacto público</span>
+                <span className={labelClasses}>Usar otro email (diferente al del registro) para que Bahía Shops te contacte</span>
               </label>
 
               {usarOtroEmail && (

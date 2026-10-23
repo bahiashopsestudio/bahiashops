@@ -6,17 +6,17 @@ import { Suspense, useEffect, useState } from 'react'
 import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
 import { createClient } from '@/lib/supabase/client'
-import { tipoEntregaDe } from '@/lib/metodosEntrega'
+import { tipoEntregaDe, RETIRO_POR_WHATSAPP } from '@/lib/metodosEntrega'
 
 // Qué pasa ahora, según cómo le llega el pedido. Sin datos del pedido (no se
-// pudo leer), el texto general.
+// pudo leer), el texto general. El retiro dice lo mismo que el mail de compra.
 const TEXTO_GENERAL = 'Te va a escribir por WhatsApp para coordinar la entrega.'
 function textoQuePasa(pedido) {
   const tipo = tipoEntregaDe(pedido?.metodo_envio)
   if (tipo === 'retiro') {
     return pedido.vendedor?.direccion_visible === false
-      ? 'Te va a escribir por WhatsApp para coordinar dónde y cuándo lo retirás.'
-      : 'Te va a escribir por WhatsApp cuando esté listo para retirar.'
+      ? 'Te va a escribir por WhatsApp para coordinar cuándo lo retirás.'
+      : 'Te va a escribir por WhatsApp cuando esté listo para que lo pases a buscar.'
   }
   if (tipo === 'domicilio') return 'Te va a escribir por WhatsApp para avisarte en qué franja horaria llega.'
   if (tipo === 'correo') return 'Te va a escribir por WhatsApp cuando lo despache por correo.'
@@ -74,6 +74,28 @@ function ExitoContenido() {
     cargarPedido()
   }, [pedidoId])
 
+  // Retiro: dónde se retira, como en el mail de compra. La tienda que no
+  // muestra su dirección la pasa por WhatsApp; la que sí, la da el servidor
+  // (solo a quien compró, con el pedido ya pagado). Si el pago todavía no se
+  // confirmó, o falla, no va la línea: la dirección queda en Mis pedidos y en
+  // el mail.
+  const esRetiro = tipoEntregaDe(pedido?.metodo_envio) === 'retiro'
+  const direccionOculta = pedido?.vendedor?.direccion_visible === false
+  const [retiroServidor, setRetiroServidor] = useState(null)
+  useEffect(() => {
+    if (!esRetiro || direccionOculta) return
+    async function cargarRetiro() {
+      try {
+        const res = await fetch(`/api/pedidos/${pedidoId}/retiro`)
+        const cuerpo = await res.json().catch(() => null)
+        if (res.ok && cuerpo?.estado === 'ok') setRetiroServidor(`Lo retirás en ${cuerpo.direccion}.`)
+        else if (res.ok && cuerpo?.estado === 'por_whatsapp') setRetiroServidor(RETIRO_POR_WHATSAPP)
+      } catch {}
+    }
+    cargarRetiro()
+  }, [esRetiro, direccionOculta, pedidoId])
+  const lineaRetiro = !esRetiro ? null : direccionOculta ? RETIRO_POR_WHATSAPP : retiroServidor
+
   // Ya se pagó: del carrito sale SOLO lo de esta tienda. El pedido se lee con la
   // sesión de quien compra (la política deja leer solo los propios), así que el
   // número de la tienda no sale de la dirección de la página.
@@ -104,6 +126,7 @@ function ExitoContenido() {
 
             <div className="bg-[#F5F2EC] rounded-2xl p-5 text-left mt-8 mb-8">
               <p className="text-sm font-medium text-[#0a0a0a]">Te mandamos la confirmación por mail y ya le avisamos al vendedor. {pedido ? textoQuePasa(pedido) : TEXTO_GENERAL}</p>
+              {lineaRetiro && <p className="text-sm font-medium text-[#0a0a0a] mt-2 mb-0">{lineaRetiro}</p>}
             </div>
 
             {sinLeerPedido && (

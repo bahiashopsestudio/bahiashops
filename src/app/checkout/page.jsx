@@ -126,6 +126,9 @@ function CheckoutContenido() {
   // (si no, el retiro se coordina con ella).
   const [entregaTienda, setEntregaTienda] = useState({ metodos_entrega_default: [], costos_envio_zona: {} })
   const [direccionVisibleTienda, setDireccionVisibleTienda] = useState(null)
+  // El barrio de la tienda, para "Retiro (en el local): {barrio}". La
+  // dirección no: esa la ve quien compró, en su pedido.
+  const [barrioTienda, setBarrioTienda] = useState(null)
   // La cotización de los envíos por zona para la dirección elegida, de
   // /api/envio/cotizar: { direccionId, envio_tienda, correo,
   // falta_codigo_postal }, cada método { estado, zona, costo } o null; con
@@ -380,9 +383,10 @@ function CheckoutContenido() {
   // Los costos de envío del vendedor. Se recargan si el servidor avisa que el
   // envío cambió mientras la persona estaba en esta pantalla.
   async function cargarVendedor() {
-    const { data: vendedor } = await supabase.from('vendedores').select('direccion_visible, metodos_entrega_default, costos_envio_zona').eq('id', vendedorId).single()
+    const { data: vendedor } = await supabase.from('vendedores').select('direccion_visible, metodos_entrega_default, costos_envio_zona, barrio:barrios(nombre)').eq('id', vendedorId).single()
     if (vendedor) {
       setDireccionVisibleTienda(vendedor.direccion_visible)
+      setBarrioTienda(String(vendedor.barrio?.nombre ?? '').trim() || null)
       setEntregaTienda({
         metodos_entrega_default: vendedor.metodos_entrega_default || [],
         costos_envio_zona: vendedor.costos_envio_zona || {},
@@ -789,7 +793,10 @@ function CheckoutContenido() {
     }
 
     if (id === 'retiro') {
-      return { ...base, sub: sinDireccionVisible ? def.detalleCompradorSinDireccion : def.detalleComprador, costoLabel: 'Gratis' }
+      // "Retiro en el local: Centro", o "Retiro: Centro" si la tienda no
+      // muestra su dirección. Sin barrio, la etiqueta de siempre.
+      const label = barrioTienda ? `${base.label}: ${barrioTienda}` : base.label
+      return { ...base, label, sub: sinDireccionVisible ? def.detalleCompradorSinDireccion : def.detalleComprador, costoLabel: 'Gratis' }
     }
 
     // Envío de la tienda y correo: lo que diga la cotización del servidor. A
@@ -1124,9 +1131,6 @@ function CheckoutContenido() {
             {/* ═══ PASO 3: PAGAR ═══ */}
             {paso === PASO_PAGAR && (
               <div>
-                <VolverAtras href="#" texto="Volver a entrega" />
-                <div className="-mt-4 mb-6" onClick={(e) => { e.preventDefault(); setPaso(PASO_ENTREGA) }} />
-
                 <button type="button" onClick={() => setPaso(PASO_ENTREGA)} className="text-sm text-[#0a0a0a]/30 font-light mb-6 flex items-center gap-2 cursor-pointer hover:text-[#0a0a0a] transition">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />

@@ -8,7 +8,7 @@ import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
 import VolverAtras from '@/components/VolverAtras'
 import { ChipForma, BarraPasos, FlechaDesplegar, fechaDia } from '@/components/PasosPedido'
-import { etiquetaMetodo, tipoEntregaDe, textoCostoEnvio, seguimientoDe } from '@/lib/metodosEntrega'
+import { etiquetaMetodo, tipoEntregaDe, textoCostoEnvio, seguimientoDe, RETIRO_POR_WHATSAPP } from '@/lib/metodosEntrega'
 import { pedidoVencido, pagableHasta, esPagoEnEfectivoPendiente, fechaDeCupon } from '@/lib/vencimientoPago'
 import {
   esVentaVisible, pasosDe, lineaDeEstado, textoCompraste, mensajeReclamo,
@@ -32,6 +32,27 @@ function textoEnvioPedido(pedido) {
   }
   if (tipo === 'correo') return textoCostoEnvio(pedido.metodo_envio, costo)
   return costo > 0 ? `$${formatearMonto(costo)}` : ''
+}
+
+// Debajo del método, en un pedido de Retiro: "Lo retirás en Colón 123,
+// Centro" o que la tienda la pasa por WhatsApp. Mientras carga, o si la tienda
+// cerró, nada.
+function LineaRetiro({ retiro, onReintentar }) {
+  if (!retiro || retiro.estado === 'cargando' || retiro.estado === 'cerrada') return null
+  const clase = 'm-0 mb-1 text-xs font-light leading-relaxed'
+  if (retiro.estado === 'ok') {
+    return <p className={`${clase} text-[#0a0a0a]/60`}>Lo retirás en <span className="text-[#0a0a0a] font-normal">{retiro.direccion}</span></p>
+  }
+  if (retiro.estado === 'por_whatsapp') return <p className={`${clase} text-[#0a0a0a]/60`}>{RETIRO_POR_WHATSAPP}</p>
+  return (
+    <p className={`${clase} text-[#dc2626]`}>
+      No pudimos traer la dirección de retiro.{' '}
+      <button type="button" onClick={onReintentar}
+        className="text-[#dc2626] underline underline-offset-2 cursor-pointer bg-transparent border-none p-0 text-xs font-light">
+        Probar de nuevo
+      </button>
+    </p>
+  )
 }
 
 // Empresa, número para copiar y link a la página de seguimiento.
@@ -176,6 +197,9 @@ export default function MisPedidosPage() {
   // ({ estado: 'cargando' | 'ok' | 'sin_telefono' | 'cerrada' | 'error', ... }).
   const [reclamosAbiertos, setReclamosAbiertos] = useState(() => new Set())
   const [reclamos, setReclamos] = useState({})
+  // Por pedido de Retiro: { estado: 'cargando' | 'ok' | 'por_whatsapp' |
+  // 'cerrada' | 'error', direccion }.
+  const [retiros, setRetiros] = useState({})
   // Las reseñas de quien compró, por pedido (las lee el servidor: resenas no
   // tiene permisos para el navegador), y su apodo. Si no se pudieron leer, no
   // se ofrece reseñar (podría duplicar) y el pedido lo dice.
@@ -251,6 +275,34 @@ export default function MisPedidosPage() {
         [pedidoId]: { estado: 'error', error: 'No pudimos conectarnos. Revisá tu conexión y probá de nuevo.' },
       }))
     }
+  }
+
+  // Dónde se retira: la dirección de la tienda no está en su página, así que
+  // se le pide al servidor, que solo se la da a quien compró ese pedido. Se
+  // pide al desplegar un pedido de Retiro pagado, una sola vez (salvo error).
+  useEffect(() => {
+    for (const pedido of pedidos) {
+      if (!abiertos.has(pedido.id) || retiros[pedido.id]) continue
+      if (tipoEntregaDe(pedido.metodo_envio) !== 'retiro' || !ESTADOS_PARA_RECLAMAR.includes(pedido.estado)) continue
+      if (tiendasCerradas.has(Number(pedido.vendedor_id))) continue
+      pedirRetiro(pedido.id)
+    }
+  }, [abiertos, pedidos, tiendasCerradas, retiros])
+
+  async function pedirRetiro(pedidoId) {
+    setRetiros((previos) => ({ ...previos, [pedidoId]: { estado: 'cargando' } }))
+    try {
+      const res = await fetch(`/api/pedidos/${pedidoId}/retiro`)
+      const cuerpo = await res.json().catch(() => null)
+      if (res.ok && ['ok', 'por_whatsapp', 'cerrada'].includes(cuerpo?.estado)) {
+        setRetiros((previos) => ({ ...previos, [pedidoId]: cuerpo }))
+        return
+      }
+      console.error('No se pudo traer la dirección de retiro', pedidoId, res.status, cuerpo?.error)
+    } catch {
+      console.error('No se pudo traer la dirección de retiro', pedidoId)
+    }
+    setRetiros((previos) => ({ ...previos, [pedidoId]: { estado: 'error' } }))
   }
 
   function abrirReclamo(pedido) {
@@ -497,6 +549,7 @@ export default function MisPedidosPage() {
                               </span>
                               <span className="text-xs text-[#0a0a0a]/40 text-right">{textoEnvioPedido(pedido)}</span>
                             </div>
+                            <LineaRetiro retiro={retiros[pedido.id]} onReintentar={() => pedirRetiro(pedido.id)} />
 
                             {/* Items */}
                             {pedido.items?.map((item) => (

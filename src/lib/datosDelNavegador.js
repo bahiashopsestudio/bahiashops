@@ -5,8 +5,10 @@
 //
 //   localStorage
 //     bahiashops_carrito    datos de la persona: el carrito (CarritoContext).
-//     vendedores_seguidos   datos de la persona: las tiendas que sigue
-//                           (tienda/[slug]/TiendaContent.jsx).
+//     vendedores_seguidos   datos de la persona: las tiendas que seguía. El
+//                           botón «Seguir» se sacó de la tienda (octubre de
+//                           2026) y ya nada la escribe ni la lee; se sigue
+//                           borrando por lo que quedó en los navegadores.
 //   sessionStorage
 //     bahiashops_cierre_propio  técnico: marca, solo en la pestaña donde se
 //                               apretó «Cerrar sesión», que el cierre es de

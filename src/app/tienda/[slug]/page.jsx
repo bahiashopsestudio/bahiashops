@@ -11,8 +11,7 @@ import TiendaPausada from './TiendaPausada'
 // lectura pública). Sin reseñas, la tienda no tiene fila y llega null.
 const CAMPOS = `
   id, nombre_negocio, slug, descripcion_corta, descripcion_larga,
-  logo_url, portada_url, instagram, direccion_visible, direccion,
-  horarios_texto_libre, estado_validacion, bloqueado, pausada_en, mensaje_pausa,
+  logo_url, portada_url, horarios_texto_libre, estado_validacion, bloqueado, pausada_en, mensaje_pausa,
   barrio:barrios(nombre),
   categoria:categorias(nombre, slug),
   puntaje:puntajes_tiendas(cantidad, promedio)

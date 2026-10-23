@@ -117,7 +117,10 @@ for (const f of archivos) {
   for (const m of s.matchAll(/const CIERRE_PROPIO\s*=\s*['"]([^'"]+)['"]/g)) encontradas.add(m[1])
 }
 const sinClasificar = [...encontradas].filter((k) => !CLAVES_DE_LA_PERSONA.includes(k) && !TECNICAS.includes(k))
-ok(encontradas.has('bahiashops_carrito') && encontradas.has('vendedores_seguidos'), `encontradas: ${[...encontradas].sort().join(', ')}`)
+ok(encontradas.has('bahiashops_carrito'), `encontradas: ${[...encontradas].sort().join(', ')}`)
+// «Seguir» se sacó de la tienda: nada la escribe, pero se sigue borrando lo
+// que quedó guardado en los navegadores.
+ok(!encontradas.has('vendedores_seguidos') && CLAVES_DE_LA_PERSONA.includes('vendedores_seguidos'), 'vendedores_seguidos: ya nadie la escribe, y se sigue borrando al cerrar sesión')
 ok(sinClasificar.length === 0, `ninguna clave sin clasificar${sinClasificar.length ? ': ' + sinClasificar.join(', ') : ''}`)
 
 console.log('\n7. Dónde está conectado')
