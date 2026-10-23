@@ -7,6 +7,7 @@
 
 import { EMAIL_CONTACTO, REMITENTE_CONTACTO } from '@/lib/contacto'
 import { SITIO_URL } from '@/lib/sitio'
+import { formatearMonto } from '@/lib/montos'
 
 export const FUENTE_TITULO = 'Fraunces, Georgia, serif'
 export const FUENTE_TEXTO = 'Poppins, Arial, sans-serif'
@@ -28,9 +29,9 @@ export function escapar(texto) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
 }
 
-// "$ 14.500": punto de miles, sin decimales si el monto es entero.
+// "$ 14.500" o "$ 2,50": punto de miles, dos decimales sólo si hay centavos.
 export function pesos(n) {
-  return `$ ${Number(n || 0).toLocaleString('es-AR')}`
+  return `$ ${formatearMonto(n)}`
 }
 
 export function negrita(html) {

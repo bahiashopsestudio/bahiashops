@@ -10,6 +10,7 @@ import VolverAtras from '@/components/VolverAtras';
 import AvatarApodo from '@/components/AvatarApodo';
 import { ChipForma, BarraPasos, FlechaDesplegar, fechaYHora } from '@/components/PasosPedido';
 import { linkWhatsApp } from '@/lib/telefono';
+import { formatearMonto } from '@/lib/montos';
 import {
   etiquetaMetodo, zonaDe, EMPRESAS_ENVIO, validarSeguimiento, seguimientoDe,
 } from '@/lib/metodosEntrega';
@@ -154,7 +155,7 @@ function tiempoRelativo(iso) {
   return `hace ${Math.floor(hs / 24)}d`;
 }
 
-function fmt(n) { return Number(n).toLocaleString('es-AR'); }
+function fmt(n) { return formatearMonto(n); }
 
 // Si el teléfono guardado no se puede convertir en un número de WhatsApp, no
 // se abre un link roto: se muestra tal como está para que el vendedor lo copie.
@@ -880,7 +881,7 @@ function PedidoCard({
                 <span className="text-[#0a0a0a] tabular-nums">$ {fmt(p.costo_envio)}</span>
               </div>
               <div className="flex justify-between text-sm py-0.5">
-                <span className="text-[#0a0a0a]/25 font-light">Comisión Bahía Shops (5%)</span>
+                <span className="text-[#0a0a0a]/25 font-light">Comisión Bahía Shops</span>
                 <span className="text-[#0a0a0a]/25 tabular-nums">-$ {fmt(p.comision_plataforma)}</span>
               </div>
               <div className="flex justify-between text-sm font-semibold text-[#0a0a0a] pt-2 border-t border-[#0a0a0a]/5 mt-1">

@@ -22,6 +22,7 @@ import { rutaInterna } from '@/lib/rutas'
 import { normalizarTelefonoAR, separarTelefonoAR, formatearTelefonoAR } from '@/lib/telefono'
 import { CAMPOS_COMPRA_RECIENTE, VENTANA_COMPRA_RECIENTE_MS, compraEnCursoDeLaTienda } from '@/lib/compraReciente'
 import { fechaDeCupon } from '@/lib/vencimientoPago'
+import { formatearMonto } from '@/lib/montos'
 
 const MENU_CATEGORIAS = [
   'moda', 'belleza-y-bienestar', 'joyeria-y-accesorios',
@@ -335,7 +336,7 @@ function CheckoutContenido() {
     setVueltaCotizar((n) => n + 1)
   }
 
-  function fmt(n) { return Number(n).toLocaleString('es-AR') }
+  function fmt(n) { return formatearMonto(n) }
 
   function alGuardarDireccion(nueva) {
     setDirecciones((actual) => [...actual, nueva])

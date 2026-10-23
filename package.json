@@ -17,6 +17,7 @@
     "probar:024": "node scripts/probar-024.mjs",
     "probar:webhook": "node scripts/probar-webhook.mjs",
     "probar:pagar-ahora": "node scripts/probar-pagar-ahora.mjs",
+    "probar:comision": "node scripts/probar-comision.mjs",
     "probar:carrito": "node scripts/probar-carrito.mjs",
     "probar:compra-reciente": "node scripts/probar-compra-reciente.mjs",
     "probar:pestanas": "node scripts/probar-pestanas.mjs",

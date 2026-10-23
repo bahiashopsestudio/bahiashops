@@ -15,6 +15,7 @@ import {
   NOMBRE_PASO, ESTADO_REEMBOLSADO, ESTADO_ENTREGADO, ESTADOS_PARA_RECLAMAR,
 } from '@/lib/pedidos'
 import { linkWhatsApp } from '@/lib/telefono'
+import { formatearMonto } from '@/lib/montos'
 import { estadoDeResena } from '@/lib/resenas'
 import { EtiquetaFranja, BotonDejarResena, TextoEstadoResena, TuResena, FormularioResena } from '@/components/ResenaPedido'
 
@@ -30,7 +31,7 @@ function textoEnvioPedido(pedido) {
     return costo === 0 ? 'Envío gratis' : `Envío a tu zona: ${textoCostoEnvio(pedido.metodo_envio, costo)}`
   }
   if (tipo === 'correo') return textoCostoEnvio(pedido.metodo_envio, costo)
-  return costo > 0 ? `$${costo.toLocaleString('es-AR')}` : ''
+  return costo > 0 ? `$${formatearMonto(costo)}` : ''
 }
 
 // Empresa, número para copiar y link a la página de seguimiento.
@@ -372,7 +373,7 @@ export default function MisPedidosPage() {
     setRecienPublicadas((previas) => new Set(previas).add(pedidoId))
   }
 
-  function fmt(n) { return Number(n).toLocaleString('es-AR') }
+  function fmt(n) { return formatearMonto(n) }
 
   const menuCats = MENU_CATEGORIAS.map(s => categorias.find(c => c.slug === s)).filter(Boolean)
 

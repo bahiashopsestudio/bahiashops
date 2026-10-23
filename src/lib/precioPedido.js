@@ -22,7 +22,9 @@ import { pideVariante, nombreVariante } from '@/lib/variantes'
 // Qué métodos hay, cuáles piden dirección y cuáles se ofrecen a quien compra
 // lo dice src/lib/metodosEntrega.js. Acá sólo se ponen los precios.
 
-// La comisión de la plataforma: 5% sobre los productos, nunca sobre el envío.
+// La comisión de la plataforma, sobre los productos y nunca sobre el envío.
+// Es el ÚNICO lugar con el porcentaje: para cambiarlo se cambia este número.
+// Se redondea al centavo (5% de $ 50 es $ 2,50, no $ 3).
 export const COMISION_PRODUCTOS = 0.05
 
 // Los precios se comparan en centavos y como números: "100", 100 y 100.00 son
@@ -267,7 +269,7 @@ export function calcularPedido({
   )
   const subtotal = dePesos(subtotalCentavos)
   const total = dePesos(subtotalCentavos + aCentavos(envio.costo))
-  const comision = Math.round(subtotal * COMISION_PRODUCTOS)
+  const comision = dePesos(Math.round(subtotalCentavos * COMISION_PRODUCTOS))
 
   return {
     ok: true,
