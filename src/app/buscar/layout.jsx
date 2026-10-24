@@ -1,9 +1,12 @@
 // La página de esta ruta es un componente de cliente y no puede exportar
-// metadata. La canónica vive acá: el path es relativo al metadataBase del
-// layout raíz, así que se sirve como https://bahiashops.com.ar/buscar
+// metadata, por eso va acá.
+//
+// Fuera de los buscadores: los resultados de una búsqueda interna no son
+// contenido para indexar (robots.js además no deja recorrer /buscar?). No
+// lleva canónica — una canónica sobre una página noindex sólo confunde.
 
 export const metadata = {
-  alternates: { canonical: '/buscar' },
+  robots: { index: false, follow: false },
 }
 
 export default function BuscarLayout({ children }) {

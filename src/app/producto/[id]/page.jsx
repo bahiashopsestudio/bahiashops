@@ -1,388 +1,99 @@
-'use client'
-
-import { useState, useEffect } from 'react'
-import { useParams } from 'next/navigation'
-import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
+import { cache } from 'react'
+import { notFound } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server'
 import { soloProductosPublicados } from '@/lib/vendedoresPublicos'
-import { useCarrito } from '@/context/CarritoContext'
-import Navbar from '@/components/Navbar'
-import MenuTakeover from '@/components/MenuTakeover'
-import VolverAtras from '@/components/VolverAtras'
-import { textoPuntajeCorto } from '@/lib/resenas'
-import { pideVariante, nombreVariante } from '@/lib/variantes'
-import BotonFavorito from '@/components/BotonFavorito'
-import ModalDenuncia from '@/components/ModalDenuncia'
+import ProductoContent from './ProductoContent'
 
-const MENU_CATEGORIAS = [
-  'moda', 'belleza-y-bienestar', 'joyeria-y-accesorios',
-  'hogar-y-deco', 'artes-y-oficios', 'bebes-y-maternidad',
-  'juegos-y-juguetes', 'mascotas', 'libros',
-  'deporte', 'vintage',
-]
+// La ficha la sigue armando ProductoContent en el navegador, igual que antes.
+// Esta capa de servidor existe para el código HTTP: lo que no se puede ver
+// responde 404 de verdad (antes era un 200 con "No encontramos este
+// producto", un Soft 404 para Google).
+//
+// Consulta con el cliente de sesión, sujeto a RLS, con el mismo filtro que
+// usa ProductoContent:
+//   · el público solo recibe productos activos de tiendas publicadas;
+//   · la dueña ve también los suyos que no están activos (en revisión,
+//     pausados, rechazados), y el admin los de cualquier tienda visible.
+// Una tienda pausada, bloqueada, sin publicar o cerrada da 404 para todos,
+// como el "No encontramos" que ya mostraba la ficha.
 
-export default function PaginaProducto() {
-  const supabase = createClient()
-  const { agregar } = useCarrito()
-  const params = useParams()
-  const productoId = params.id
+// Una sola consulta por pedido: la comparten generateMetadata y la página.
+const leerProducto = cache(async (id) => {
+  // Un id que no es número ni llega a la base.
+  if (!/^\d+$/.test(id)) return null
 
-  const [producto, setProducto] = useState(null)
-  const [fotos, setFotos] = useState([])
-  const [variantes, setVariantes] = useState([])
-  const [vendedor, setVendedor] = useState(null)
-  const [categoria, setCategoria] = useState(null)
-  const [categorias, setCategorias] = useState([])
-  const [fotoActiva, setFotoActiva] = useState(0)
-  const [varianteElegida, setVarianteElegida] = useState('')
-  const [cargando, setCargando] = useState(true)
-  const [noEncontrado, setNoEncontrado] = useState(false)
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [usuarioId, setUsuarioId] = useState(null)
-  const [denunciando, setDenunciando] = useState(false)
+  const supabase = await createClient()
+  const { data, error } = await soloProductosPublicados(
+    supabase
+      .from('productos')
+      .select(`
+        id, nombre, descripcion, estado,
+        vendedores!inner(nombre_negocio, estado_validacion, bloqueado),
+        media:producto_media(url, es_principal, orden)
+      `)
+      .eq('id', id),
+    'vendedores'
+  ).maybeSingle()
 
-  useEffect(() => {
-    if (menuOpen) {
-      document.body.style.overflow = 'hidden'
-    } else {
-      document.body.style.overflow = ''
-    }
-    return () => { document.body.style.overflow = '' }
-  }, [menuOpen])
-
-  useEffect(() => {
-    async function cargar() {
-      const { data: cats } = await supabase
-        .from('categorias')
-        .select('id, nombre, slug')
-        .eq('activa', true)
-        .order('orden')
-      if (cats) setCategorias(cats)
-
-      // El !inner sobre el vendedor hace que la ficha de un producto de una
-      // tienda bloqueada o despublicada no traiga fila: se ve el mismo
-      // "no encontrado" que un id inexistente.
-      const { data: prod, error } = await soloProductosPublicados(
-        supabase
-          .from('productos')
-          .select('*, vendedores!inner(estado_validacion, bloqueado)')
-          .eq('id', productoId),
-        'vendedores'
-      ).maybeSingle()
-
-      if (error || !prod) {
-        setNoEncontrado(true)
-        setCargando(false)
-        return
-      }
-      setProducto(prod)
-
-      const { data: media } = await supabase
-        .from('producto_media')
-        .select('url, orden, es_principal')
-        .eq('producto_id', productoId)
-        .order('orden')
-      if (media) setFotos(media)
-
-      const { data: vars } = await supabase
-        .from('producto_variantes')
-        .select('propiedad_1_valor')
-        .eq('producto_id', productoId)
-      if (vars) setVariantes(vars)
-
-      // puntaje: migración 037 (lectura pública).
-      const { data: vend, error: errorVend } = await supabase
-        .from('vendedores')
-        .select('nombre_negocio, slug, usuario_id, puntaje:puntajes_tiendas(cantidad, promedio)')
-        .eq('id', prod.vendedor_id)
-        .single()
-      if (errorVend) console.error('[producto/vendedor]', errorVend.message)
-      if (vend) setVendedor(vend)
-
-      const { data: cat } = await supabase
-        .from('categorias')
-        .select('nombre, slug')
-        .eq('id', prod.categoria_id)
-        .single()
-      if (cat) setCategoria(cat)
-
-      const { data: { user } } = await supabase.auth.getUser()
-      setUsuarioId(user?.id || null)
-
-      // Volvió de Entrar para denunciar: se abre el cuadro (si puede) y se
-      // limpia la URL.
-      try {
-        const url = new URL(window.location.href)
-        if (url.searchParams.get('denunciar') === '1') {
-          url.searchParams.delete('denunciar')
-          window.history.replaceState(null, '', url)
-          if (user && prod.estado === 'activo' && vend?.usuario_id !== user.id) setDenunciando(true)
-        }
-      } catch { /* sin URL: no pasa nada */ }
-
-      setCargando(false)
-    }
-    cargar()
-  }, [productoId])
-
-  function formatearPrecio(valor) {
-    if (!valor) return ''
-    return Number(valor).toLocaleString('es-AR')
+  // Si la base falla no se puede decir que no existe: un 404 haría que Google
+  // la saque del índice por una caída. Se corta con error (500) y reintenta.
+  if (error) {
+    console.error('[producto/servidor]', id, error.message)
+    throw new Error('No se pudo leer el producto')
   }
+  return data
+})
 
-  const menuCats = MENU_CATEGORIAS
-    .map(slug => categorias.find(c => c.slug === slug))
-    .filter(Boolean)
-
-  if (cargando) {
-    return (
-      <>
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&display=swap" />
-        <div className="min-h-screen bg-white flex items-center justify-center" style={{ fontFamily: "'Inter', sans-serif" }}>
-          <span className="text-[#0a0a0a]/30 text-sm font-light">Cargando producto...</span>
-        </div>
-      </>
-    )
-  }
-
-  if (noEncontrado) {
-    return (
-      <>
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&display=swap" />
-        <div className="min-h-screen bg-white" style={{ fontFamily: "'Inter', sans-serif" }}>
-          <Navbar onToggleMenu={() => setMenuOpen(!menuOpen)} variant="solid" />
-          {menuOpen && <MenuTakeover categorias={menuCats} onClose={() => setMenuOpen(false)} />}
-          <div className="pt-20 px-4 text-center">
-            <VolverAtras href="/" texto="Volver al inicio" />
-            <p className="text-[#0a0a0a]/40 font-light mt-4">No encontramos este producto.</p>
-          </div>
-        </div>
-      </>
-    )
-  }
-
-  const hayOferta = producto.precio_anterior && Number(producto.precio_anterior) > Number(producto.precio)
-
-  // Solo un producto publicado se denuncia, y nunca el propio. La dueña o un
-  // admin pueden estar viendo uno que no está publicado (RLS se los deja ver).
-  const puedeDenunciar = producto.estado === 'activo' && !(usuarioId && vendedor?.usuario_id === usuarioId)
-
-  function abrirDenuncia() {
-    if (!usuarioId) {
-      window.location.href = `/entrar?next=${encodeURIComponent(`/producto/${producto.id}?denunciar=1`)}`
-      return
-    }
-    setDenunciando(true)
-  }
-
-  return (
-    <>
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&display=swap" />
-
-      <div className="min-h-screen bg-white" style={{ fontFamily: "'Inter', sans-serif" }}>
-
-        {menuOpen && (
-          <MenuTakeover categorias={menuCats} onClose={() => setMenuOpen(false)} />
-        )}
-
-        <Navbar onToggleMenu={() => setMenuOpen(!menuOpen)} variant="solid" />
-
-        <div className="pt-20 pb-24 px-4 md:px-8">
-          <div className="max-w-5xl mx-auto">
-
-            <VolverAtras href="/" texto="Volver al inicio" />
-
-            <div className="flex items-center gap-1.5 text-xs font-light text-[#0a0a0a]/30 mb-8 -mt-2">
-              <Link href="/" className="hover:text-[#0a0a0a]/60 transition">Inicio</Link>
-              {categoria && (
-                <>
-                  <span>·</span>
-                  <Link href={`/categoria/${categoria.slug}`} className="hover:text-[#0a0a0a]/60 transition underline underline-offset-2">
-                    {categoria.nombre}
-                  </Link>
-                </>
-              )}
-              <span>·</span>
-              <span className="text-[#0a0a0a]/50">{producto.nombre}</span>
-            </div>
-
-            <div className="flex flex-col md:flex-row gap-8 md:gap-12">
-
-              <div className="flex-1 min-w-0 relative">
-                {fotos.length > 0 ? (
-                  <>
-                    <div className="aspect-square bg-[#ECEAE3] rounded-2xl overflow-hidden">
-                      <img
-                        src={fotos[fotoActiva].url}
-                        alt={producto.nombre}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <div className="absolute top-4 right-4">
-                      <BotonFavorito
-                        productoId={producto.id}
-                        className="w-10 h-10 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center text-gray-500 shadow-sm"
-                      />
-                    </div>
-                    {fotos.length > 1 && (
-                      <div className="flex gap-2 mt-3">
-                        {fotos.map((foto, index) => (
-                          <button
-                            key={foto.url}
-                            onClick={() => setFotoActiva(index)}
-                            className={`w-16 h-16 rounded-lg overflow-hidden cursor-pointer transition ${
-                              index === fotoActiva
-                                ? 'ring-2 ring-[#0a0a0a] ring-offset-2 ring-offset-white'
-                                : 'opacity-50 hover:opacity-100'
-                            }`}
-                          >
-                            <img src={foto.url} alt={`Vista ${index + 1}`} className="w-full h-full object-cover" />
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="aspect-square bg-[#ECEAE3] rounded-2xl flex items-center justify-center">
-                    <span className="text-[#0a0a0a]/20 text-sm font-light">Sin foto</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex-1 min-w-0">
-                {vendedor && (
-                  <p className="m-0 text-sm font-light text-[#0a0a0a]/45">
-                    Vendido por{' '}
-                    <Link
-                      href={`/tienda/${vendedor.slug}`}
-                      className="font-semibold text-[#0a0a0a]/80 hover:text-[#0a0a0a] transition underline underline-offset-2"
-                    >
-                      {vendedor.nombre_negocio}
-                    </Link>
-                    {' · '}{textoPuntajeCorto(vendedor.puntaje)}
-                  </p>
-                )}
-
-                <h1 className="text-2xl md:text-3xl font-black text-[#0a0a0a] tracking-tight mt-2 mb-4">
-                  {producto.nombre}
-                </h1>
-
-                <div className="mb-6">
-                  {hayOferta && (
-                    <span className="text-[#0a0a0a]/30 line-through text-base font-light mr-3">
-                      ${formatearPrecio(producto.precio_anterior)}
-                    </span>
-                  )}
-                  <span className="text-2xl font-black text-[#0a0a0a] tracking-tight">
-                    ${formatearPrecio(producto.precio)}
-                  </span>
-                  {hayOferta && (
-                    <span className="ml-3 bg-[#4164fe] text-white text-xs font-medium px-2.5 py-1 rounded-full">
-                      Oferta
-                    </span>
-                  )}
-                </div>
-
-                {producto.marca && (
-                  <p className="text-sm text-[#0a0a0a]/40 font-light mb-4">
-                    <span className="font-medium text-[#0a0a0a]/60">Marca:</span> {producto.marca}
-                  </p>
-                )}
-
-                {pideVariante(producto, variantes) && (
-                  <div className="mb-6">
-                    <label className="block text-sm font-medium text-[#0a0a0a]/60 mb-2">
-                      {producto.propiedad_1_nombre}
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      {variantes.map((v) => (
-                        <button
-                          key={v.propiedad_1_valor}
-                          type="button"
-                          onClick={() => setVarianteElegida(v.propiedad_1_valor)}
-                          className={`px-4 py-2 rounded-full text-sm cursor-pointer transition ${
-                            varianteElegida === v.propiedad_1_valor
-                              ? 'bg-[#0a0a0a] text-white'
-                              : 'bg-white text-[#0a0a0a] hover:bg-[#0a0a0a]/5'
-                          }`}
-                        >
-                          {v.propiedad_1_valor}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    // El mismo criterio que el servidor (FALTA_VARIANTE).
-                    const conVariante = pideVariante(producto, variantes)
-                    if (conVariante && !varianteElegida) {
-                      alert(`Elegí ${nombreVariante(producto)} antes de agregar.`)
-                      return
-                    }
-
-                    const itemParaCarrito = {
-                      productoId: producto.id,
-                      nombre: producto.nombre,
-                      precio: Number(producto.precio),
-                      foto: fotos.length > 0 ? fotos[0].url : null,
-                      variante: conVariante ? varianteElegida : null,
-                      cantidad: 1,
-                    }
-
-                    const vendedorParaCarrito = {
-                      id: producto.vendedor_id,
-                      nombre: vendedor ? vendedor.nombre_negocio : 'Local',
-                    }
-
-                    agregar(itemParaCarrito, vendedorParaCarrito)
-                    alert('¡Agregado al carrito!')
-                  }}
-                  className="w-full py-3.5 bg-[#0a0a0a] text-white rounded-full text-sm font-medium hover:bg-[#2a2a2a] transition cursor-pointer"
-                >
-                  Agregar al carrito
-                </button>
-
-                {producto.tiempo_preparacion && (
-                  <p className="mt-4 text-sm text-[#0a0a0a]/30 font-light">
-                    Tiempo de preparación: {producto.tiempo_preparacion.replaceAll('_', ' ')}
-                  </p>
-                )}
-
-                {producto.descripcion && (
-                  <div className="mt-8 pt-6 border-t border-[#0a0a0a]/5">
-                    <h2 className="text-lg font-black text-[#0a0a0a] tracking-tight mb-3">Descripción</h2>
-                    <p className="whitespace-pre-line leading-relaxed text-[#0a0a0a]/50 font-light">
-                      {producto.descripcion}
-                    </p>
-                  </div>
-                )}
-
-                {puedeDenunciar && (
-                  <div className="mt-8 pt-6 border-t border-[#0a0a0a]/5">
-                    <p className="m-0 text-sm text-[#0a0a0a]/40 font-light">¿Ves algo que no debería estar acá?</p>
-                    <button
-                      type="button"
-                      onClick={abrirDenuncia}
-                      className="mt-1 inline-flex items-center gap-1.5 p-0 bg-transparent border-none text-sm font-semibold text-[#4164fe] underline underline-offset-2 cursor-pointer hover:opacity-80"
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v1.5M3 21v-6m0 0 2.77-.693a9 9 0 0 1 6.208.682l.108.054a9 9 0 0 0 6.086.71l3.114-.732a48.524 48.524 0 0 1-.005-10.499l-3.11.732a9 9 0 0 1-6.085-.711l-.108-.054a9 9 0 0 0-6.208-.682L3 4.5M3 15V4.5" />
-                      </svg>
-                      Denunciar producto
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-
-          </div>
-        </div>
-      </div>
-
-      {denunciando && <ModalDenuncia productoId={producto.id} onClose={() => setDenunciando(false)} />}
-    </>
+function fotoPrincipal(media) {
+  const fotos = [...(media || [])].sort((a, b) =>
+    (b.es_principal === true) - (a.es_principal === true) || (a.orden ?? 0) - (b.orden ?? 0)
   )
+  return fotos[0]?.url || null
+}
+
+function resumen(texto, nombre, tienda) {
+  const limpio = String(texto || '').replace(/\s+/g, ' ').trim()
+  if (!limpio) return `${nombre}, de ${tienda}. En Bahía Shops, el marketplace de Bahía Blanca.`
+  return limpio.length > 160 ? `${limpio.slice(0, 157).trimEnd()}...` : limpio
+}
+
+export async function generateMetadata({ params }) {
+  const { id } = await params
+  const producto = await leerProducto(id)
+  // Sin fila la página llama a notFound(): esta metadata no se llega a usar.
+  if (!producto) return {}
+
+  const titulo = `${producto.nombre} — Bahía Shops`
+
+  // Lo ve la dueña o el admin pero no el público: ni se indexa ni declara
+  // canónica.
+  if (producto.estado !== 'activo') {
+    return { title: titulo, robots: { index: false, follow: false } }
+  }
+
+  const descripcion = resumen(producto.descripcion, producto.nombre, producto.vendedores.nombre_negocio)
+  const foto = fotoPrincipal(producto.media)
+
+  return {
+    title: titulo,
+    description: descripcion,
+    alternates: { canonical: `/producto/${producto.id}` },
+    openGraph: {
+      title: titulo,
+      description: descripcion,
+      url: `/producto/${producto.id}`,
+      siteName: 'Bahía Shops',
+      locale: 'es_AR',
+      type: 'website',
+      ...(foto ? { images: [{ url: foto, alt: producto.nombre }] } : {}),
+    },
+  }
+}
+
+export default async function ProductoPage({ params }) {
+  const { id } = await params
+  const producto = await leerProducto(id)
+  if (!producto) notFound()
+
+  return <ProductoContent />
 }
