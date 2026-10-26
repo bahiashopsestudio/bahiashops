@@ -17,11 +17,16 @@ const fuenteTexto = {
 const SECCIONES = [
   {
     titulo: 'Por qué existe',
-    texto: 'Bahía Blanca está llena de proyectos que casi nadie conoce. Marcas que se mueven solo por redes, talleres que venden por mensaje privado, gente que hace cosas hermosas y no tiene dónde mostrarlas. Bahía Shops nace para darles un lugar y para que comprar en tu ciudad sea una opción real, no un esfuerzo.',
+    parrafos: [
+      'En Bahía Blanca hay muchos negocios y proyectos que tenemos cerca, pero que no conocemos. Algunos venden por redes sociales, otros reciben pedidos por mensaje y muchos todavía no tienen un espacio propio para mostrar todo lo que ofrecen.',
+      'Bahía Shops nace para conectarlos con más personas, darles un lugar donde vender y hacer que descubrir los productos de tu ciudad sea más fácil.',
+    ],
   },
   {
     titulo: 'Cómo funciona',
-    texto: 'Cada negocio tiene su tienda dentro de la plataforma, con sus productos, sus precios y su forma de envío. Vos comprás directo a través de Bahía Shops, con los medios de pago de Mercado Pago, y el vendedor te lo hace llegar.',
+    parrafos: [
+      'Cada negocio tiene su propia tienda dentro de Bahía Shops, con sus productos, precios y opciones de envío. Podés buscar el producto que necesitás, ubicar tiendas en distintos barrios, explorarlas, elegir lo que buscás y comprar a través de la plataforma con Mercado Pago. Cada vendedor se encarga de hacerte llegar tu compra.',
+    ],
   },
 ]
 
@@ -36,7 +41,7 @@ export default function SobreNosotrosContent() {
   return (
     <>
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&display=swap" />
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,100..900&family=Poppins:wght@300;400;500&display=swap" />
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,100..900&family=Poppins:wght@300;400;500;700;900&display=swap" />
 
       <div className="min-h-screen bg-white" style={{ fontFamily: "'Inter', sans-serif" }}>
         {menuAbierto && <MenuTakeover onClose={() => setMenuAbierto(false)} />}
@@ -55,26 +60,50 @@ export default function SobreNosotrosContent() {
             </h1>
 
             <p style={{ ...fuenteTexto, fontSize: '16px', color: 'rgba(10,10,10,0.75)', marginBottom: '40px' }}>
-              Bahía Shops es el mercado online de Bahía Blanca. Reunimos en un solo lugar a los comercios, emprendedores y productores de la ciudad, para que encontrar lo que buscás acá sea tan fácil como buscarlo afuera.
+              Queremos que descubrir y comprar en los negocios de Bahía Blanca sea más fácil. El objetivo de Bahía Shops es conectar a los comercios, emprendedores y productores de nuestra ciudad con las personas que buscan comprar de forma local. Queremos reunir en un mismo lugar la oferta de la ciudad y hacer que descubrir lo que tenemos cerca sea más fácil.
             </p>
 
             {SECCIONES.map((seccion) => (
               <section key={seccion.titulo} style={{ marginBottom: '32px' }}>
-                <h2 className="text-[19px] md:text-[22px]" style={{ ...fuenteTitulo, marginBottom: '8px' }}>
+                <h2 className="text-[26px] md:text-[34px]" style={{ ...fuenteTitulo, letterSpacing: '-0.02em', marginBottom: '8px' }}>
                   {seccion.titulo}
                 </h2>
-                <p style={fuenteTexto}>{seccion.texto}</p>
+                <div className="space-y-5">
+                  {seccion.parrafos.map((parrafo) => (
+                    <p key={parrafo} style={fuenteTexto}>{parrafo}</p>
+                  ))}
+                </div>
               </section>
             ))}
 
             <section style={{ marginBottom: '32px' }}>
-              <h2 className="text-[19px] md:text-[22px]" style={{ ...fuenteTitulo, marginBottom: '8px' }}>
-                Quiénes estamos detrás
+              <h2 className="text-[26px] md:text-[34px]" style={{ ...fuenteTitulo, letterSpacing: '-0.02em', marginBottom: '8px' }}>
+                Quién está detrás
               </h2>
-              {/* TODO: texto pendiente — lo escribe Rosario */}
-              <p style={fuenteTexto}>
-                Próximamente.
-              </p>
+              <div className="max-w-2xl space-y-5">
+                <p style={fuenteTexto}>
+                  Soy Rosario, diseñadora industrial y creadora de Bahía Shops.
+                </p>
+                <p style={fuenteTexto}>
+                  Durante diez años llevé adelante una marca de calzado y marroquinería. Con Las Pulpas diseñábamos los productos, los fabricábamos, buscábamos proveedores, sacábamos las fotos y los vendíamos en el local, online y en ferias. Conocí de cerca todo lo que implica sostener un negocio y buscar maneras de llegar a las personas.
+                </p>
+                <p style={fuenteTexto}>
+                  Cuando cerramos la marca, todavía había gente que me decía: «No las conocía». ¡Mi vecina de la esquina no sabía que mi local existía porque nunca caminaba esa cuadra!
+                </p>
+                <p style={fuenteTexto}>
+                  Esa experiencia me dejó algo claro: no alcanza con hacer algo bueno; también tiene que haber una manera de encontrarlo.
+                </p>
+                <p style={fuenteTexto}>
+                  De esa idea nació Bahía Shops: una plataforma pensada para que los negocios locales puedan llegar a más personas y para que quienes vivimos en Bahía Blanca descubramos todo lo que tenemos cerca.
+                </p>
+                <p style={fuenteTexto}>
+                  Lo diseño y desarrollo desde{" "}
+                  <a href="https://www.instagram.com/planmaterial" target="_blank" rel="noopener noreferrer" className="text-[#4164fe] underline underline-offset-4 hover:no-underline">
+                    Plan Material
+                  </a>
+                  , mi estudio de diseño industrial y digital. Si tenés una duda, una idea o algo que mejorar, escribime: <span style={{ fontWeight: 500 }}>hola@bahiashops.com.ar</span>
+                </p>
+              </div>
             </section>
 
           </div>
