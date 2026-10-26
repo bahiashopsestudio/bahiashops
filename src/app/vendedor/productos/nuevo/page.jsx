@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { activarCategorias, AVISO_CATEGORIA } from '@/lib/categorias';
-import imageCompression from 'browser-image-compression';
+import { comprimirFotoProducto, subirFotoProducto, borrarFotosSubidas } from '@/lib/fotosProducto';
 import {
   DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors,
 } from '@dnd-kit/core';
@@ -261,11 +261,10 @@ export default function NuevoProductoPage() {
     if (espacioDisponible <= 0) return;
     const aProcesar = archivos.slice(0, espacioDisponible);
     setComprimiendo(true);
-    const opciones = { maxSizeMB: 0.2, maxWidthOrHeight: 1200, useWebWorker: true };
     const nuevas = [];
     for (const archivo of aProcesar) {
       try {
-        const comprimida = await imageCompression(archivo, opciones);
+        const comprimida = await comprimirFotoProducto(archivo);
         nuevas.push({ file: comprimida, preview: URL.createObjectURL(comprimida) });
       } catch (err) { console.error('Error comprimiendo imagen:', err); }
     }
@@ -354,29 +353,40 @@ export default function NuevoProductoPage() {
     if (moderacion.nivel === 'bloqueo') { setBloqueoModeracion(moderacion); return; }
 
     setGuardandoProducto(true);
+    // Lo que se suba en este intento: si el producto no se guarda, se borra.
+    // Solo si se sabe que no se guardó: si la red se corta con el pedido en
+    // viaje, puede haberse guardado, y una foto suelta es mejor que un
+    // producto con fotos rotas.
+    const subidas = [];
+    let borrarSiFalla = true;
     try {
-      // Subir fotos
+      // Subir fotos (src/lib/fotosProducto.js)
       const urls = [];
-      for (let i = 0; i < fotos.length; i++) {
-        const foto = fotos[i];
-        const nombreArchivo = `${vendedorId}/${Date.now()}-${i}.webp`;
-        const { error: errorUpload } = await supabase.storage.from('productos').upload(nombreArchivo, foto.file);
-        if (errorUpload) throw new Error('Error al subir una foto: ' + errorUpload.message);
-        const { data: dataUrl } = supabase.storage.from('productos').getPublicUrl(nombreArchivo);
-        urls.push(dataUrl.publicUrl);
+      for (const foto of fotos) {
+        const { url, ruta } = await subirFotoProducto(supabase, vendedorId, foto.file);
+        subidas.push(ruta);
+        urls.push(url);
       }
 
       // El producto, las fotos, las variantes y los sellos los guarda el
       // servidor (migración 033: el navegador no puede escribir en productos).
       // Ahí corre la moderación de verdad y se decide el estado.
+      borrarSiFalla = false;
       const res = await fetch('/api/vendedor/productos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(armarCuerpo(urls)),
       });
       const respuesta = await res.json().catch(() => ({}));
-      if (res.status === 422 && respuesta.moderacion) { setBloqueoModeracion(respuesta.moderacion); return; }
-      if (!res.ok) throw new Error(respuesta.error || 'Hubo un error al guardar. Probá de nuevo.');
+      if (res.status === 422 && respuesta.moderacion) {
+        await borrarFotosSubidas(supabase, subidas);
+        setBloqueoModeracion(respuesta.moderacion);
+        return;
+      }
+      if (!res.ok) {
+        borrarSiFalla = true;
+        throw new Error(respuesta.error || 'Hubo un error al guardar. Probá de nuevo.');
+      }
 
       // Abrir las categorías del producto si estaban cerradas. Va por el
       // servidor: el navegador no puede escribir en 'categorias'.
@@ -395,6 +405,8 @@ export default function NuevoProductoPage() {
       router.push('/vendedor/productos');
     } catch (err) {
       console.error(err);
+      // Si el producto no se guardó, las fotos subidas no las usa nadie.
+      if (borrarSiFalla) await borrarFotosSubidas(supabase, subidas);
       alert(err.message || 'Hubo un error al guardar. Probá de nuevo.');
     } finally {
       setGuardandoProducto(false);

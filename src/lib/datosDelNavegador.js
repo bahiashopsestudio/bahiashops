@@ -9,6 +9,9 @@
 //                           botón «Seguir» se sacó de la tienda (octubre de
 //                           2026) y ya nada la escribe ni la lee; se sigue
 //                           borrando por lo que quedó en los navegadores.
+//     bahiashops_link_tienda  datos de la persona: por qué link propio de
+//                             tienda entró y cuándo (src/lib/marcaLink.js,
+//                             48 horas). Baja la comisión de esa tienda.
 //   sessionStorage
 //     bahiashops_cierre_propio  técnico: marca, solo en la pestaña donde se
 //                               apretó «Cerrar sesión», que el cierre es de
@@ -25,7 +28,7 @@
 // Solo se borran las claves de la persona. Si se agrega otra, va en
 // CLAVES_DE_LA_PERSONA.
 
-export const CLAVES_DE_LA_PERSONA = ['bahiashops_carrito', 'vendedores_seguidos']
+export const CLAVES_DE_LA_PERSONA = ['bahiashops_carrito', 'vendedores_seguidos', 'bahiashops_link_tienda']
 
 const CIERRE_PROPIO = 'bahiashops_cierre_propio'
 

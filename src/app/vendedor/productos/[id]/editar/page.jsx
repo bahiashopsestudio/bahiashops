@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { activarCategorias, AVISO_CATEGORIA } from '@/lib/categorias';
-import imageCompression from 'browser-image-compression';
+import { comprimirFotoProducto, subirFotoProducto, borrarFotosSubidas } from '@/lib/fotosProducto';
 import {
   DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors,
 } from '@dnd-kit/core';
@@ -58,13 +58,6 @@ function SortableFoto({ foto, index, onQuitar }) {
   );
 }
 
-function extraerRutaStorage(url, bucket) {
-  const marker = `/${bucket}/`;
-  const idx = url.indexOf(marker);
-  if (idx === -1) return null;
-  return url.substring(idx + marker.length).split('?')[0];
-}
-
 export default function EditarProductoPage() {
   const supabase = createClient();
   const router = useRouter();
@@ -104,8 +97,9 @@ export default function EditarProductoPage() {
   const [nombreNegocio, setNombreNegocio] = useState('');
   const [vendedorId, setVendedorId] = useState(null);
 
+  // Las que se sacan no se borran acá: las borra el servidor al guardar (PUT
+  // de /api/vendedor/productos/[id]), si ningún pedido las usa.
   const [fotos, setFotos] = useState([]);
-  const [fotosAEliminar, setFotosAEliminar] = useState([]);
   const [comprimiendo, setComprimiendo] = useState(false);
 
   const [nombrePropiedad, setNombrePropiedad] = useState('');
@@ -349,11 +343,10 @@ export default function EditarProductoPage() {
     if (espacioDisponible <= 0) return;
     const aProcesar = archivos.slice(0, espacioDisponible);
     setComprimiendo(true);
-    const opciones = { maxSizeMB: 0.2, maxWidthOrHeight: 1200, useWebWorker: true };
     const nuevas = [];
     for (const archivo of aProcesar) {
       try {
-        const comprimida = await imageCompression(archivo, opciones);
+        const comprimida = await comprimirFotoProducto(archivo);
         nuevas.push({ file: comprimida, preview: URL.createObjectURL(comprimida), existente: false });
       } catch (err) {
         console.error('Error comprimiendo imagen:', err);
@@ -367,11 +360,7 @@ export default function EditarProductoPage() {
   function quitarFoto(index) {
     setFotos(prev => {
       const foto = prev[index];
-      if (foto.existente) {
-        setFotosAEliminar(old => [...old, foto.url]);
-      } else {
-        URL.revokeObjectURL(foto.preview);
-      }
+      if (!foto.existente) URL.revokeObjectURL(foto.preview);
       return prev.filter((_, i) => i !== index);
     });
   }
@@ -464,6 +453,11 @@ export default function EditarProductoPage() {
 
     setGuardando(true);
 
+    // Las fotos nuevas que se suban en este intento: si el producto no se
+    // guarda, se borran. Solo si se sabe que no se guardó (ver el alta).
+    const subidas = [];
+    let borrarSiFalla = true;
+
     try {
       const urlsFinales = [];
 
@@ -471,36 +465,31 @@ export default function EditarProductoPage() {
         if (foto.existente) {
           urlsFinales.push(foto.url);
         } else {
-          const nombreArchivo = `${vendedorId}/${Date.now()}-${urlsFinales.length}.webp`;
-          const { error: errUpload } = await supabase.storage
-            .from('productos')
-            .upload(nombreArchivo, foto.file);
-          if (errUpload) throw new Error('Error al subir una foto: ' + errUpload.message);
-          const { data: dataUrl } = supabase.storage.from('productos').getPublicUrl(nombreArchivo);
-          urlsFinales.push(dataUrl.publicUrl);
+          const { url, ruta } = await subirFotoProducto(supabase, vendedorId, foto.file);
+          subidas.push(ruta);
+          urlsFinales.push(url);
         }
       }
 
       // El producto, las fotos, las variantes y los sellos los guarda el
       // servidor (migración 033: el navegador no puede escribir en productos).
       // Ahí corre la moderación de verdad y se decide el estado: un producto
-      // ya aprobado sigue publicado.
+      // ya aprobado sigue publicado. Las fotos que se sacaron las borra él.
+      borrarSiFalla = false;
       const res = await fetch(`/api/vendedor/productos/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(armarCuerpo(urlsFinales)),
       });
       const respuesta = await res.json().catch(() => ({}));
-      if (res.status === 422 && respuesta.moderacion) { setBloqueoModeracion(respuesta.moderacion); return; }
-      if (!res.ok) throw new Error(respuesta.error || 'Hubo un error al guardar. Probá de nuevo.');
-
-      // Las fotos que se sacaron, recién ahora que el producto ya no las usa.
-      if (fotosAEliminar.length > 0) {
-        const rutas = fotosAEliminar.map(url => extraerRutaStorage(url, 'productos')).filter(Boolean);
-        if (rutas.length > 0) {
-          const { error: errRemove } = await supabase.storage.from('productos').remove(rutas);
-          if (errRemove) console.error('No se pudieron borrar fotos viejas:', errRemove.message);
-        }
+      if (res.status === 422 && respuesta.moderacion) {
+        await borrarFotosSubidas(supabase, subidas);
+        setBloqueoModeracion(respuesta.moderacion);
+        return;
+      }
+      if (!res.ok) {
+        borrarSiFalla = true;
+        throw new Error(respuesta.error || 'Hubo un error al guardar. Probá de nuevo.');
       }
 
       // Abrir las categorías del producto si estaban cerradas. Va por el
@@ -520,6 +509,8 @@ export default function EditarProductoPage() {
 
     } catch (err) {
       console.error(err);
+      // Si el producto no se guardó, las fotos nuevas no las usa nadie.
+      if (borrarSiFalla) await borrarFotosSubidas(supabase, subidas);
       alert(err.message || 'Hubo un error al guardar. Probá de nuevo.');
     } finally {
       setGuardando(false);

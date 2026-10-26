@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { soloProductosPublicados } from '@/lib/vendedoresPublicos'
 import ProductoContent from './ProductoContent'
+import MarcaLinkTienda from '@/components/MarcaLinkTienda'
 
 // La ficha la sigue armando ProductoContent en el navegador, igual que antes.
 // Esta capa de servidor existe para el código HTTP: lo que no se puede ver
@@ -27,7 +28,7 @@ const leerProducto = cache(async (id) => {
     supabase
       .from('productos')
       .select(`
-        id, nombre, descripcion, estado,
+        id, nombre, descripcion, estado, vendedor_id,
         vendedores!inner(nombre_negocio, estado_validacion, bloqueado),
         media:producto_media(url, es_principal, orden)
       `)
@@ -95,5 +96,12 @@ export default async function ProductoPage({ params }) {
   const producto = await leerProducto(id)
   if (!producto) notFound()
 
-  return <ProductoContent />
+  // El link propio (?de=tienda) deja la marca de la tienda del producto. Solo
+  // si se puede comprar: la dueña o el admin viendo uno en revisión no cuentan.
+  return (
+    <>
+      {producto.estado === 'activo' && <MarcaLinkTienda vendedorId={producto.vendedor_id} />}
+      <ProductoContent />
+    </>
+  )
 }

@@ -6,6 +6,7 @@ import { resenasPublicadas } from '@/lib/resenasServidor'
 import { puntajeDe } from '@/lib/resenas'
 import TiendaContent from './TiendaContent'
 import TiendaPausada from './TiendaPausada'
+import MarcaLinkTienda from '@/components/MarcaLinkTienda'
 
 // puntaje: cantidad y promedio de las reseñas publicadas (migración 037,
 // lectura pública). Sin reseñas, la tienda no tiene fila y llega null.
@@ -159,6 +160,9 @@ export default async function TiendaPage({ params, searchParams }) {
             : 'Vista previa · esta tienda todavía no está publicada'}
         </div>
       )}
+      {/* El link propio (?de=tienda): la marca de 48 horas. No en la vista
+          previa del admin ni en la pausada (que sale arriba): ahí no se compra. */}
+      {!esPrevisualizacion && <MarcaLinkTienda vendedorId={vendedor.id} />}
       <TiendaContent
         vendedor={vendedor}
         productos={productos || []}

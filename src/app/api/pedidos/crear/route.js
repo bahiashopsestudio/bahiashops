@@ -6,6 +6,7 @@ import { camposDeVencimiento, vencerPreferencia, idItemMp } from '@/lib/mercadop
 import { calcularVencimiento, calcularVencimientoCupon } from '@/lib/vencimientoPago';
 import { urlParaMercadoPago } from '@/lib/sitio';
 import { calcularPedido } from '@/lib/precioPedido';
+import { elegirComision } from '@/lib/comision';
 import { metodoPideDireccion, normalizarMetodo, metodosConfigurados } from '@/lib/metodosEntrega';
 import { zonasPara } from '@/lib/zonaEnvio';
 import { codigoPostalValido, normalizarCodigoPostal } from '@/lib/direcciones';
@@ -41,6 +42,9 @@ export async function POST(request) {
     // La persona vio el aviso de que ya tiene una compra en curso en esta
     // tienda y eligió seguir igual (paso 2b).
     confirmarOtraCompra,
+    // Cuándo tocó el link propio de ESTA tienda (ms), o null. Lo valida
+    // elegirComision (paso 4): solo baja la comisión que paga la tienda.
+    linkTocadoEn,
   } = body;
   // La zona del correo ya no la elige quien compra: si una pestaña vieja la
   // manda, se ignora. La calcula el servidor (paso 3d).
@@ -118,9 +122,19 @@ export async function POST(request) {
     .eq('vendedor_id', vendedorId)
     .maybeSingle();
 
-  if (errorVendedor || errorCuentaMp) {
+  // Las comisiones especiales de la tienda que no se terminaron (migración
+  // 042). Cuál está vigente lo decide elegirComision. Si no se pueden leer, no
+  // se cobra: cobrar el 5% a una tienda con promo sería cobrarle de más.
+  const { data: especiales, error: errorEspeciales } = await admin
+    .from('vendedor_comisiones')
+    .select('comision_bp, desde, vence_en, terminada_en')
+    .eq('vendedor_id', vendedorId)
+    .is('terminada_en', null);
+
+  if (errorVendedor || errorCuentaMp || errorEspeciales) {
     if (errorVendedor) console.error('[crear-pedido/vendedores]', errorVendedor.message);
     if (errorCuentaMp) console.error('[crear-pedido/mercadopago_cuentas]', errorCuentaMp.message);
+    if (errorEspeciales) console.error('[crear-pedido/vendedor_comisiones]', errorEspeciales.message);
     return NextResponse.json(
       { error: 'No se pudo verificar el pedido.' },
       { status: 500 }
@@ -301,6 +315,15 @@ export async function POST(request) {
   }
 
   // 4. La plata: toda calculada acá, con lo leído de la base.
+  //
+  // La comisión: 5%, 2,5% si llegó por el link de la tienda en las últimas 48
+  // horas, o la especial si es más baja (src/lib/comision.js).
+  const eleccion = elegirComision({
+    linkTocadoEn: typeof linkTocadoEn === 'number' ? linkTocadoEn : null,
+    especiales: especiales || [],
+    ahoraMs: Date.now(),
+  });
+
   const calculo = calcularPedido({
     items,
     productos: vigentes,
@@ -313,6 +336,7 @@ export async function POST(request) {
     zonaCorreo,
     codigoPostalOk: codigoPostalValido(direccionVerificada?.codigo_postal),
     costoEnvioVisto,
+    comisionBp: eleccion.bp,
   });
 
   if (!calculo.ok) {
@@ -465,6 +489,12 @@ export async function POST(request) {
       costo_envio: calculo.costoEnvio,
       total: calculo.total,
       comision_plataforma: comision,
+      // De dónde vino la compra y qué porcentaje se aplicó (migración 041).
+      // «Pagar ahora» no recalcula: usa comision_plataforma.
+      origen: eleccion.origen,
+      comision_bp: calculo.comisionBp,
+      comision_motivo: eleccion.motivo,
+      link_tocado_en: eleccion.linkTocadoEn ? new Date(eleccion.linkTocadoEn).toISOString() : null,
       estado: 'pendiente',
     })
     .select()

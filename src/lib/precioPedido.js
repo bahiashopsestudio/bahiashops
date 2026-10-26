@@ -18,14 +18,18 @@ import {
   METODOS, normalizarMetodo, metodosParaComprador, zonaDe, precioDeZona,
 } from '@/lib/metodosEntrega'
 import { pideVariante, nombreVariante } from '@/lib/variantes'
+import { COMISION_BASE_BP } from '@/lib/comision'
 
 // Qué métodos hay, cuáles piden dirección y cuáles se ofrecen a quien compra
 // lo dice src/lib/metodosEntrega.js. Acá sólo se ponen los precios.
 
-// La comisión de la plataforma, sobre los productos y nunca sobre el envío.
-// Es el ÚNICO lugar con el porcentaje: para cambiarlo se cambia este número.
-// Se redondea al centavo (5% de $ 50 es $ 2,50, no $ 3).
-export const COMISION_PRODUCTOS = 0.05
+// La comisión de la plataforma va sobre los productos y nunca sobre el envío.
+// Qué porcentaje toca lo decide src/lib/comision.js; acá llega en puntos
+// básicos (comisionBp: 500 = 5%) y se cuenta en enteros, redondeando al
+// centavo (5% de $ 50 es $ 2,50, no $ 3; medio centavo redondea para arriba).
+function comisionEnCentavos(subtotalCentavos, comisionBp) {
+  return Math.floor((subtotalCentavos * comisionBp + 5000) / 10000)
+}
 
 // Los precios se comparan en centavos y como números: "100", 100 y 100.00 son
 // el mismo precio. Devuelve null si el valor no es un número usable.
@@ -129,7 +133,14 @@ export function calcularPedido({
   zonaCorreo,
   codigoPostalOk,
   costoEnvioVisto,
+  comisionBp = COMISION_BASE_BP,
 }) {
+  // Lo decide el servidor (src/lib/comision.js): un valor raro es un error
+  // nuestro, no de quien compra.
+  if (!Number.isInteger(comisionBp) || comisionBp < 0 || comisionBp > 10000) {
+    return rechazo(500, 'COMISION_INVALIDA', 'No se pudo calcular el pedido.')
+  }
+
   if (!Array.isArray(items) || items.length === 0) {
     return rechazo(400, 'SIN_ITEMS', 'El pedido no tiene productos.')
   }
@@ -269,7 +280,7 @@ export function calcularPedido({
   )
   const subtotal = dePesos(subtotalCentavos)
   const total = dePesos(subtotalCentavos + aCentavos(envio.costo))
-  const comision = dePesos(Math.round(subtotalCentavos * COMISION_PRODUCTOS))
+  const comision = dePesos(comisionEnCentavos(subtotalCentavos, comisionBp))
 
   return {
     ok: true,
@@ -280,5 +291,6 @@ export function calcularPedido({
     costoEnvio: envio.costo,
     total,
     comision,
+    comisionBp,
   }
 }

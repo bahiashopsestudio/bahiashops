@@ -23,6 +23,7 @@ import { normalizarTelefonoAR, separarTelefonoAR, formatearTelefonoAR } from '@/
 import { CAMPOS_COMPRA_RECIENTE, VENTANA_COMPRA_RECIENTE_MS, compraEnCursoDeLaTienda } from '@/lib/compraReciente'
 import { fechaDeCupon } from '@/lib/vencimientoPago'
 import { formatearMonto } from '@/lib/montos'
+import { marcaDe, almacenDelNavegador } from '@/lib/marcaLink'
 
 const MENU_CATEGORIAS = [
   'moda', 'belleza-y-bienestar', 'joyeria-y-accesorios',
@@ -416,6 +417,9 @@ function CheckoutContenido() {
           turnoPreferido: METODOS[elegido]?.pideTurno ? turno : null,
           costoEnvio,
           confirmarOtraCompra: seguirIgual,
+          // Si llegó por el link propio de ESTA tienda: cuándo lo tocó
+          // (src/lib/marcaLink.js). Solo la de esta tienda; el servidor decide.
+          linkTocadoEn: marcaDe(almacenDelNavegador(), local.vendedorId, Date.now()),
         }),
       })
       const data = await res.json()

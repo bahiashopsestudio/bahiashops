@@ -248,7 +248,9 @@ export default function PerfilVendedorPage() {
       const blob = await recortarImagen(recorte.src, areaPixels, config.anchoSalida, config.altoSalida);
       const bucket = recorte.destino === 'logo' ? 'logos' : 'portadas';
       const ruta = `${vendedorId}/${config.etiqueta}.webp`;
-      const { error: errorUpload } = await supabase.storage.from(bucket).upload(ruta, blob, { upsert: true, contentType: 'image/webp' });
+      // El tipo real: si el navegador no genera WebP (Safari puede devolver
+      // PNG), no se sube diciendo que es WebP.
+      const { error: errorUpload } = await supabase.storage.from(bucket).upload(ruta, blob, { upsert: true, contentType: blob.type || 'image/webp' });
       if (errorUpload) throw new Error('No se pudo subir la imagen: ' + errorUpload.message);
       const { data: dataUrl } = supabase.storage.from(bucket).getPublicUrl(ruta);
       const urlFinal = `${dataUrl.publicUrl}?v=${Date.now()}`;

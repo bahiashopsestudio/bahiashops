@@ -48,6 +48,34 @@ async function productoDeLaTienda(admin, id, vendedorId, contexto) {
   return { producto: data }
 }
 
+// Al editar: las fotos que el producto tenía y ya no tiene se borran de
+// Storage (antes lo hacía la pantalla, y si fallaba no se enteraba nadie). Las
+// de las variantes también: guardarProducto rehace las variantes sin foto.
+// Solo las de la carpeta de la tienda, y nunca una que use un pedido
+// (pedido_items.foto_url: el historial y los mails la siguen mostrando). Si
+// no se puede leer qué usan los pedidos, no se borra nada. Es limpieza: el
+// producto ya quedó guardado, y si algo falla queda en el log.
+async function borrarFotosQueSeSacaron(admin, { vendedorId, productoId, antes, ahora }) {
+  const quedan = new Set(ahora.map((url) => rutaEnBucket(url, 'productos')).filter(Boolean))
+  const sacadas = new Set(
+    antes
+      .map((url) => rutaEnBucket(url, 'productos'))
+      .filter((ruta) => ruta && ruta.startsWith(`${vendedorId}/`) && !quedan.has(ruta))
+  )
+  if (sacadas.size === 0) return
+
+  const { data: items, error } = await admin.from('pedido_items').select('foto_url').eq('producto_id', productoId)
+  if (error) {
+    console.error('[productos/editar/fotos-en-pedidos]', productoId, error.message)
+    return
+  }
+  for (const item of items || []) sacadas.delete(rutaEnBucket(item.foto_url, 'productos'))
+  if (sacadas.size === 0) return
+
+  const { error: errorStorage } = await admin.storage.from('productos').remove([...sacadas])
+  if (errorStorage) console.error('[productos/editar/storage]', productoId, errorStorage.message)
+}
+
 export async function PUT(request, { params }) {
   const { respuesta, vendedor, admin } = await tiendaDeLaSesion('productos/editar')
   if (respuesta) return respuesta
@@ -73,6 +101,16 @@ export async function PUT(request, { params }) {
 
   const r = await guardarProducto(admin, { vendedorId: vendedor.id, productoId: id, validado, avisos: moderacion.avisos })
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status })
+
+  await borrarFotosQueSeSacaron(admin, {
+    vendedorId: vendedor.id,
+    productoId: id,
+    antes: [
+      ...(producto.producto_media || []).map((m) => m.url),
+      ...(producto.producto_variantes || []).map((v) => v.imagen_url),
+    ],
+    ahora: validado.fotos,
+  })
 
   return NextResponse.json({ ok: true, id: r.id, estado: r.estado, revision_posterior: r.revisionPosterior })
 }
