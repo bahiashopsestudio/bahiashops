@@ -18,7 +18,7 @@ const SECCIONES = [
   {
     titulo: 'Por qué existe',
     parrafos: [
-      'En Bahía Blanca hay muchos negocios y proyectos que tenemos cerca, pero que no conocemos. Algunos venden por redes sociales, otros reciben pedidos por mensaje y muchos todavía no tienen un espacio propio para mostrar todo lo que ofrecen.',
+      'En Bahía Blanca hay muchos negocios, marcas y proyectos que tenemos cerca, pero que no conocemos. Algunos venden por redes sociales, otros reciben pedidos por mensaje y muchos todavía no tienen un espacio propio para mostrar todo lo que ofrecen.',
       'Bahía Shops nace para conectarlos con más personas, darles un lugar donde vender y hacer que descubrir los productos de tu ciudad sea más fácil.',
     ],
   },
@@ -60,7 +60,7 @@ export default function SobreNosotrosContent() {
             </h1>
 
             <p style={{ ...fuenteTexto, fontSize: '16px', color: 'rgba(10,10,10,0.75)', marginBottom: '40px' }}>
-              Queremos que descubrir y comprar en los negocios de Bahía Blanca sea más fácil. El objetivo de Bahía Shops es conectar a los comercios, emprendedores y productores de nuestra ciudad con las personas que buscan comprar de forma local. Queremos reunir en un mismo lugar la oferta de la ciudad y hacer que descubrir lo que tenemos cerca sea más fácil.
+              Queremos que los productos y proyectos de Bahía Blanca sean más fáciles de descubrir. El objetivo de Bahía Shops es conectar a los comercios, emprendedores y productores de nuestra ciudad con las personas que buscan comprar de forma local. Queremos reunir en un mismo lugar la oferta de la ciudad y hacer que descubrir lo que tenemos cerca sea más fácil.
             </p>
 
             {SECCIONES.map((seccion) => (
@@ -85,10 +85,10 @@ export default function SobreNosotrosContent() {
                   Soy Rosario, diseñadora industrial y creadora de Bahía Shops.
                 </p>
                 <p style={fuenteTexto}>
-                  Durante diez años llevé adelante una marca de calzado y marroquinería. Con Las Pulpas diseñábamos los productos, los fabricábamos, buscábamos proveedores, sacábamos las fotos y los vendíamos en el local, online y en ferias. Conocí de cerca todo lo que implica sostener un negocio y buscar maneras de llegar a las personas.
+                  Durante diez años llevé adelante una marca de calzado y marroquinería. En ella diseñábamos los productos, los fabricábamos, buscábamos proveedores, sacábamos las fotos y los vendíamos en el local, online y en ferias. Conocí de cerca todo lo que implica sostener un negocio y buscar maneras de llegar a las personas.
                 </p>
                 <p style={fuenteTexto}>
-                  Cuando cerramos la marca, todavía había gente que me decía: «No las conocía». ¡Mi vecina de la esquina no sabía que mi local existía porque nunca caminaba esa cuadra!
+                  Cuando cerramos el negocio, todavía había gente que me decía: «No las conocía». ¡Mi vecina de la esquina no sabía que mi local existía porque nunca caminaba esa cuadra!
                 </p>
                 <p style={fuenteTexto}>
                   Esa experiencia me dejó algo claro: no alcanza con hacer algo bueno; también tiene que haber una manera de encontrarlo.
@@ -101,7 +101,8 @@ export default function SobreNosotrosContent() {
                   <a href="https://www.instagram.com/planmaterial" target="_blank" rel="noopener noreferrer" className="text-[#4164fe] underline underline-offset-4 hover:no-underline">
                     Plan Material
                   </a>
-                  , mi estudio de diseño industrial y digital. Si tenés una duda, una idea o algo que mejorar, escribime: <span style={{ fontWeight: 500 }}>hola@bahiashops.com.ar</span>
+                  , mi estudio de diseño industrial y digital. Si tenés una duda, una idea o algo que mejorar, escribime: <span style={{ fontWeight: 500 }}>hola@bahiashops.com.ar</span>.
+                  ¡Tengo muchos planes para este proyecto y me encantaría que me acompañen!
                 </p>
               </div>
             </section>
