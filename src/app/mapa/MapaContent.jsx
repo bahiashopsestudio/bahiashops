@@ -5,20 +5,32 @@ import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
+import LeyendaMapa from '@/components/LeyendaMapa'
+import { PIELES } from '@/lib/mapaEstilo'
+import { usePielMapa } from '@/lib/pielMapa'
 
+// Sin fondo propio: mientras carga se ve el color de tierra de la piel.
 const MapaVendedores = dynamic(() => import('@/components/MapaVendedores'), {
   ssr: false,
   loading: () => (
-    <div className="bg-[#F5F2EC] h-full w-full flex items-center justify-center">
-      <span className="text-[#0a0a0a]/15 text-sm font-light">Cargando mapa...</span>
+    <div className="h-full w-full flex items-center justify-center">
+      <span className="text-white/60 text-sm font-light">Cargando mapa...</span>
     </div>
   ),
 })
+
+const FONDO_BLOQUE = '#e9e778'
+const TINTA = '#0a0a0a'
+
+// La vista con que arranca el mapa: casi toda la ciudad, con la Plaza
+// Rivadavia apenas por encima del centro.
+const VISTA_MAPA = { center: [-62.2648, -38.721], zoom: 11.45 }
 
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage']
 
 export default function MapaContent({ vendedores = [], categorias = [] }) {
   const [menuOpen, setMenuOpen] = useState(false)
+  const [piel, cambiarPiel] = usePielMapa()
 
   const menuCats = MENU_CATEGORIAS.map(s => categorias.find(c => c.slug === s)).filter(Boolean)
 
@@ -39,12 +51,13 @@ export default function MapaContent({ vendedores = [], categorias = [] }) {
         {menuOpen && <MenuTakeover categorias={menuCats} onClose={() => setMenuOpen(false)} />}
         <Navbar onToggleMenu={() => setMenuOpen(!menuOpen)} variant="solid" />
 
-        <div className="pt-14 flex flex-col lg:flex-row lg:h-[620px]">
+        {/* pt-20: la Navbar mide 80 px; con menos tapaba los controles del mapa */}
+        <div className="pt-20 flex flex-col lg:flex-row lg:h-[620px]">
 
           {/* ── Bloque de texto ── */}
           <div
             className="w-full lg:w-1/2 flex items-center shrink-0"
-            style={{ background: '#3a0823' }}
+            style={{ background: FONDO_BLOQUE }}
           >
             <div className="px-6 md:px-16 py-14 lg:py-0 max-w-xl">
               <p
@@ -52,7 +65,7 @@ export default function MapaContent({ vendedores = [], categorias = [] }) {
                   fontFamily: 'Poppins, sans-serif',
                   fontWeight: 500,
                   fontSize: '12px',
-                  color: 'rgba(255,255,255,0.65)',
+                  color: TINTA,
                   letterSpacing: '0.08em',
                   textTransform: 'uppercase',
                   marginBottom: '20px',
@@ -65,7 +78,7 @@ export default function MapaContent({ vendedores = [], categorias = [] }) {
                 style={{
                   fontFamily: 'Fraunces, serif',
                   fontWeight: 500,
-                  color: '#ffffff',
+                  color: TINTA,
                   letterSpacing: '-0.02em',
                   lineHeight: 1.25,
                   marginBottom: '24px',
@@ -78,7 +91,7 @@ export default function MapaContent({ vendedores = [], categorias = [] }) {
                   fontFamily: "'Inter', sans-serif",
                   fontWeight: 500,
                   fontSize: '14px',
-                  color: 'rgba(255,255,255,0.9)',
+                  color: TINTA,
                   marginBottom: '32px',
                 }}
               >
@@ -87,7 +100,7 @@ export default function MapaContent({ vendedores = [], categorias = [] }) {
 
               <Link
                 href="/vendedor/nuevo"
-                className="inline-block bg-white text-[#0a0a0a] border border-white no-underline hover:bg-transparent hover:text-white transition-colors"
+                className="inline-block bg-[#0a0a0a] text-white border border-[#0a0a0a] no-underline hover:bg-transparent hover:text-[#0a0a0a] transition-colors"
                 style={{
                   fontFamily: "'Inter', sans-serif",
                   fontWeight: 500,
@@ -102,24 +115,21 @@ export default function MapaContent({ vendedores = [], categorias = [] }) {
           </div>
 
           {/* ── Mapa ── */}
-          <div className="w-full lg:w-1/2 h-[420px] lg:h-full">
-            <MapaVendedores vendedores={vendedores} />
+          <div className="w-full lg:w-1/2 h-[420px] lg:h-full" style={{ background: PIELES[piel].land }}>
+            <MapaVendedores vendedores={vendedores} piel={piel} onCambiarPiel={cambiarPiel} vista={VISTA_MAPA} />
           </div>
         </div>
 
         {/* ── Leyenda: debajo del mapa, alineada a la derecha en desktop ── */}
         <div className="flex flex-col lg:flex-row">
           <div className="hidden lg:block lg:w-1/2 shrink-0" />
-          <div className="w-full lg:w-1/2 px-4 md:px-8 lg:px-6 py-6 flex gap-5 justify-center lg:justify-end">
-            <div className="flex items-center gap-2">
-              <div className="w-[8px] h-[8px] rounded-full bg-[#ff1010] shrink-0" />
-              <span className="text-[11px] font-light text-[#0a0a0a]/35">Dirección exacta ({exactas.length})</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-[12px] h-[12px] rounded-full bg-[#9cc3ea]/60 border border-[#6fa3d6] shrink-0" />
-              <span className="text-[11px] font-light text-[#0a0a0a]/35">Zona aproximada ({zonas.length})</span>
-            </div>
-          </div>
+          <LeyendaMapa
+            piel={piel}
+            textoExacta={`Dirección exacta (${exactas.length})`}
+            textoZona={`Zona aproximada (${zonas.length})`}
+            className="w-full lg:w-1/2 px-4 md:px-8 lg:px-6 py-6 flex gap-5 justify-center lg:justify-end"
+            claseTexto="text-[11px] font-light text-[#0a0a0a]/35"
+          />
         </div>
       </div>
     </>
