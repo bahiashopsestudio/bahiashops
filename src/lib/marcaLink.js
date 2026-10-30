@@ -74,7 +74,7 @@ export function marcaDe(almacen, vendedorId, ahoraMs) {
   return valor >= ahoraMs - VIGENCIA_MARCA_MS ? valor : null
 }
 
-// El link propio, para copiar o mandar por WhatsApp.
+// El link propio, para copiar.
 //   linkPropio({ slug })        → https://bahiashops.com.ar/tienda/<slug>?de=tienda
 //   linkPropio({ productoId })  → https://bahiashops.com.ar/producto/<id>?de=tienda
 export function linkPropio({ slug, productoId } = {}) {

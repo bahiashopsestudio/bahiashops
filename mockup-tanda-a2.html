@@ -1,0 +1,639 @@
+<title>Mockup link y comisión</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Poppins:wght@300;400;500&family=Inter:wght@300;400;500;600;700&display=swap">
+<style>
+/* Layout: banda de controles arriba, la pantalla del sitio en un marco (compu o celular), y al costado las decisiones abiertas. */
+:root {
+  --ground: #E9E7E2;
+  --panel: #FFFFFF;
+  --ink: #16191A;
+  --ink-soft: #5B6461;
+  --ink-faint: #8A928F;
+  --line: #D6D4CE;
+  --brand: #015444;
+  --brand-soft: #DCEBF7;
+  --sel: #16191A;
+  --sel-ink: #FFFFFF;
+  --f-display: "Fraunces", Georgia, serif;
+  --f-body: "Poppins", system-ui, sans-serif;
+  --f-ui: "Inter", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #141716; --panel: #1C201F; --ink: #E9EEEC; --ink-soft: #A3ADA9; --ink-faint: #737C79;
+    --line: #2C3230; --brand: #7FC4B3; --brand-soft: #1E3A35; --sel: #E9EEEC; --sel-ink: #141716;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --ground: #141716; --panel: #1C201F; --ink: #E9EEEC; --ink-soft: #A3ADA9; --ink-faint: #737C79;
+  --line: #2C3230; --brand: #7FC4B3; --brand-soft: #1E3A35; --sel: #E9EEEC; --sel-ink: #141716;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--ground); color: var(--ink); font-family: var(--f-ui);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 80px; -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1360px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+header.top { padding-top: 40px; display: flex; flex-direction: column; gap: 8px; }
+.eyebrow { font-size: 10px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); }
+h1 { font-family: var(--f-display); font-weight: 500; font-size: clamp(26px, 4vw, 36px); margin: 0; line-height: 1.15; text-wrap: balance; }
+.lede { font-family: var(--f-body); font-weight: 300; font-size: 14.5px; color: var(--ink-soft); margin: 0; max-width: 70ch; line-height: 1.6; }
+
+.controls { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: center; }
+.seg { display: inline-flex; flex-wrap: wrap; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 4px; }
+.seg button {
+  font: 500 13px var(--f-ui); color: var(--ink-soft); background: none; border: 0; border-radius: 7px;
+  padding: 8px 13px; cursor: pointer; white-space: nowrap;
+}
+.seg button[aria-pressed="true"] { background: var(--sel); color: var(--sel-ink); }
+.seg button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.ctl-label { font-size: 11px; color: var(--ink-faint); font-weight: 500; margin-right: 6px; }
+.ctl { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 22px; align-items: start; }
+@media (max-width: 1080px) { .stage { grid-template-columns: minmax(0, 1fr); } }
+
+.viewport { overflow-x: auto; padding-bottom: 6px; min-width: 0; }
+.frame { margin: 0 auto; background: #2a2d2c; border-radius: 14px; padding: 10px; width: max-content; }
+.frame.desk { border-radius: 12px; }
+.frame.phone { border-radius: 38px; padding: 12px; }
+.frame .bar { display: flex; gap: 6px; padding: 2px 4px 10px; }
+.frame .bar i { width: 10px; height: 10px; border-radius: 50%; background: #555a58; display: block; }
+.frame.phone .bar { justify-content: center; padding: 4px 0 10px; }
+.frame.phone .bar i { width: 70px; height: 6px; border-radius: 4px; }
+.frame.phone .bar i + i { display: none; }
+
+.notes { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+.notes h2 { font-family: var(--f-display); font-weight: 500; font-size: 19px; margin: 0; }
+.notes .intro { font-family: var(--f-body); font-weight: 300; font-size: 13px; color: var(--ink-soft); margin: 0; line-height: 1.55; }
+.q { border-top: 1px solid var(--line); padding-top: 14px; display: flex; flex-direction: column; gap: 6px; }
+.q b { font-size: 13.5px; font-weight: 600; line-height: 1.4; }
+.q p { margin: 0; font-family: var(--f-body); font-weight: 300; font-size: 13px; color: var(--ink-soft); line-height: 1.55; }
+.q .rec { font-family: var(--f-ui); font-size: 12px; color: var(--brand); font-weight: 500; }
+.legend { font-family: var(--f-body); font-weight: 300; font-size: 12.5px; color: var(--ink-faint); margin: 0; }
+
+/* ================= Pantalla del sitio (colores del sitio, solo claro) ================= */
+.scr { background: #fff; color: #0a0a0a; font-family: "Inter", sans-serif; overflow: hidden; border-radius: 4px; position: relative; }
+.frame.phone .scr { border-radius: 26px; }
+.scr.admin { background: #faf9f7; }
+.scr * { box-sizing: border-box; }
+.nav { height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 28px; border-bottom: 1px solid rgba(10,10,10,.06); background: #fff; }
+.nav .logo { font-family: "Fraunces", serif; font-weight: 600; font-size: 18px; letter-spacing: -.01em; }
+.nav .items { display: flex; gap: 22px; font-size: 13px; color: rgba(10,10,10,.6); }
+.nav .burger { width: 20px; height: 12px; border-top: 2px solid #0a0a0a; border-bottom: 2px solid #0a0a0a; position: relative; }
+.nav .burger::after { content: ""; position: absolute; left: 0; right: 0; top: 3px; border-top: 2px solid #0a0a0a; }
+.body { padding: 28px 32px 48px; }
+.phone .body { padding: 20px 16px 40px; }
+.col { max-width: 576px; margin: 0 auto; }
+.col.wide { max-width: 820px; }
+.back { font-size: 12px; color: rgba(10,10,10,.4); margin-bottom: 18px; display: inline-block; }
+.s-eyebrow { font-size: 10px; text-transform: uppercase; letter-spacing: 2px; color: rgba(10,10,10,.3); margin: 0 0 8px; }
+.s-h1 { font-family: "Fraunces", serif; font-weight: 500; font-size: 28px; margin: 0 0 2px; }
+.phone .s-h1 { font-size: 25px; }
+.s-sub { font-family: "Poppins", sans-serif; font-weight: 300; font-size: 13px; color: rgba(10,10,10,.45); margin: 0 0 18px; }
+.pub { background: #f1f29f; border: 1px solid #e3e48a; border-radius: 16px; padding: 18px 20px; margin-bottom: 18px; position: relative; color: #5a5c00; }
+.pub .t { font-family: "Fraunces", serif; font-weight: 500; font-size: 17px; margin: 0; padding-right: 28px; }
+.pub .x { margin: 6px 0 0; font-family: "Poppins", sans-serif; font-weight: 300; font-size: 13px; line-height: 1.6; }
+.pub .bb { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+.pub .bb span { font: 500 14px "Inter", sans-serif; border-radius: 4px; padding: 11px 20px; }
+.pub .cerrar { position: absolute; top: 10px; right: 10px; width: 32px; height: 32px; border-radius: 50%; border: 0; background: transparent; color: #5a5c00; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.pub .cerrar:hover { background: rgba(90,92,0,.1); }
+.pub .cerrar:focus-visible { outline: 2px solid #5a5c00; }
+.pub .cerrar svg { width: 16px; height: 16px; }
+.vermi { font-size: 12px; color: rgba(10,10,10,.45); text-decoration: underline; text-underline-offset: 2px; margin: -6px 0 18px; display: inline-block; }
+.estado { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-radius: 16px; background: #ecf7f1; color: #1f5f43; font-size: 13px; margin-bottom: 18px; }
+.estado .dot { width: 8px; height: 8px; border-radius: 50%; background: #2e9e6a; }
+.estado u { margin-left: auto; color: #1f5f43; font-size: 12px; white-space: nowrap; }
+.x-est { width: 26px; height: 26px; margin: -4px -6px -4px 0; border: 0; background: transparent; color: #1f5f43; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.x-est:hover { background: rgba(31,95,67,.1); }
+.x-est:focus-visible { outline: 2px solid #1f5f43; }
+.x-est svg { width: 14px; height: 14px; }
+.estado.rev { background: #fdf6e3; color: #7a5a12; }
+.estado.rev .dot { background: #d9a520; }
+.portada { aspect-ratio: 16/9; border-radius: 16px; background: linear-gradient(135deg, #f1d9c5, #e9c7a8 45%, #c9dbe7); position: relative; max-width: 100%; }
+.portada .lg { position: absolute; left: 16px; bottom: -22px; width: 70px; height: 70px; border-radius: 12px; background: #015444; box-shadow: 0 0 0 3px #fff; color: #9cc3ea; font-family: "Fraunces", serif; font-size: 26px; display: flex; align-items: center; justify-content: center; }
+.pills { display: flex; flex-wrap: wrap; gap: 10px; padding-top: 36px; }
+.pill { border: 1px solid rgba(10,10,10,.1); border-radius: 999px; padding: 9px 18px; font-size: 13px; color: rgba(10,10,10,.6); font-weight: 300; background: #fff; }
+.menu { margin-top: 16px; border: 1px solid rgba(10,10,10,.05); border-radius: 16px; overflow: hidden; }
+.menu div { display: flex; align-items: center; gap: 12px; padding: 14px 20px; font-size: 14px; font-weight: 300; border-top: 1px solid rgba(10,10,10,.05); }
+.menu div:first-child { border-top: 0; }
+.menu div span:last-child { margin-left: auto; color: rgba(10,10,10,.25); }
+.cobros { margin-top: 16px; border: 1px solid rgba(10,10,10,.05); border-radius: 16px; padding: 14px 20px; display: flex; align-items: center; gap: 12px; font-size: 14px; }
+.cobros .ok { margin-left: auto; font-size: 10px; background: #d1fae5; color: #047857; padding: 4px 10px; border-radius: 999px; font-weight: 500; }
+.ghost { opacity: .45; }
+
+/* --- Bloque del link (verde del footer + celeste) --- */
+.link { margin-top: 0; margin-bottom: 18px; background: #015444; color: #9cc3ea; border-radius: 16px; padding: 22px 22px 20px; display: flex; flex-direction: column; gap: 14px; position: relative; }
+.phone .link { padding: 20px 18px 18px; }
+.link .ey { font-size: 10px; text-transform: uppercase; letter-spacing: 2px; color: rgba(156,195,234,.65); margin: 0; }
+.link h3 { font-family: "Fraunces", serif; font-weight: 500; font-size: 22px; line-height: 1.2; margin: 0; color: #9cc3ea; text-wrap: balance; }
+.phone .link h3 { font-size: 20px; }
+.link p.ex { font-family: "Poppins", sans-serif; font-weight: 300; font-size: 13px; line-height: 1.6; margin: 0; color: rgba(156,195,234,.85); }
+.link .url { display: flex; align-items: center; gap: 10px; background: rgba(156,195,234,.12); border-radius: 8px; padding: 6px 6px 6px 12px; font-size: 13px; color: #fff; min-width: 0; }
+.link .url > span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.link .url em { font-style: normal; color: #9cc3ea; }
+.link .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn-c { font: 500 12px "Inter", sans-serif; border-radius: 4px; padding: 6px 11px; white-space: nowrap; flex-shrink: 0; cursor: pointer; border: 1px solid #9cc3ea; display: inline-flex; align-items: center; gap: 6px; }
+.btn-c.fill { background: #9cc3ea; color: #015444; }
+.btn-c.fill:hover { background: transparent; color: #9cc3ea; }
+.btn-c.line { background: transparent; color: #9cc3ea; }
+.btn-c.line:hover { background: #9cc3ea; color: #015444; }
+.btn-c svg { width: 13px; height: 13px; }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid rgba(156,195,234,.2); padding-top: 14px; }
+.stats div { padding: 0 12px; border-left: 1px solid rgba(156,195,234,.2); display: flex; flex-direction: column; gap: 2px; }
+.stats div:first-child { padding-left: 0; border-left: 0; }
+.stats b { font-weight: 600; font-size: 19px; color: #fff; font-variant-numeric: tabular-nums; }
+.phone .stats b { font-size: 16px; }
+.stats span { font-size: 11.5px; color: rgba(156,195,234,.75); font-weight: 300; line-height: 1.35; }
+.nada { border-top: 1px solid rgba(156,195,234,.2); padding-top: 14px; font-family: "Poppins", sans-serif; font-weight: 300; font-size: 12.5px; color: rgba(156,195,234,.8); line-height: 1.55; margin: 0; }
+.tip { font-size: 11.5px; color: rgba(156,195,234,.6); font-weight: 300; margin: 0; }
+.esp { background: #9cc3ea; color: #015444; border-radius: 10px; padding: 11px 14px; font-size: 13px; line-height: 1.5; }
+.esp b { font-weight: 600; }
+.link .tog { position: absolute; top: 14px; right: 14px; width: 32px; height: 32px; border-radius: 50%; border: 0; background: transparent; color: #9cc3ea; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.link .tog:hover { background: rgba(156,195,234,.15); }
+.link .tog:focus-visible, .mini .tog:focus-visible { outline: 2px solid #9cc3ea; }
+.link .tog svg { width: 16px; height: 16px; }
+.link .tog.up svg { transform: rotate(180deg); }
+.link h3 { padding-right: 36px; }
+.mini { margin-bottom: 18px; background: #015444; color: #9cc3ea; border-radius: 12px; padding: 8px 8px 8px 16px; display: flex; align-items: center; gap: 10px; }
+.mini .ey2 { font-size: 10px; text-transform: uppercase; letter-spacing: 2px; color: rgba(156,195,234,.7); flex-shrink: 0; }
+.mini .u { font-size: 12.5px; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+.mini .u em { font-style: normal; color: #9cc3ea; }
+.mini .esp2 { flex-shrink: 0; font-size: 10.5px; font-weight: 600; background: #9cc3ea; color: #015444; border-radius: 999px; padding: 2px 8px; }
+
+.mini .tog { flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%; border: 0; background: transparent; color: #9cc3ea; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.mini .tog:hover { background: rgba(156,195,234,.15); }
+.mini .tog svg { width: 16px; height: 16px; }
+.phone .mini .u { display: none; }
+.phone .mini .ey2 { flex: 1; }
+.link.off { margin-bottom: 18px; background: #f3f5f4; color: rgba(10,10,10,.55); }
+.link.off h3 { color: rgba(10,10,10,.55); }
+.link.off .ey { color: rgba(10,10,10,.3); }
+.link.off p.ex { color: rgba(10,10,10,.45); }
+
+/* --- Mis productos --- */
+.ph1 { font-size: 26px; font-weight: 900; letter-spacing: -.02em; margin: 0; }
+.prow { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; gap: 12px; }
+.prow small { display: block; font-size: 13px; color: rgba(10,10,10,.3); font-weight: 300; margin-top: 2px; }
+.btn-k { background: #0a0a0a; color: #fff; border-radius: 999px; padding: 10px 18px; font-size: 13px; font-weight: 500; white-space: nowrap; }
+.card { border: 1px solid rgba(10,10,10,.05); border-radius: 16px; padding: 16px; margin-bottom: 12px; }
+.card .in { display: flex; gap: 14px; align-items: center; }
+.ph { width: 80px; height: 80px; border-radius: 12px; flex-shrink: 0; }
+.info { flex: 1; min-width: 0; }
+.info .n { font-weight: 500; font-size: 14.5px; margin: 0 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.info .c { font-size: 11px; color: rgba(10,10,10,.25); font-weight: 300; margin: 0 0 6px; }
+.info .p { font-size: 14px; font-weight: 600; margin: 0; }
+.chip { display: inline-flex; align-items: center; gap: 6px; font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 999px; margin-top: 6px; }
+.chip i { width: 6px; height: 6px; border-radius: 50%; display: block; }
+.acts { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+.acts span { border: 1px solid rgba(10,10,10,.1); border-radius: 999px; padding: 5px 15px; font-size: 12px; color: rgba(10,10,10,.6); font-weight: 300; text-align: center; white-space: nowrap; background: #fff; }
+.acts .pa { border-color: #fbbf24; color: #d97706; }
+.acts .ac { border-color: #34d399; color: #059669; }
+.acts .el { border-color: #fecaca; color: #f87171; }
+.share { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(10,10,10,.05); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.share .lb { font-size: 11px; color: rgba(10,10,10,.35); margin-right: 4px; }
+.sbtn { font: 500 12px "Inter", sans-serif; border-radius: 999px; padding: 6px 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; border: 1px solid #015444; color: #015444; background: #fff; }
+.sbtn:hover { background: #015444; color: #9cc3ea; }
+.sbtn svg { width: 13px; height: 13px; }
+.share .hint { font-size: 11px; color: rgba(10,10,10,.3); font-weight: 300; margin-left: auto; }
+.phone .share .hint { margin-left: 0; width: 100%; }
+
+/* --- Pedidos --- */
+.tabs { display: flex; gap: 18px; border-bottom: 1px solid rgba(10,10,10,.08); margin-bottom: 16px; font-size: 13px; }
+.tabs span { padding: 8px 0; color: rgba(10,10,10,.4); }
+.tabs span.on { color: #0a0a0a; border-bottom: 2px solid #0a0a0a; font-weight: 500; }
+.ped { border: 1px solid rgba(10,10,10,.05); border-radius: 16px; margin-bottom: 12px; }
+.ped .hd { width: 100%; display: flex; align-items: center; gap: 12px; padding: 16px 20px; background: none; border: 0; text-align: left; cursor: pointer; font-family: inherit; color: inherit; }
+.phone .ped .hd { padding: 14px 14px; gap: 10px; }
+.av { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: "Fraunces", serif; font-weight: 500; font-size: 16px; color: rgba(10,10,10,.75); flex-shrink: 0; }
+.ped .mid { flex: 1; min-width: 0; }
+.ped .nm { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ped .nm strong { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tag-link { flex-shrink: 0; display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 600; color: #015444; background: #dcebf7; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+.tag-link svg { width: 10px; height: 10px; }
+.ped .ln { margin-top: 4px; display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 12.5px; font-weight: 500; }
+.ped .ln span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cf { flex-shrink: 0; font-size: 10.5px; font-weight: 500; padding: 2px 8px; border-radius: 999px; background: #f1efe9; color: rgba(10,10,10,.6); }
+.ped .tt { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.chev { width: 14px; height: 14px; flex-shrink: 0; color: rgba(10,10,10,.3); transition: transform .2s; }
+.ped.open .chev { transform: rotate(180deg); }
+.det { padding: 0 20px 20px; }
+.phone .det { padding: 0 14px 16px; }
+.det .bx { border-top: 1px solid rgba(10,10,10,.05); padding-top: 14px; }
+.lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: rgba(10,10,10,.3); margin: 0 0 6px; }
+.rowt { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; padding: 2px 0; }
+.rowt .k { color: rgba(10,10,10,.4); font-weight: 300; }
+.rowt .v { font-variant-numeric: tabular-nums; }
+.rowt.com .k, .rowt.com .v { color: rgba(10,10,10,.35); }
+.rowt.com .pct { color: rgba(10,10,10,.55); font-weight: 500; }
+.rowt.tot { font-weight: 600; border-top: 1px solid rgba(10,10,10,.05); margin-top: 4px; padding-top: 8px; }
+.ahorro { margin: 8px 0 0; font-size: 12px; color: #015444; font-weight: 400; }
+.muted { font-size: 13px; color: rgba(10,10,10,.6); font-weight: 300; margin: 0 0 14px; }
+
+/* --- Admin --- */
+.ad-h { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+.ad-h h4 { font-family: "Fraunces", serif; font-weight: 500; font-size: 26px; margin: 0; }
+.ad-chip { font-size: 11px; font-weight: 500; border-radius: 999px; padding: 3px 11px; color: #047857; background: #d1fae5; }
+.ad-sub { font-family: "Poppins", sans-serif; font-weight: 300; font-size: 13px; color: rgba(10,10,10,.45); margin: 0 0 22px; }
+.sec h5 { font-family: "Fraunces", serif; font-weight: 500; font-size: 17px; margin: 0 0 12px; }
+.secbox { background: #fff; border: 1px solid rgba(10,10,10,.06); border-radius: 8px; padding: 18px 20px; display: flex; flex-direction: column; gap: 18px; }
+.phone .secbox { padding: 16px; }
+.vig { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
+.vig .big { font-family: "Fraunces", serif; font-weight: 500; font-size: 40px; line-height: 1; color: #015444; }
+.vig .tx { flex: 1; min-width: 180px; display: flex; flex-direction: column; gap: 4px; }
+.vig .tx .t1 { font-size: 14px; font-weight: 500; }
+.vig .tx .t2 { font-size: 12.5px; color: rgba(10,10,10,.5); font-weight: 300; }
+.nota { background: #f6f5f2; border-radius: 6px; padding: 9px 12px; font-size: 12.5px; color: rgba(10,10,10,.7); font-weight: 300; line-height: 1.5; }
+.nota small { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: rgba(10,10,10,.4); font-weight: 500; margin-bottom: 2px; }
+.abtn { font: 500 12px "Inter", sans-serif; border-radius: 4px; padding: 8px 16px; cursor: pointer; border: 1px solid #0a0a0a; background: #0a0a0a; color: #fff; }
+.abtn.sec2 { background: #fff; color: #0a0a0a; }
+.abtn.red { background: #cc152b; border-color: #cc152b; }
+.abtn.link2 { background: none; border: 0; color: rgba(10,10,10,.45); padding: 0; font-weight: 400; }
+.abtn:disabled { background: rgba(10,10,10,.2); border-color: transparent; cursor: default; }
+.conf { background: #fce4e4; border-radius: 6px; padding: 12px; font-size: 12.5px; color: #7a0f1c; line-height: 1.5; display: flex; flex-direction: column; gap: 10px; }
+.conf .r { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.normal { font-size: 13.5px; color: rgba(10,10,10,.6); font-weight: 300; line-height: 1.55; margin: 0; }
+.normal b { font-weight: 500; color: #0a0a0a; }
+.form { border-top: 1px solid rgba(10,10,10,.05); padding-top: 16px; display: flex; flex-direction: column; gap: 12px; }
+.form .ft { font-size: 13px; font-weight: 600; margin: 0; }
+.fg { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 12px; }
+.phone .fg { grid-template-columns: minmax(0, 1fr); }
+.fl { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.fl label { font-size: 11.5px; color: rgba(10,10,10,.5); }
+.inp { display: flex; align-items: center; border: 1px solid rgba(10,10,10,.12); border-radius: 8px; background: #fff; padding: 0 10px; height: 38px; font-size: 13px; }
+.inp input { border: 0; outline: 0; font: 400 13px "Inter", sans-serif; width: 100%; background: transparent; color: #0a0a0a; min-width: 0; }
+.inp span { color: rgba(10,10,10,.4); }
+.inp:focus-within { border-color: #0a0a0a; }
+.chk { display: flex; align-items: center; gap: 6px; font-size: 12px; color: rgba(10,10,10,.6); }
+.ta { border: 1px solid rgba(10,10,10,.12); border-radius: 8px; padding: 9px 11px; font: 300 13px "Inter", sans-serif; resize: vertical; min-height: 64px; width: 100%; color: #0a0a0a; background: #fff; }
+.help { font-size: 11px; color: rgba(10,10,10,.35); font-weight: 300; }
+.warn { background: #fef3c7; color: #92650a; border-radius: 6px; padding: 9px 12px; font-size: 12px; line-height: 1.5; }
+.hist { border-top: 1px solid rgba(10,10,10,.05); padding-top: 14px; }
+.hist .ft { font-size: 13px; font-weight: 600; margin: 0 0 6px; }
+.hr { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 12px; align-items: baseline; padding: 10px 0; border-top: 1px solid rgba(10,10,10,.05); }
+.hr:first-of-type { border-top: 0; }
+.hr .p { font-family: "Fraunces", serif; font-size: 18px; font-weight: 500; }
+.hr .d { font-size: 12.5px; color: rgba(10,10,10,.6); font-weight: 300; line-height: 1.45; min-width: 0; }
+.hr .d i { display: block; font-style: normal; color: rgba(10,10,10,.4); font-size: 11.5px; }
+.st { font-size: 10px; font-weight: 600; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+.st.vigente { background: #d1fae5; color: #047857; }
+.st.vencida { background: #f1efe9; color: rgba(10,10,10,.5); }
+.st.terminada { background: #fce4e4; color: #a01020; }
+.toast { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); background: #0a0a0a; color: #fff; font-size: 12.5px; padding: 10px 14px; border-radius: 8px; max-width: calc(100% - 32px); line-height: 1.5; box-shadow: 0 6px 20px rgba(0,0,0,.2); z-index: 5; }
+.toast small { display: block; color: rgba(255,255,255,.6); font-size: 11px; margin-bottom: 2px; }
+@media (prefers-reduced-motion: reduce) { .chev { transition: none; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="eyebrow">Bahía Shops · Tanda A2 · mockup</div>
+    <h1>El link de cada tienda y la comisión especial</h1>
+    <p class="lede">Las cuatro piezas que faltan dibujar, sobre las pantallas reales (rearmadas del código). Elegí pantalla, compu o celular y el caso. «Copiar link» responde, y el cartel de tienda publicada se cierra con la cruz. Todo lo del link usa el verde del footer con el celeste, como los mensajes de la marca.</p>
+  </header>
+
+  <div class="controls">
+    <div class="ctl"><span class="ctl-label">Pantalla</span>
+      <div class="seg" id="seg-tab">
+        <button type="button" data-v="negocio">Mi negocio</button>
+        <button type="button" data-v="productos">Mis productos</button>
+        <button type="button" data-v="pedidos">Pedidos</button>
+        <button type="button" data-v="admin">Admin · Comisión</button>
+      </div>
+    </div>
+    <div class="ctl"><span class="ctl-label">Ver en</span>
+      <div class="seg" id="seg-dev">
+        <button type="button" data-v="desk">Compu</button>
+        <button type="button" data-v="phone">Celular</button>
+      </div>
+    </div>
+    <div class="ctl" id="ctl-caso"><span class="ctl-label">Caso</span>
+      <div class="seg" id="seg-caso"></div>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="viewport"><div id="frame"></div></div>
+    <aside class="notes" id="notes"></aside>
+  </div>
+</div>
+
+<script>
+const IC = {
+  copy: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="7" y="7" width="10" height="10" rx="2"/><path d="M13 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/></svg>',
+  wa: '<svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a8 8 0 0 0-6.9 12l-1 3.8 3.9-1A8 8 0 1 0 10 2Zm0 14.5a6.5 6.5 0 0 1-3.3-.9l-.2-.1-2.3.6.6-2.2-.1-.2A6.5 6.5 0 1 1 10 16.5Zm3.6-4.9c-.2-.1-1.2-.6-1.4-.6-.2-.1-.3-.1-.4.1l-.6.8c-.1.1-.2.1-.4 0a5.3 5.3 0 0 1-2.6-2.3c-.2-.3.2-.3.6-1 .1-.1 0-.2 0-.3l-.6-1.5c-.2-.4-.3-.3-.4-.3h-.4a.7.7 0 0 0-.5.2 2.1 2.1 0 0 0-.7 1.6 3.7 3.7 0 0 0 .8 2 8.4 8.4 0 0 0 3.2 2.8c1.2.5 1.7.6 2.3.5.4-.1 1.2-.5 1.4-1 .2-.4.2-.8.1-.9l-.4-.1Z"/></svg>',
+  link: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M8.5 11.5a3.5 3.5 0 0 0 5 0l3-3a3.5 3.5 0 0 0-5-5l-1 1"/><path d="M11.5 8.5a3.5 3.5 0 0 0-5 0l-3 3a3.5 3.5 0 0 0 5 5l1-1"/></svg>',
+  chev: '<svg class="chev" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 8 5 5 5-5"/></svg>',
+};
+
+const CASOS = {
+  negocio: [['ventas', 'Ya vendió por el link'], ['cero', 'Todavía no vendió'], ['especial', 'Con comisión especial'], ['revision', 'Tienda sin publicar']],
+  productos: [],
+  pedidos: [],
+  admin: [['vigente', 'Con una vigente'], ['ninguna', 'Sin especial'], ['propia', 'Tu tienda (0%)']],
+};
+
+const NOTAS = {
+  negocio: [
+    ['Dónde va el bloque', 'Después de los botones Cambiar logo y Cambiar portada, antes del menú, y se minimiza con la flechita. Minimizado queda en una línea con «Copiar link» a la vista (y «1% especial» si tiene una). Se recuerda en la base, como el cartel.', 'Arranca abierto; si lo minimiza, queda así hasta que lo abra.'],
+    ['El cartel de «tienda publicada»', 'Reemplaza al amarillo: chico, en verde, con la cruz después de «Ver mi tienda». Al cerrarlo queda un link chico «Ver mi tienda» para no perder el acceso. Los otros carteles (en revisión, pedimos cambios, bloqueada) no se cierran: piden que haga algo.', 'Falta decidir dónde se recuerda que lo cerró.'],
+    ['Solo «Copiar link»', 'Saqué el botón de WhatsApp. Con el link copiado la tienda lo pega donde quiera: Instagram, historias, WhatsApp, estados.', ''],
+    ['Cuánto dura la marca', 'El texto chico de abajo dice que el link vale 48 horas desde que lo tocan. Lo puse para que entiendan por qué conviene compartirlo seguido, que es lo que buscabas.', ''],
+    ['Con comisión especial', 'Si la especial es más baja que 2,5%, el link no le baja más la comisión, pero igual le cuenta las ventas. Por eso el bloque sigue igual y la especial aparece como una franja aparte, con la regla de «se cobra la más baja».', ''],
+    ['Tienda sin publicar o en pausa', 'Mientras no esté publicada o esté en pausa, el bloque se ve apagado y sin botones. Decidido.', ''],
+  ],
+  productos: [
+    ['Dónde va el botón', 'En el cuadro de acciones de la derecha ya hay cuatro (Editar, Pausar, Ver, Eliminar), y en el celular no entra un quinto. Lo puse en una franja abajo de cada producto, separada por una línea fina.', ''],
+    ['Solo en publicados', 'La franja aparece en los productos activos. En pausados, en revisión o rechazados no, porque el link llevaría a un producto que no se puede comprar.', ''],
+  ],
+  pedidos: [
+    ['La etiqueta «Por tu link»', 'Va al lado del apodo, en la franja que siempre se ve. La línea de abajo (forma de entrega · número · paso) ya se corta en el celular, así que ahí no entra.', ''],
+    ['El porcentaje', 'Va en el detalle, en la línea de la comisión: «5%», «2,5% · por tu link» o «1% · especial». Los pedidos viejos muestran 5%: A1 les completó comision_bp en 500.', ''],
+    ['La línea «Te ahorraste»', 'En los pedidos por link sumé, en verde, cuánto se ahorró en ese pedido. No estaba en el tablero: si te parece de más, la saco y queda solo el total en Mi negocio.', 'Decidido: queda.'],
+    ['Por link con especial', 'El tercer pedido llegó por el link pero se cobró la especial (era más baja). La etiqueta sigue diciendo «Por tu link» porque cuenta el origen, y el porcentaje dice «especial».', ''],
+  ],
+  admin: [
+    ['Dónde va la sección', 'Justo después del recuadro de acciones (aprobar, pedir cambios, bloquear) y antes de «Presencia online». Es de las cosas que vas a tocar, no solo leer.', ''],
+    ['Cargar una nueva con otra vigente', 'Como ya está construido: la nueva termina la vigente. El formulario lo avisa en amarillo antes de cargar.', ''],
+    ['Qué significa «vence el 31/12»', 'Propongo que valga todo ese día: se guarda como el 1/1 a las 00:00, hora de Argentina. Si no, una que «vence el 31» dejaría de valer al empezar el 31.', 'Decidido.'],
+    ['El motivo', 'Es obligatorio y la tienda nunca lo ve; lo dice debajo del campo. Sirve para acordarte por qué se la diste.', ''],
+    ['Terminar ahora', 'Pide confirmación en el mismo recuadro (el visor no deja usar ventanitas emergentes, y en el sitio tampoco las usamos). Desde ese momento vuelve a cobrar 5% o 2,5% por link.', ''],
+  ],
+};
+
+let st = { linkMin: false, cartelCerrado: false, tab: 'negocio', dev: 'desk', caso: { negocio: 'ventas', admin: 'vigente' }, abiertos: { 1: true }, conf: false, formAbierto: true, sinVenc: false, toast: null };
+try {
+  const g = JSON.parse(localStorage.getItem('mock-a2') || 'null');
+  if (g && g.tab) { st.tab = g.tab; st.dev = g.dev || 'desk'; }
+} catch (e) {}
+function guardar() { try { localStorage.setItem('mock-a2', JSON.stringify({ tab: st.tab, dev: st.dev })); } catch (e) {} }
+
+const fmt = (n) => n.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+const SLUG = 'ludomestica';
+const LINK = 'bahiashops.com.ar/tienda/' + SLUG + '?de=tienda';
+
+function nav(phone) {
+  return '<div class="nav"><span class="logo">Bahía Shops</span>' + (phone
+    ? '<span class="burger"></span>'
+    : '<span class="items"><span>Categorías</span><span>Comprá con tus valores</span><span>Tesoros</span><span>Servicios</span><span>Mapa</span><span>Mi perfil</span></span>') + '</div>';
+}
+
+function bloqueLink(caso) {
+  if (caso === 'revision') {
+    return '<div class="link off"><p class="ey">Tu link</p><h3>Quien compra por tu link, te cuesta la mitad</h3>' +
+      '<p class="ex">Tu link se activa cuando publiquemos tu tienda. Desde ese día lo vas a poder copiar y mandar por WhatsApp.</p></div>';
+  }
+  let pie;
+  if (caso === 'cero') {
+    pie = '<p class="nada">Todavía no vendiste por tu link. Cuando alguien entre por él y compre, lo vas a ver acá.</p>';
+  } else {
+    pie = '<div class="stats"><div><b>3</b><span>ventas por tu link</span></div><div><b>$ 45.600</b><span>vendiste por tu link</span></div><div><b>$ 1.140</b><span>te ahorraste en comisiones</span></div></div>';
+  }
+  const esp = caso === 'especial'
+    ? '<div class="esp">Tenés una <b>comisión especial de 1%</b> hasta el 31 de diciembre. En cada venta se cobra la más baja entre esa y la normal.</div>'
+    : '';
+  if (st.linkMin) {
+    return '<div class="mini"><span class="ey2">Tu link</span>' +
+      '<span class="u">bahiashops.com.ar/tienda/' + SLUG + '<em>?de=tienda</em></span>' +
+      (caso === 'especial' ? '<span class="esp2">1% especial</span>' : '') +
+      '<button type="button" class="btn-c line" data-copy="tienda">' + IC.copy + '<span>Copiar link</span></button>' +
+      '<button type="button" class="tog" data-act="link-abrir" aria-label="Abrir tu link" aria-expanded="false"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 8 5 5 5-5"/></svg></button></div>';
+  }
+  return '<div class="link"><button type="button" class="tog up" data-act="link-min" aria-label="Minimizar" aria-expanded="true"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 8 5 5 5-5"/></svg></button><p class="ey">Tu link</p>' +
+    '<h3>Quien compra por tu link, te cuesta la mitad</h3>' +
+    '<p class="ex">Pegalo donde quieras: tu Instagram, tus historias, un WhatsApp. Si alguien entra por él y compra en tu tienda, pagás 2,5% de comisión en lugar de 5%.</p>' +
+    '<div class="url"><span>' + 'bahiashops.com.ar/tienda/' + SLUG + '<em>?de=tienda</em></span>' +
+    '<button type="button" class="btn-c line" data-copy="tienda">' + IC.copy + '<span>Copiar link</span></button></div>' +
+    esp + pie +
+    '<p class="tip">Cada vez que alguien lo toca, vale 48 horas. Compartilo seguido.</p></div>';
+}
+
+function pantallaNegocio(phone) {
+  const caso = st.caso.negocio;
+  const estado = caso === 'revision'
+    ? '<div class="estado rev"><span class="dot"></span>Estamos revisando tu tienda</div>'
+    : st.cartelCerrado
+      ? '<span class="vermi">Ver mi tienda ↗</span><br>'
+      : '<div class="estado"><span class="dot"></span><span>Tu tienda está publicada</span><u>Ver mi tienda</u>' +
+        '<button type="button" class="x-est" data-act="cerrar-cartel" aria-label="Cerrar el cartel"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 5 10 10M15 5 5 15"/></svg></button></div>';
+  return nav(phone) + '<div class="body"><div class="col">' +
+    '<span class="back">← Volver a Mi perfil</span>' +
+    '<p class="s-eyebrow">Tu tienda</p><p class="s-h1">Mi negocio</p><p class="s-sub">Ludoméstica</p>' + estado +
+    '<div class="ghost"><div class="portada"><div class="lg">L</div></div>' +
+    '<div class="pills"><span class="pill">Cambiar logo</span><span class="pill">Cambiar portada</span></div></div>' +
+    '<div style="margin-top:28px"></div>' + bloqueLink(caso) +
+    '<div class="menu ghost" style="margin-top:0">' + ['📦 Mis productos', '🛒 Mis pedidos', '⭐ Reseñas', '🚚 Cómo entregás', '📍 Mi ubicación'].map((t) => {
+      const [e, ...r] = t.split(' ');
+      return '<div><span>' + e + '</span><span>' + r.join(' ') + '</span><span>›</span></div>';
+    }).join('') + '</div>' +
+    '<div class="cobros ghost"><span>💳</span><span>MercadoPago conectado</span><span class="ok">Activo</span></div>' +
+    '</div></div>';
+}
+
+const PRODUCTOS = [
+  { id: 41, n: 'Juego de memoria de madera', c: 'Juegos y juguetes · Didácticos', p: 18500, e: 'activo', col: 'linear-gradient(140deg,#e7c9a4,#c99c6c)' },
+  { id: 42, n: 'Rompecabezas Bahía Blanca, 500 piezas', c: 'Juegos y juguetes · Rompecabezas', p: 24900, pa: 27500, e: 'activo', col: 'linear-gradient(140deg,#9cc3ea,#5f8fbd)' },
+  { id: 43, n: 'Dominó de colores', c: 'Juegos y juguetes · De mesa', p: 15200, e: 'pausado', col: 'linear-gradient(140deg,#f2b8a2,#d77b5f)' },
+  { id: 44, n: 'Ta-te-ti de viaje', c: 'Juegos y juguetes · De mesa', p: 9800, e: 'en_revision', col: 'linear-gradient(140deg,#cfe0c3,#8fb07c)' },
+];
+const ESTADOS = {
+  activo: ['Publicado', '#ecfdf5', '#047857', '#10b981'],
+  pausado: ['Pausado', '#fffbeb', '#b45309', '#f59e0b'],
+  en_revision: ['En revisión', '#f5f5f4', '#57534e', '#a8a29e'],
+};
+
+function pantallaProductos(phone) {
+  return nav(phone) + '<div class="body"><div class="col">' +
+    '<span class="back">← Volver a Mi negocio</span>' +
+    '<div class="prow"><div><p class="ph1">Mis productos</p><small>4 productos</small></div><span class="btn-k">+ Cargar producto</span></div>' +
+    PRODUCTOS.map((p) => {
+      const [t, f, c, d] = ESTADOS[p.e];
+      const share = p.e === 'activo'
+        ? '<div class="share"><span class="lb">Compartir</span>' +
+          '<button type="button" class="sbtn" data-copy="p' + p.id + '">' + IC.copy + '<span>Copiar link</span></button>' +
+          '<span class="hint">Si compran por acá, pagás 2,5%</span></div>'
+        : '';
+      return '<div class="card"><div class="in"><div class="ph" style="background:' + p.col + '"></div>' +
+        '<div class="info"><p class="n">' + p.n + '</p><p class="c">' + p.c + '</p><p class="p">' +
+        (p.pa ? '<span style="color:rgba(10,10,10,.25);font-weight:300;text-decoration:line-through;font-size:12px;margin-right:6px">$' + fmt(p.pa) + '</span>' : '') +
+        '$' + fmt(p.p) + '</p>' +
+        (p.e === 'en_revision' ? '<p style="font-size:12px;color:rgba(10,10,10,.4);margin:4px 0 0;font-family:Poppins,sans-serif;font-weight:300">Lo estamos revisando.</p>' : '') +
+        '<span class="chip" style="background:' + f + ';color:' + c + '"><i style="background:' + d + '"></i>' + t + '</span></div>' +
+        '<div class="acts"><span>Editar</span>' + (p.e === 'activo' ? '<span class="pa">Pausar</span>' : p.e === 'pausado' ? '<span class="ac">Activar</span>' : '') +
+        '<span style="color:rgba(10,10,10,.4)">Ver</span><span class="el">Eliminar</span></div></div>' + share + '</div>';
+    }).join('') + '</div></div>';
+}
+
+const PEDIDOS = [
+  { id: 128, apodo: 'Tero Viajero', col: '#cfe3f3', link: true, forma: 'Retiro', paso: 'Listo para retirar', items: [['Juego de memoria de madera', 1, 18500], ['Ta-te-ti de viaje', 1, 4300]], sub: 22800, env: 0, bp: 250, mot: 'link' },
+  { id: 127, apodo: 'Calandria', col: '#f6d9c9', link: false, forma: 'Envío', paso: 'Preparando', items: [['Juego de memoria de madera', 1, 18500]], sub: 18500, env: 2500, bp: 500, mot: 'base' },
+  { id: 125, apodo: 'Ñandú Feliz', col: '#dbe9cf', link: true, forma: 'Correo', paso: 'Despachado', items: [['Dominó de colores', 1, 12000]], sub: 12000, env: 4800, bp: 100, mot: 'especial' },
+];
+function comision(sub, bp) { return Math.floor((Math.round(sub * 100) * bp + 5000) / 10000) / 100; }
+function textoPct(p) {
+  const pct = fmt(p.bp / 100) + '%';
+  if (p.mot === 'link') return pct + ' · por tu link';
+  if (p.mot === 'especial') return pct + ' · especial';
+  return pct;
+}
+
+function pantallaPedidos(phone) {
+  return nav(phone) + '<div class="body"><div class="col">' +
+    '<span class="back">← Volver a Mi negocio</span>' +
+    '<p class="ph1" style="margin-bottom:4px">Mis pedidos</p><p class="muted" style="color:rgba(10,10,10,.3)">3 pedidos en total</p>' +
+    '<div class="tabs"><span class="on">Nuevos pedidos</span><span>Entregados</span><span>Carritos abandonados</span></div>' +
+    PEDIDOS.map((p, i) => {
+      const com = comision(p.sub, p.bp);
+      const total = p.sub + p.env;
+      const alCinco = comision(p.sub, 500);
+      const abierto = !!st.abiertos[i];
+      const tag = p.link ? '<span class="tag-link">' + IC.link + 'Por tu link</span>' : '';
+      let det = '';
+      if (abierto) {
+        det = '<div class="det"><div class="bx">' +
+          '<p class="lbl">Productos</p>' + p.items.map(([n, c, pr]) => '<div class="rowt"><span class="k" style="color:rgba(10,10,10,.6)">' + n + ' × ' + c + '</span><span class="v">$ ' + fmt(pr * c) + '</span></div>').join('') +
+          '<p class="muted" style="margin-top:12px">Compró: 28 de octubre, 18:42</p>' +
+          '<div style="border-top:1px solid rgba(10,10,10,.05);padding-top:8px">' +
+          '<div class="rowt"><span class="k">Productos</span><span class="v">$ ' + fmt(p.sub) + '</span></div>' +
+          '<div class="rowt"><span class="k">Envío</span><span class="v">$ ' + fmt(p.env) + '</span></div>' +
+          '<div class="rowt com"><span class="k">Comisión Bahía Shops · <span class="pct">' + textoPct(p) + '</span></span><span class="v">-$ ' + fmt(com) + '</span></div>' +
+          '<div class="rowt tot"><span>Recibís</span><span class="v">$ ' + fmt(total - com) + '</span></div>' +
+          (p.link && alCinco > com ? '<p class="ahorro">Por llegar con tu link te ahorraste $ ' + fmt(alCinco - com) + '.</p>' : '') +
+          '</div></div></div>';
+      }
+      return '<div class="ped' + (abierto ? ' open' : '') + '"><button type="button" class="hd" data-ped="' + i + '" aria-expanded="' + abierto + '">' +
+        '<span class="av" style="background:' + p.col + '">' + p.apodo[0] + '</span>' +
+        '<span class="mid"><span class="nm"><strong>' + p.apodo + '</strong>' + tag + '</span>' +
+        '<span class="ln"><span class="cf">' + p.forma + '</span><span>#' + p.id + ' · ' + p.paso + '</span></span></span>' +
+        '<span class="tt">$ ' + fmt(total) + '</span>' + IC.chev + '</button>' + det + '</div>';
+    }).join('') + '</div></div>';
+}
+
+const HIST = {
+  vigente: [
+    { p: '1%', d: 'Desde el 1 de noviembre · vence el 31 de diciembre', m: 'Promo de bienvenida por sumarse en la primera semana.', s: 'vigente' },
+    { p: '2%', d: 'Del 1 al 30 de septiembre', m: 'Prueba de feria de primavera.', s: 'vencida' },
+  ],
+  ninguna: [
+    { p: '1%', d: 'Del 1 de noviembre al 4 de noviembre', i: 'Terminada el 4 de noviembre', m: 'Promo de bienvenida.', s: 'terminada' },
+  ],
+  propia: [
+    { p: '0%', d: 'Desde el 30 de noviembre · sin vencimiento', m: 'Tienda propia de la plataforma.', s: 'vigente' },
+  ],
+};
+
+function pantallaAdmin(phone) {
+  const caso = st.caso.admin;
+  const propia = caso === 'propia';
+  const nombre = propia ? 'Bahía Shops' : 'Ludoméstica';
+  const vig = HIST[caso].find((h) => h.s === 'vigente');
+  let cabeza;
+  if (vig) {
+    cabeza = '<div class="vig"><span class="big">' + vig.p + '</span><div class="tx"><span class="t1">Comisión especial vigente</span>' +
+      '<span class="t2">' + vig.d + '</span>' +
+      '<span class="t2">Mientras dure, en cada venta se cobra la más baja entre esta y la normal (5%, o 2,5% por su link).</span></div></div>' +
+      '<div class="nota"><small>Motivo · no lo ve la tienda</small>' + vig.m + '</div>' +
+      (st.conf
+        ? '<div class="conf"><span>¿Terminar la comisión de ' + vig.p + '? Desde ahora cobra la normal: 5%, o 2,5% en las ventas por su link.</span>' +
+          '<div class="r"><button type="button" class="abtn red" data-act="ok-term">Sí, terminarla</button><button type="button" class="abtn link2" data-act="no-term">Cancelar</button></div></div>'
+        : '<div><button type="button" class="abtn sec2" data-act="term">Terminar ahora</button></div>');
+  } else {
+    cabeza = '<p class="normal">No tiene comisión especial. Cobra la normal: <b>5%</b>, o <b>2,5%</b> en las ventas que llegan por su link.</p>';
+  }
+  const form = st.formAbierto
+    ? '<div class="form"><p class="ft">Cargar una comisión especial</p>' +
+      (vig ? '<div class="warn">Al cargarla, termina la de ' + vig.p + ' que está vigente.</div>' : '') +
+      '<div class="fg"><div class="fl"><label for="f-pct">Porcentaje</label><div class="inp"><input id="f-pct" inputmode="decimal" value="1,5"><span>%</span></div><span class="help">De 0 a 4,99</span></div>' +
+      '<div class="fl"><label for="f-vence">Vence</label><div class="inp" style="' + (st.sinVenc ? 'opacity:.4' : '') + '"><input id="f-vence" type="date" value="2026-12-31"' + (st.sinVenc ? ' disabled' : '') + '></div>' +
+      '<label class="chk" for="f-sinv"><input id="f-sinv" type="checkbox"' + (st.sinVenc ? ' checked' : '') + ' data-act="sinv"> Sin vencimiento</label>' +
+      '<span class="help">' + (st.sinVenc ? 'Dura hasta que la termines.' : 'Vale todo ese día, hasta las 23:59.') + '</span></div></div>' +
+      '<div class="fl"><label for="f-mot">Motivo</label><textarea id="f-mot" class="ta" maxlength="300">Feria de diciembre: le bajamos la comisión mientras dure.</textarea><span class="help">Para vos. La tienda no lo ve. Hasta 300 caracteres.</span></div>' +
+      '<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap"><button type="button" class="abtn">Cargar comisión</button><button type="button" class="abtn link2" data-act="cerrar-form">Cancelar</button></div></div>'
+    : '<div class="form"><div><button type="button" class="abtn sec2" data-act="abrir-form">+ Cargar comisión especial</button></div></div>';
+  const hist = '<div class="hist"><p class="ft">Historial</p>' + HIST[caso].map((h) =>
+    '<div class="hr"><span class="p">' + h.p + '</span><span class="d">' + h.d + (h.i ? '<i>' + h.i + '</i>' : '') + '<i>' + h.m + '</i></span>' +
+    '<span class="st ' + h.s + '">' + h.s[0].toUpperCase() + h.s.slice(1) + '</span></div>').join('') + '</div>';
+
+  return nav(phone) + '<div class="body"><div class="col wide">' +
+    '<span class="back">← Vendedores</span>' +
+    '<div class="ad-h"><h4>' + nombre + '</h4><span class="ad-chip">Aprobada</span></div>' +
+    '<p class="ad-sub">Alta ' + (propia ? '30 de noviembre de 2026' : '12 de octubre de 2026') + '</p>' +
+    '<div class="secbox ghost" style="margin-bottom:28px;flex-direction:row;flex-wrap:wrap;gap:10px"><span class="abtn sec2" style="cursor:default">Pedir cambios</span><span class="abtn sec2" style="cursor:default">Bloquear</span></div>' +
+    '<div class="sec"><h5>Comisión</h5><div class="secbox">' + cabeza + form + hist + '</div></div>' +
+    '<div class="sec ghost" style="margin-top:28px"><h5>Presencia online</h5><div class="secbox" style="height:70px"></div></div>' +
+    '</div></div>';
+}
+
+const TEXTO_WA = {
+  tienda: '¡Hola! Te comparto mi tienda en Bahía Shops: https://' + LINK,
+};
+PRODUCTOS.forEach((p) => { TEXTO_WA['p' + p.id] = 'Mirá ' + p.n + ' en mi tienda de Bahía Shops: https://bahiashops.com.ar/producto/' + p.id + '?de=tienda'; });
+function linkDe(clave) { return clave === 'tienda' ? 'https://' + LINK : 'https://bahiashops.com.ar/producto/' + clave.slice(1) + '?de=tienda'; }
+
+function render() {
+  document.querySelectorAll('#seg-tab button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === st.tab));
+  document.querySelectorAll('#seg-dev button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === st.dev));
+  const casos = CASOS[st.tab];
+  const ctl = document.getElementById('ctl-caso');
+  ctl.hidden = !casos.length;
+  document.getElementById('seg-caso').innerHTML = casos.map(([v, t]) =>
+    '<button type="button" data-v="' + v + '" aria-pressed="' + (st.caso[st.tab] === v) + '">' + t + '</button>').join('');
+
+  const phone = st.dev === 'phone';
+  const ancho = phone ? 375 : 1040;
+  const html = { negocio: pantallaNegocio, productos: pantallaProductos, pedidos: pantallaPedidos, admin: pantallaAdmin }[st.tab](phone);
+  const toast = st.toast ? '<div class="toast"><small>' + st.toast[0] + '</small>' + st.toast[1] + '</div>' : '';
+  document.getElementById('frame').innerHTML =
+    '<div class="frame ' + (phone ? 'phone' : 'desk') + '"><div class="bar"><i></i><i></i><i></i></div>' +
+    '<div class="scr ' + (phone ? 'phone' : '') + (st.tab === 'admin' ? ' admin' : '') + '" style="width:' + ancho + 'px">' + html + toast + '</div></div>';
+
+  document.getElementById('notes').innerHTML = '<h2>Para decidir</h2><p class="intro">Lo que elegí al dibujar y lo que necesito que confirmes antes de armar el pedido para Code.</p>' +
+    NOTAS[st.tab].map(([t, p, r]) => '<div class="q"><b>' + t + '</b><p>' + p + '</p>' + (r ? '<span class="rec">' + r + '</span>' : '') + '</div>').join('') +
+    '<p class="legend">Lo que está más tenue en la pantalla ya existe y no cambia; está para que veas dónde cae lo nuevo.</p>';
+}
+
+let toastTimer;
+function mostrarToast(t) {
+  st.toast = t; render();
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { st.toast = null; render(); }, 3200);
+}
+
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('button, input[data-act]');
+  if (!b) return;
+  const seg = b.closest('.seg');
+  if (seg) {
+    if (seg.id === 'seg-tab') { st.tab = b.dataset.v; st.conf = false; }
+    if (seg.id === 'seg-dev') st.dev = b.dataset.v;
+    if (seg.id === 'seg-caso') { st.caso[st.tab] = b.dataset.v; st.conf = false; st.cartelCerrado = false; }
+    st.toast = null; guardar(); render(); return;
+  }
+  if (b.dataset.copy) {
+    const url = linkDe(b.dataset.copy);
+    const ok = () => mostrarToast(['Copiado', url]);
+    try { navigator.clipboard.writeText(url).then(ok, ok); } catch (err) { ok(); }
+    return;
+  }
+  if (b.dataset.wa) { mostrarToast(['Se abre WhatsApp con este mensaje', TEXTO_WA[b.dataset.wa]]); return; }
+  if (b.dataset.ped !== undefined) { const i = b.dataset.ped; st.abiertos[i] = !st.abiertos[i]; render(); return; }
+  const a = b.dataset.act;
+  if (a === 'term') st.conf = true;
+  if (a === 'no-term') st.conf = false;
+  if (a === 'ok-term') { st.conf = false; st.caso.admin = 'ninguna'; mostrarToast(['Listo', 'Terminaste la comisión especial. Desde ahora cobra la normal.']); return; }
+  if (a === 'link-min') st.linkMin = true;
+  if (a === 'link-abrir') st.linkMin = false;
+  if (a === 'cerrar-cartel') st.cartelCerrado = true;
+  if (a === 'abrir-form') st.formAbierto = true;
+  if (a === 'cerrar-form') st.formAbierto = false;
+  if (a === 'sinv') st.sinVenc = b.checked;
+  if (a) render();
+});
+
+render();
+</script>

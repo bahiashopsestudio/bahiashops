@@ -28,7 +28,7 @@ export function resolve(especificador, contexto, siguiente) {
 `))
 
 const { calcularPedido } = await import("../src/lib/precioPedido.js")
-const { COMISION_BASE_BP, COMISION_LINK_BP, marcaVigente, especialVigente, elegirComision, porcentajeABp, estadoDeComision } = await import("../src/lib/comision.js")
+const { COMISION_BASE_BP, COMISION_LINK_BP, marcaVigente, especialVigente, elegirComision, porcentajeABp, estadoDeComision, textoPorcentaje, ahorroAlCinco, venceEnDesdeDia, hoyEnArgentina, fechaDeComision, ultimoDiaQueVale } = await import("../src/lib/comision.js")
 const { CLAVE_MARCA_LINK, anotarMarca, marcaDe, linkPropio } = await import("../src/lib/marcaLink.js")
 const { armarPreferenciaNueva } = await import("../src/lib/pagarAhora.js")
 const { formatearMonto } = await import("../src/lib/montos.js")
@@ -239,6 +239,37 @@ console.log("\n6. La marca del link en el navegador (marcaLink)")
 
   ok(linkPropio({ slug: "la tienda" }) === "https://bahiashops.com.ar/tienda/la%20tienda?de=tienda", `link de la tienda: ${linkPropio({ slug: "la tienda" })}`)
   ok(linkPropio({ productoId: 42 }) === "https://bahiashops.com.ar/producto/42?de=tienda", `link del producto: ${linkPropio({ productoId: 42 })}`)
+}
+
+console.log("\n7. Cómo se escriben una comisión y sus fechas (las pantallas de la tanda A2)")
+{
+  ok(textoPorcentaje(250) === "2,5%", "250 bp: 2,5%")
+  ok(textoPorcentaje(100) === "1%", "100 bp: 1%")
+  ok(textoPorcentaje(0) === "0%", "0 bp: 0%")
+  ok(textoPorcentaje(125) === "1,25%", "125 bp: 1,25%")
+
+  ok(ahorroAlCinco(22800, 570) === 570, "al 5% serían 1.140; pagó 570: se ahorró 570")
+  ok(ahorroAlCinco(18500, 925) === 0, "pagó el 5%: no se ahorró nada")
+  ok(ahorroAlCinco(100.1, 2.5) === 2.51, "medio centavo para arriba: 5,005 redondea a 5,01")
+
+  ok(venceEnDesdeDia("2026-12-31") === "2027-01-01T00:00:00-03:00", "vence el 31/12: se guarda el 1/1 a las 00:00 de Argentina")
+  ok(venceEnDesdeDia("2028-02-28") === "2028-02-29T00:00:00-03:00", "año bisiesto")
+  ok(venceEnDesdeDia("2026-02-31") === null, "un día que no existe: null")
+  ok(venceEnDesdeDia("") === null && venceEnDesdeDia(null) === null, "vacío: null")
+
+  const octubre2026 = Date.parse("2026-10-30T12:00:00-03:00")
+  ok(hoyEnArgentina(octubre2026) === "2026-10-30", "hoy en Argentina")
+  ok(hoyEnArgentina(Date.parse("2026-10-31T01:00:00Z")) === "2026-10-30", "a las 22 de Argentina ya es otro día en UTC, pero acá sigue siendo hoy")
+
+  ok(ultimoDiaQueVale("2026-12-31T23:59:00-03:00", octubre2026) === "31 de diciembre", "mismo año: sin el año")
+  ok(ultimoDiaQueVale("2027-01-01T00:00:00-03:00", octubre2026) === "31 de diciembre", "vence el 1/1 a las 00:00: el último día es el 31/12 de este año")
+  ok(ultimoDiaQueVale("2027-01-01T03:00:00.000Z", octubre2026) === "31 de diciembre", "el mismo instante, como lo devuelve la base")
+  ok(ultimoDiaQueVale("2028-01-01T00:00:00-03:00", octubre2026) === "31 de diciembre de 2027", "otro año: con el año")
+  ok(ultimoDiaQueVale("no es fecha", octubre2026) === "", "una fecha ilegible: vacío")
+
+  ok(fechaDeComision("2026-11-01T10:00:00-03:00", octubre2026) === "1 de noviembre", "desde, este año")
+  ok(fechaDeComision("2025-11-01T10:00:00-03:00", octubre2026) === "1 de noviembre de 2025", "desde, otro año")
+  ok(fechaDeComision("2027-01-01T01:00:00Z", octubre2026) === "31 de diciembre", "el año también se mira en Argentina")
 }
 
 console.log(fallas === 0 ? "\nTODO OK" : `\n${fallas} FALLAS`)

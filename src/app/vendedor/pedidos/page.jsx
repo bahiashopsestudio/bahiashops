@@ -16,8 +16,9 @@ import {
 } from '@/lib/metodosEntrega';
 import { calleNumeroDepto, ciudadProvinciaCodigo } from '@/lib/direcciones';
 import {
-  pestanaEnElPanel, siguientePaso, pasosDe, formaDeEntrega, NOMBRE_PASO, ESTADO_ENTREGADO, ESTADO_REEMBOLSADO,
+  pestanaEnElPanel, siguientePaso, pasosDe, formaDeEntrega, NOMBRE_PASO, ESTADO_ENTREGADO, ESTADO_REEMBOLSADO, ESTADOS_PARA_RECLAMAR,
 } from '@/lib/pedidos';
+import { ahorroAlCinco, textoPorcentaje } from '@/lib/comision';
 import { diasSinMarcarEntregado, textoPedidosSinMarcar } from '@/lib/resenas';
 
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage'];
@@ -753,6 +754,35 @@ function textoPaso(p) {
   return NOMBRE_PASO[p.estado] || p.estado;
 }
 
+// El porcentaje de la línea de la comisión: "5%", "2,5% por tu link", "1% especial".
+function textoComision(p) {
+  const porcentaje = textoPorcentaje(p.comision_bp);
+  if (p.comision_motivo === 'link') return `${porcentaje} por tu link`;
+  if (p.comision_motivo === 'especial') return `${porcentaje} especial`;
+  return porcentaje;
+}
+
+// Lo que se ahorró este pedido por llegar con el link. Solo si el link fue lo
+// que bajó la comisión (con una especial, el ahorro no fue por el link) y es una
+// venta: sin cancelados ni reembolsados.
+function ahorroPorLink(p) {
+  if (p.comision_motivo !== 'link' || !ESTADOS_PARA_RECLAMAR.includes(p.estado)) return 0;
+  return ahorroAlCinco(p.subtotal_productos, p.comision_plataforma);
+}
+
+function PillPorTuLink() {
+  return (
+    <span className="inline-flex items-center shrink-0 whitespace-nowrap rounded-full"
+      style={{ gap: '4px', padding: '2px 8px', fontSize: '10.5px', fontWeight: 600, color: '#015444', backgroundColor: '#dcebf7' }}>
+      <svg width="10" height="10" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+        <path d="M8.5 11.5a3.5 3.5 0 0 0 5 0l3-3a3.5 3.5 0 0 0-5-5l-1 1" />
+        <path d="M11.5 8.5a3.5 3.5 0 0 0-5 0l-3 3a3.5 3.5 0 0 0 5 5l1-1" />
+      </svg>
+      Por tu link
+    </span>
+  );
+}
+
 function Etiqueta({ children }) {
   return <p className="m-0 mb-1.5 text-[11px] text-[#0a0a0a]/25 font-light uppercase tracking-wider">{children}</p>;
 }
@@ -771,6 +801,7 @@ function PedidoCard({
   const entregado = p.estado === ESTADO_ENTREGADO;
   const reembolsado = p.estado === ESTADO_REEMBOLSADO;
   const idDetalle = `pedido-${p.id}-detalle`;
+  const ahorro = ahorroPorLink(p);
 
   return (
     // scroll-mt: que la barra fija de arriba no tape el pedido al bajar.
@@ -786,8 +817,11 @@ function PedidoCard({
         )}
         <span className="flex-1 min-w-0">
           {/* Afuera va el apodo; nombre real y teléfono, sólo en el detalle. */}
-          <span className="block truncate text-[#0a0a0a]" style={{ fontWeight: 600, fontSize: '15px' }}>
-            {p.comprador_eliminado ? 'Cuenta eliminada' : (p.comprador_apodo || 'Comprador')}
+          <span className="flex items-center gap-2 min-w-0">
+            <span className="truncate text-[#0a0a0a]" style={{ fontWeight: 600, fontSize: '15px' }}>
+              {p.comprador_eliminado ? 'Cuenta eliminada' : (p.comprador_apodo || 'Comprador')}
+            </span>
+            {p.origen === 'link_tienda' && <PillPorTuLink />}
           </span>
           <span className="mt-1 flex items-center gap-2 min-w-0">
             <ChipForma metodoEnvio={p.metodo_envio} />
@@ -881,13 +915,18 @@ function PedidoCard({
                 <span className="text-[#0a0a0a] tabular-nums">$ {fmt(p.costo_envio)}</span>
               </div>
               <div className="flex justify-between text-sm py-0.5">
-                <span className="text-[#0a0a0a]/25 font-light">Comisión Bahía Shops</span>
+                <span className="text-[#0a0a0a]/25 font-light">Comisión Bahía Shops · <span style={{ color: 'rgba(10,10,10,0.5)' }}>{textoComision(p)}</span></span>
                 <span className="text-[#0a0a0a]/25 tabular-nums">-$ {fmt(p.comision_plataforma)}</span>
               </div>
               <div className="flex justify-between text-sm font-semibold text-[#0a0a0a] pt-2 border-t border-[#0a0a0a]/5 mt-1">
                 <span>Recibís</span>
                 <span className="tabular-nums">$ {fmt(p.total - (p.comision_plataforma || 0))}</span>
               </div>
+              {ahorro > 0 && (
+                <p className="m-0 mt-2" style={{ fontSize: '12px', color: '#015444' }}>
+                  Por llegar con tu link te ahorraste $ {fmt(ahorro)}.
+                </p>
+              )}
             </div>
 
             <div className="mb-4">

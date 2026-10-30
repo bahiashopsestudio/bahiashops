@@ -1,13 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Navbar from '@/components/Navbar';
 import MenuTakeover from '@/components/MenuTakeover';
 import VolverAtras from '@/components/VolverAtras';
+import CopiarLink from '@/components/CopiarLink';
 import { textoMotivoRechazo } from '@/lib/productos';
+import { linkPropio } from '@/lib/marcaLink';
 
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage'];
 
@@ -25,6 +27,47 @@ function formatearPrecio(valor) {
   return Number(valor).toLocaleString('es-AR');
 }
 
+// El link propio del producto, al pie de la tarjeta. Si el portapapeles falla,
+// aparece el link ya seleccionado para copiarlo a mano.
+function FranjaCompartir({ productoId }) {
+  const link = linkPropio({ productoId });
+  const [mostrarLink, setMostrarLink] = useState(false);
+  const campo = useRef(null);
+
+  useEffect(() => {
+    if (mostrarLink) campo.current?.select();
+  }, [mostrarLink]);
+
+  function alFallar() {
+    setMostrarLink(true);
+    campo.current?.select();
+  }
+
+  return (
+    <div className="mt-3.5 pt-3" style={{ borderTop: '1px solid rgba(10,10,10,0.05)' }}>
+      <div className="flex items-center flex-wrap gap-2">
+        <span className="mr-1" style={{ fontSize: '11px', color: 'rgba(10,10,10,0.35)' }}>Compartir</span>
+        <CopiarLink link={link} variante="claro" onFallo={alFallar} onCopiado={() => setMostrarLink(false)} />
+        <span className="w-full md:w-auto md:ml-auto" style={{ fontSize: '11px', fontWeight: 300, color: 'rgba(10,10,10,0.3)' }}>
+          Si compran por acá, pagás 2,5%
+        </span>
+      </div>
+      {mostrarLink && (
+        <input
+          ref={campo}
+          type="text"
+          readOnly
+          value={link}
+          aria-label="Link del producto"
+          onFocus={(e) => e.target.select()}
+          className="w-full mt-2 rounded-lg"
+          style={{ fontSize: '12px', padding: '8px 10px', color: '#0a0a0a', border: '1px solid rgba(10,10,10,0.12)', outline: 'none' }}
+        />
+      )}
+    </div>
+  );
+}
+
 export default function MisProductosPage() {
   const supabase = createClient();
   const router = useRouter();
@@ -36,6 +79,8 @@ export default function MisProductosPage() {
   const [eliminando, setEliminando] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [categorias, setCategorias] = useState([]);
+  // El link solo sirve con la tienda publicada y sin pausa.
+  const [puedeCompartir, setPuedeCompartir] = useState(false);
 
   useEffect(() => {
     if (menuOpen) { document.body.style.overflow = 'hidden' } else { document.body.style.overflow = '' }
@@ -58,7 +103,7 @@ export default function MisProductosPage() {
 
         const { data: vendedor, error: errVendedor } = await supabase
           .from('vendedores')
-          .select('id, categoria_id')
+          .select('id, categoria_id, estado_validacion, bloqueado, pausada_en')
           .eq('usuario_id', user.id)
           .single();
 
@@ -67,6 +112,8 @@ export default function MisProductosPage() {
           setCargando(false);
           return;
         }
+
+        setPuedeCompartir(vendedor.estado_validacion === 'aprobado' && !vendedor.bloqueado && !vendedor.pausada_en);
 
         const { data: categoria } = await supabase
           .from('categorias')
@@ -290,6 +337,8 @@ export default function MisProductosPage() {
                   </div>
                   )}
                 </div>
+
+                {puedeCompartir && p.estado === 'activo' && <FranjaCompartir productoId={p.id} />}
 
                 {/* Por qué no se publicó (solo mientras está rechazado: al
                     reenviarlo pasa a en revisión y esto deja de verse) */}

@@ -18,7 +18,7 @@
 import { NextResponse } from 'next/server'
 import { tiendaDeLaSesion } from '@/lib/tiendaDeLaSesion'
 import { ESTADOS_PARA_RECLAMAR } from '@/lib/pedidos'
-import { COMISION_BASE_BP, especialVigente } from '@/lib/comision'
+import { ahorroAlCinco, especialVigente } from '@/lib/comision'
 import { linkPropio } from '@/lib/marcaLink'
 
 const ERROR = 'No pudimos cargar tu link. Probá de nuevo en un rato.'
@@ -59,9 +59,7 @@ export async function GET() {
   for (const p of pedidos.data || []) {
     const subtotal = centavos(p.subtotal_productos)
     vendido += subtotal
-    // Lo mismo que calcularPedido al 5%: en enteros, medio centavo para arriba.
-    const alCinco = Math.floor((subtotal * COMISION_BASE_BP + 5000) / 10000)
-    ahorro += alCinco - centavos(p.comision_plataforma)
+    ahorro += centavos(ahorroAlCinco(p.subtotal_productos, p.comision_plataforma))
   }
 
   const vigente = especialVigente(especiales.data, Date.now())

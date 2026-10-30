@@ -21,6 +21,8 @@
 // La comisión la paga la tienda, no quien compra: nadie gana nada falsificando
 // la marca. Por eso no va firmada.
 
+import { fechaLarga } from '@/lib/fechas'
+
 export const COMISION_BASE_BP = 500
 export const COMISION_LINK_BP = 250
 
@@ -84,6 +86,59 @@ export function estadoDeComision(fila, ahoraMs) {
   const vence = ms(fila.vence_en)
   if (fila.vence_en && (vence === null || vence <= ahoraMs)) return 'vencida'
   return 'vigente'
+}
+
+// ── Cómo se escriben una comisión y sus fechas (panel y admin) ──
+
+// 250 -> '2,5%', 100 -> '1%', 0 -> '0%'.
+export function textoPorcentaje(bp) {
+  return `${(Number(bp) / 100).toLocaleString('es-AR', { maximumFractionDigits: 2 })}%`
+}
+
+function centavos(valor) {
+  const n = Number(valor)
+  return Number.isFinite(n) ? Math.round(n * 100) : 0
+}
+
+// Lo que un pedido hubiera pagado al 5% menos lo que pagó, en pesos. La misma
+// cuenta que calcularPedido al 5%: en enteros, medio centavo para arriba.
+export function ahorroAlCinco(subtotal, comision) {
+  const alCinco = Math.floor((centavos(subtotal) * COMISION_BASE_BP + 5000) / 10000)
+  return (alCinco - centavos(comision)) / 100
+}
+
+const ZONA = 'America/Argentina/Buenos_Aires'
+
+// «Vence el 31/12» vale todo ese día: se guarda el día siguiente a las 00:00
+// de Argentina. '2026-12-31' -> '2027-01-01T00:00:00-03:00'. null si el día no
+// existe. Argentina no tiene horario de verano desde 2009: el -03:00 es fijo.
+export function venceEnDesdeDia(dia) {
+  const partes = /^(\d{4})-(\d{2})-(\d{2})$/.exec(typeof dia === 'string' ? dia : '')
+  if (!partes) return null
+  const [anio, mes, numero] = partes.slice(1).map(Number)
+  const elegido = new Date(Date.UTC(anio, mes - 1, numero))
+  if (elegido.getUTCMonth() !== mes - 1 || elegido.getUTCDate() !== numero) return null
+  const siguiente = new Date(Date.UTC(anio, mes - 1, numero + 1))
+  return `${siguiente.toISOString().slice(0, 10)}T00:00:00-03:00`
+}
+
+// Hoy en Argentina, 'YYYY-MM-DD' (como lo usa <input type="date">).
+export function hoyEnArgentina(ahoraMs = Date.now()) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: ZONA }).format(new Date(ahoraMs))
+}
+
+// "31 de diciembre", con el año solo si no es el año en curso en Argentina:
+// "31 de diciembre de 2027". '' si la fecha no se puede leer.
+export function fechaDeComision(valor, ahoraMs = Date.now()) {
+  const texto = fechaLarga(valor)
+  if (!texto) return ''
+  const anio = hoyEnArgentina(valor instanceof Date ? valor.getTime() : Date.parse(valor)).slice(0, 4)
+  return anio === hoyEnArgentina(ahoraMs).slice(0, 4) ? texto : `${texto} de ${anio}`
+}
+
+// El último día que vale un vence_en: el anterior al instante guardado.
+export function ultimoDiaQueVale(venceEn, ahoraMs = Date.now()) {
+  return fechaDeComision(new Date(Date.parse(venceEn) - 1), ahoraMs)
 }
 
 // La comisión de un pedido.

@@ -9,6 +9,7 @@ import Navbar from '@/components/Navbar';
 import MenuTakeover from '@/components/MenuTakeover';
 import VolverAtras from '@/components/VolverAtras';
 import EstadoValidacion from '@/components/EstadoValidacion';
+import BloqueLinkPropio from '@/components/LinkPropio';
 import { usePausaTienda, SeccionPausar, TarjetaPausada } from '@/components/PausaTienda';
 import { entregaConfigurada, correoSinPrecios } from '@/lib/metodosEntrega';
 
@@ -59,6 +60,36 @@ const MENSAJES_MP = {
 
 const MENSAJE_MP_GENERICO = 'No pudimos completar la conexión con MercadoPago. Probá de nuevo.';
 
+// El link propio y lo vendido por él. Nunca lanza: si falla, el texto de error
+// de la ruta va en el lugar del bloque.
+const ERROR_LINK = 'No pudimos cargar tu link. Probá de nuevo en un rato.';
+
+async function cargarLinkPropio() {
+  try {
+    const res = await fetch('/api/vendedor/link-propio');
+    const datos = await res.json().catch(() => ({}));
+    return res.ok ? datos : { error: datos.error || ERROR_LINK };
+  } catch (err) {
+    console.error('No se pudo cargar el link propio:', err);
+    return { error: ERROR_LINK };
+  }
+}
+
+// El cartel cerrado y el link minimizado. Si no se guarda, en esta visita queda
+// igual y la próxima vuelve como estaba.
+async function guardarPreferencia(cambio) {
+  try {
+    const res = await fetch('/api/vendedor/preferencias', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cambio),
+    });
+    if (!res.ok) throw new Error('respuesta ' + res.status);
+  } catch (err) {
+    console.error('No se pudo guardar la preferencia:', err);
+  }
+}
+
 function Chevron() {
   return (
     <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-[#0a0a0a]/20 shrink-0">
@@ -82,6 +113,11 @@ export default function PerfilVendedorPage() {
   const [errorNotas, setErrorNotas] = useState(false);
   const [slugTienda, setSlugTienda] = useState(null);
   const [bloqueado, setBloqueado] = useState(false);
+  // El cartel de "publicada" cerrado y el link minimizado (migración 043).
+  const [cartelCerrado, setCartelCerrado] = useState(false);
+  const [linkMinimizado, setLinkMinimizado] = useState(false);
+  // Lo de /api/vendedor/link-propio, o { error }. Null si la tienda está bloqueada.
+  const [linkPropio, setLinkPropio] = useState(null);
   // Sin punto, la tienda no aparece en el mapa (por ejemplo, si en el alta
   // no se pudo guardar la ubicación).
   const [sinUbicacion, setSinUbicacion] = useState(false);
@@ -156,7 +192,7 @@ export default function PerfilVendedorPage() {
       if (!user) { router.replace('/entrar?next=%2Fvendedor%2Fperfil'); return; }
       const { data, error } = await supabase
         .from('vendedores')
-        .select('id, nombre_negocio, slug, logo_url, portada_url, mercadopago_conectado, estado_validacion, bloqueado, latitud, metodos_entrega_default, costos_envio_zona')
+        .select('id, nombre_negocio, slug, logo_url, portada_url, mercadopago_conectado, estado_validacion, bloqueado, latitud, metodos_entrega_default, costos_envio_zona, cartel_publicada_cerrado, link_propio_minimizado')
         .eq('usuario_id', user.id)
         .single();
       if (error) {
@@ -180,8 +216,15 @@ export default function PerfilVendedorPage() {
           }
         }
         setEstadoValidacion(data.estado_validacion || 'aprobado');
-        // Si falla, el panel sale igual, sin la sección de pausa.
-        await pausaTienda.cargar();
+        // Si falla la pausa, el panel sale igual, sin su sección. Se espera
+        // también el link, para que el bloque no aparezca de golpe.
+        const [, datosLink] = await Promise.all([
+          pausaTienda.cargar(),
+          data.bloqueado === true ? null : cargarLinkPropio(),
+        ]);
+        setLinkPropio(datosLink);
+        setCartelCerrado(data.cartel_publicada_cerrado === true);
+        setLinkMinimizado(data.link_propio_minimizado === true);
         setSlugTienda(data.slug || null);
         setBloqueado(data.bloqueado === true);
         setSinUbicacion(data.latitud === null);
@@ -318,6 +361,21 @@ export default function PerfilVendedorPage() {
     }
   }
 
+  function cerrarCartel() {
+    setCartelCerrado(true);
+    guardarPreferencia({ cartelPublicadaCerrado: true });
+  }
+
+  function cambiarLinkMinimizado(minimizado) {
+    setLinkMinimizado(minimizado);
+    guardarPreferencia({ linkMinimizado: minimizado });
+  }
+
+  // Por qué el link no anda. Sin publicar va primero: reactivar no alcanzaría.
+  let linkApagado = null;
+  if (estadoValidacion !== 'aprobado') linkApagado = 'Tu link se activa cuando publiquemos tu tienda. Desde ese día lo vas a poder copiar.';
+  else if (pausa?.pausada) linkApagado = 'Tu tienda está en pausa. Tu link vuelve a funcionar cuando la reactives.';
+
   function cerrarConfirmacion() {
     if (desconectando) return;
     setConfirmarDesconexion(false);
@@ -382,6 +440,8 @@ export default function PerfilVendedorPage() {
                   notas={notasValidacion}
                   slug={slugTienda}
                   bloqueado={bloqueado}
+                  cerrado={cartelCerrado}
+                  onCerrar={cerrarCartel}
                 />
               )}
               {pausa?.pausada && (
@@ -431,6 +491,18 @@ export default function PerfilVendedorPage() {
             <p className="mt-2 text-[11px] text-[#0a0a0a]/20 font-light leading-relaxed">
               Logo: cuadrado, mín. 400×400 px · Portada: panorámica 16:9 · JPG, PNG o WEBP · hasta 3 MB
             </p>
+
+            {/* ═══ TU LINK ═══ */}
+            {!bloqueado && (
+              <div className="mt-8">
+                <BloqueLinkPropio
+                  datos={linkPropio}
+                  textoApagado={linkApagado}
+                  minimizado={linkMinimizado}
+                  onCambiarMinimizado={cambiarLinkMinimizado}
+                />
+              </div>
+            )}
 
             {/* ═══ AVISO: SIN UBICACIÓN ═══ */}
             {sinUbicacion && (

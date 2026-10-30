@@ -10,7 +10,9 @@
 // o punto). Se guarda en puntos básicos (1,5 -> 150). 5 o más no tendría
 // efecto: siempre se cobra la más baja entre la especial y la normal
 // (src/lib/comision.js).
-// venceEn: fecha futura (ISO) o vacío = sin vencimiento.
+// venceEn: fecha futura (ISO) o vacío = sin vencimiento. «Vence el 31/12» vale
+// todo ese día: el panel manda el día siguiente a las 00:00 de Argentina
+// (venceEnDesdeDia, src/lib/comision.js).
 // motivo: obligatorio, hasta 300 caracteres. No lo ve la tienda.
 //
 // El admin que la carga sale de la sesión, nunca del body.

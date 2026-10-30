@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import Navbar from '@/components/Navbar'
+import ComisionEspecial from './ComisionEspecial'
 import { etiquetaMetodo } from '@/lib/metodosEntrega'
 
 const ESTADOS = {
@@ -377,6 +378,10 @@ export default function AdminVendedorDetallePage() {
                 </div>
               )}
             </div>
+
+            <Seccion titulo="Comisión">
+              <ComisionEspecial vendedorId={id} />
+            </Seccion>
 
             {/* ── Verificación: lo primero que se mira ── */}
             <Seccion titulo="Presencia online">
