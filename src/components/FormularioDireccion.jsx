@@ -8,6 +8,8 @@
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { createClient } from '@/lib/supabase/client';
+import LineaBarrio from '@/components/LineaBarrio';
+import { CLASE_ALTO_MAPA_UBICACION, PIELES } from '@/lib/mapaEstilo';
 import {
   PROVINCIAS, CIUDAD_BAHIA, PROVINCIA_BAHIA, errorDireccion, esDeBahia, normalizarCodigoPostal,
   codigoPostalValido, avisoLugar,
@@ -18,12 +20,18 @@ const MapaUbicacion = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="h-[300px] bg-[#F5F2EC] rounded-lg flex items-center justify-center text-gray-400 text-sm">
+      <div className={`${CLASE_ALTO_MAPA_UBICACION} rounded-lg flex items-center justify-center text-[#0a0a0a]/40 text-sm`} style={{ background: PIELES.claro.land }}>
         Cargando mapa...
       </div>
     ),
   }
 );
+
+// Zooms de MapLibre. El mínimo permite alejarse hasta ver el país: una dirección
+// puede ser de cualquier ciudad.
+const ZOOM_DIRECCION = 16;
+const ZOOM_CIUDAD = 12;
+const ZOOM_PAIS = 4;
 
 const inputClasses =
   'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-[0.95rem] outline-none focus:border-[#0a0a0a] focus:ring-1 focus:ring-[#0a0a0a]/20 transition-colors box-border';
@@ -82,7 +90,7 @@ export default function FormularioDireccion({ onGuardada, onCancelar, esPrimera 
   const [mostrarMapa, setMostrarMapa] = useState(tienePuntoGuardado);
   const [buscandoDireccion, setBuscandoDireccion] = useState(false);
   const [posicionBuscada, setPosicionBuscada] = useState(
-    tienePuntoGuardado ? { lat: d.lat, lng: d.lng, zoom: 16, nonce: 1 } : null
+    tienePuntoGuardado ? { lat: d.lat, lng: d.lng, zoom: ZOOM_DIRECCION, nonce: 1 } : null
   );
   const [barrioId, setBarrioId] = useState(d?.barrio_id || null);
   const [barrioNombre, setBarrioNombre] = useState('');
@@ -91,8 +99,9 @@ export default function FormularioDireccion({ onGuardada, onCancelar, esPrimera 
 
   const [barrios, setBarrios] = useState([]);
   const [mostrarFallback, setMostrarFallback] = useState(false);
+  const [barrioFallo, setBarrioFallo] = useState(false);
   // Arriba del mapa: la búsqueda cayó en otra ciudad, o no encontró la calle.
-  // No bloquea: la persona mueve el pin y guarda.
+  // No bloquea: la persona mueve la casita y guarda.
   const [avisoMapa, setAvisoMapa] = useState('');
 
   // El nombre del barrio guardado, para mostrarlo.
@@ -115,6 +124,7 @@ export default function FormularioDireccion({ onGuardada, onCancelar, esPrimera 
     setLongitud(null);
     setBarrioId(null);
     setBarrioNombre('');
+    setBarrioFallo(false);
     setMostrarFallback(false);
     setMostrarMapa(false);
     setPosicionBuscada(null);
@@ -148,20 +158,20 @@ export default function FormularioDireccion({ onGuardada, onCancelar, esPrimera 
     try {
       const encontrada = await buscarEnNominatim({ calle: calle.trim(), numero: numero.trim(), ...donde });
       if (encontrada) {
-        setPosicionBuscada({ lat: encontrada.lat, lng: encontrada.lng, zoom: 16, nonce: Date.now() });
+        setPosicionBuscada({ lat: encontrada.lat, lng: encontrada.lng, zoom: ZOOM_DIRECCION, nonce: Date.now() });
         if (!codigoPostal.trim() && encontrada.codigoPostal) setCodigoPostal(normalizarCodigoPostal(encontrada.codigoPostal));
         if (!enBahia) setAvisoMapa(avisoLugar(donde, encontrada.address) || '');
         return;
       }
       // Sin la calle, al menos la ciudad (con su código postal y su
-      // provincia), para arrastrar el pin desde ahí.
+      // provincia), para arrastrar la casita desde ahí.
       const soloCiudad = enBahia ? null : await buscarEnNominatim({ ...donde });
       const centro = soloCiudad || (enBahia ? CENTRO_BAHIA : CENTRO_ARGENTINA);
-      setPosicionBuscada({ lat: centro.lat, lng: centro.lng, zoom: soloCiudad || enBahia ? 13 : 5, nonce: Date.now() });
+      setPosicionBuscada({ lat: centro.lat, lng: centro.lng, zoom: soloCiudad || enBahia ? ZOOM_CIUDAD : ZOOM_PAIS, nonce: Date.now() });
       const otraCiudad = soloCiudad ? avisoLugar(donde, soloCiudad.address) : null;
       setAvisoMapa(otraCiudad || (soloCiudad || enBahia
-        ? 'No encontramos esa calle. Te mostramos la ciudad: arrastrá el pin hasta tu casa.'
-        : 'No encontramos esa ciudad. Arrastrá el pin hasta tu casa.'));
+        ? 'No encontramos esa calle. Te mostramos la ciudad: arrastrá la casita hasta tu casa.'
+        : 'No encontramos esa ciudad. Arrastrá la casita hasta tu casa.'));
     } catch (err) {
       console.error('Error buscando dirección:', err);
       alert('No se pudo buscar la dirección. Probá de nuevo.');
@@ -170,17 +180,21 @@ export default function FormularioDireccion({ onGuardada, onCancelar, esPrimera 
     }
   }
 
-  function alCambiarUbicacion({ lat, lng, barrioDetectado }) {
+  function alCambiarUbicacion({ lat, lng, barrioDetectado, barrioFallo: fallo }) {
     setLatitud(lat);
     setLongitud(lng);
     if (!enBahia) return;
 
+    setBarrioFallo(fallo);
     if (barrioDetectado) {
       setBarrioId(barrioDetectado.id);
       setBarrioNombre(barrioDetectado.nombre);
       setMostrarFallback(false);
     } else {
-      setBarrioId(null);
+      // Si la consulta falló sobre el punto guardado, el barrio guardado sigue
+      // valiendo: no se sabe que esté mal.
+      const esElGuardado = tienePuntoGuardado && Number(d.lat) === lat && Number(d.lng) === lng;
+      if (!(fallo && esElGuardado)) setBarrioId(null);
       setBarrioNombre('');
       setMostrarFallback(true);
     }
@@ -363,40 +377,26 @@ export default function FormularioDireccion({ onGuardada, onCancelar, esPrimera 
             posicionBuscada={posicionBuscada}
             onUbicacionChange={alCambiarUbicacion}
             conBarrios={enBahia}
+            zoomMinimo={ZOOM_PAIS}
           />
 
-          {enBahia && barrioNombre && (
-            <div className="mt-2 px-3 py-2 bg-[#F5F2EC] rounded-lg text-sm text-[#0a0a0a] flex items-center gap-1.5">
-              📍 Barrio detectado: <strong>{barrioNombre}</strong>
-            </div>
-          )}
-
-          {enBahia && mostrarFallback && !barrioNombre && (
+          {enBahia && (barrioNombre || mostrarFallback) && (
             <div className="mt-2">
-              <p className="text-xs text-gray-400 mb-1">
-                No pudimos detectar tu barrio automáticamente. Elegilo de la lista:
-              </p>
-              <select
-                className={`${inputClasses} bg-white`}
-                value={barrioId || ''}
-                onChange={(e) => {
-                  const id = Number(e.target.value);
-                  const barrio = barrios.find(b => b.id === id);
-                  setBarrioId(id || null);
-                  setBarrioNombre(barrio?.nombre || '');
-                }}
-              >
-                <option value="">Elegí tu barrio</option>
-                {barrios.map((b) => (
-                  <option key={b.id} value={b.id}>{b.nombre}</option>
-                ))}
-              </select>
+              <LineaBarrio nombre={barrioNombre} fallo={barrioFallo}>
+                <select
+                  aria-label="Barrio"
+                  className={`${inputClasses} bg-white`}
+                  value={barrioId || ''}
+                  onChange={(e) => setBarrioId(Number(e.target.value) || null)}
+                >
+                  <option value="">Elegí tu barrio</option>
+                  {barrios.map((b) => (
+                    <option key={b.id} value={b.id}>{b.nombre}</option>
+                  ))}
+                </select>
+              </LineaBarrio>
             </div>
           )}
-
-          <p className="text-xs text-gray-400 mt-1.5">
-            Si la ubicación no es exacta, arrastrá el pin hasta tu puerta.
-          </p>
         </div>
       )}
 

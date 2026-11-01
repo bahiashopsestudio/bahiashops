@@ -32,7 +32,7 @@ import { createClient } from '@/lib/supabase/client'
 import { textoPuntajeTarjeta } from '@/lib/resenas'
 import {
   PIELES, PIEL_INICIAL, CASA, CASA_VIEWBOX, CENTRO_MAPA, TAMANO_LOCALIDAD, ESPACIADO_LOCALIDAD,
-  buildStyle, centro, partir,
+  MENSAJES_GESTOS, buildStyle, centro, partir, soportaWebGL,
 } from '@/lib/mapaEstilo'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
@@ -50,14 +50,6 @@ const OFFSET_PIN = {
   left: [29, -21], right: [0, -21], center: [14, -21],
 }
 const OFFSET_ZONA = [0, 0]
-// Lo que muestra el mapa con cooperativeGestures cuando alguien intenta
-// hacer zoom o moverlo sin la tecla o sin los dos dedos. MapLibre usa ⌘ en Mac.
-const MENSAJES_GESTOS = {
-  'CooperativeGesturesHandler.WindowsHelpText': 'Usá Ctrl + rueda para acercar',
-  'CooperativeGesturesHandler.MacHelpText': 'Usá ⌘ + rueda para acercar',
-  'CooperativeGesturesHandler.MobileHelpText': 'Usá dos dedos para mover el mapa',
-}
-
 // Lo que tarda el aro de una zona en crecer o volver, como las casitas.
 const DURACION_ARO_MS = 150
 
@@ -126,19 +118,6 @@ function ContenidoPopup({ tiendas, zona, barriosMap }) {
       )}
     </div>
   )
-}
-
-// MapLibre dibuja con WebGL: sin él, el mapa no puede arrancar.
-function soportaWebGL() {
-  try {
-    const lienzoPrueba = document.createElement('canvas')
-    const gl = lienzoPrueba.getContext('webgl2') || lienzoPrueba.getContext('webgl')
-    // Se suelta enseguida: el navegador permite pocos contextos a la vez.
-    gl?.getExtension('WEBGL_lose_context')?.loseContext()
-    return !!gl
-  } catch {
-    return false
-  }
 }
 
 function svgCasa(color) {

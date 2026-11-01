@@ -1,9 +1,12 @@
-// El estilo del mapa público (MapaVendedores): las dos pieles, las capas del
-// fondo, la casita de los pines y las reglas de los nombres de barrio.
+// El estilo de los mapas: el público (MapaVendedores), con sus dos pieles, las
+// capas del fondo, la casita de los pines y las reglas de los nombres de
+// barrio; y el de ubicar un punto (MapaUbicacion), siempre Claro y con nombres
+// de calles.
 //
-// Todo sale de docs/mapa-mockup.html, que es la fuente de verdad: si cambia
-// el diseño, se cambia ahí primero y se copia acá tal cual. En el mockup las
-// pieles se llaman "audaz" (Claro) y "verde" (Oscuro).
+// Todo sale de docs/mapa-mockup.html y docs/mapa-ubicacion-mockup.html, que son
+// la fuente de verdad: si cambia el diseño, se cambia ahí primero y se copia
+// acá tal cual. En el mockup público las pieles se llaman "audaz" (Claro) y
+// "verde" (Oscuro).
 //
 // El fondo es OpenFreeMap (teselas vectoriales de OpenMapTiles): sin clave y
 // sin tope de visitas. Su atribución la trae la propia fuente y el mapa la
@@ -40,6 +43,41 @@ export const PLAZA = [-62.2663, -38.7183]
 // place-label). Lo usa también la reserva de lugar de «Bahía Blanca».
 export const TAMANO_LOCALIDAD = { city: 22, town: 16, village: 13 }
 export const ESPACIADO_LOCALIDAD = 0.06
+
+// Lo que muestran los mapas con cooperativeGestures cuando alguien intenta
+// hacer zoom o moverlos sin la tecla o sin los dos dedos. MapLibre usa ⌘ en Mac.
+export const MENSAJES_GESTOS = {
+  'CooperativeGesturesHandler.WindowsHelpText': 'Usá Ctrl + rueda para acercar',
+  'CooperativeGesturesHandler.MacHelpText': 'Usá ⌘ + rueda para acercar',
+  'CooperativeGesturesHandler.MobileHelpText': 'Usá dos dedos para mover el mapa',
+}
+
+// MapLibre dibuja con WebGL: sin él, el mapa no puede arrancar.
+export function soportaWebGL() {
+  try {
+    const lienzoPrueba = document.createElement('canvas')
+    const gl = lienzoPrueba.getContext('webgl2') || lienzoPrueba.getContext('webgl')
+    // Se suelta enseguida: el navegador permite pocos contextos a la vez.
+    gl?.getExtension('WEBGL_lose_context')?.loseContext()
+    return !!gl
+  } catch {
+    return false
+  }
+}
+
+// El alto del mapa de ubicación. Acá para que el "Cargando mapa..." de cada
+// formulario mida lo mismo que el mapa.
+export const CLASE_ALTO_MAPA_UBICACION = 'h-[min(62svh,460px)] min-h-[320px]'
+
+// Los nombres de ciudades y pueblos del fondo, en los dos mapas.
+function capaLocalidades(s) {
+  return { id: 'place-label', type: 'symbol', source: 'omt', 'source-layer': 'place',
+    filter: ['match', ['get', 'class'], ['city', 'town', 'village'], true, false],
+    layout: { 'text-field': ['coalesce', ['get', 'name:es'], ['get', 'name']], 'text-font': ['Noto Sans Bold'],
+      'text-size': ['match', ['get', 'class'], 'city', TAMANO_LOCALIDAD.city, 'town', TAMANO_LOCALIDAD.town, TAMANO_LOCALIDAD.village],
+      'text-transform': 'uppercase', 'text-letter-spacing': ESPACIADO_LOCALIDAD },
+    paint: { 'text-color': s.place, 'text-halo-color': s.halo, 'text-halo-width': 2 } }
+}
 
 // La zona es un aro sobre el borde de los RADIO_ZONA_M metros, que nunca
 // baja de RADIO_MINIMO_PX en pantalla (con 4 px de borde, uno más chico se ve
@@ -115,12 +153,42 @@ export function buildStyle(piel, zonas = ZONAS_VACIAS) {
       { id: 'water-label', type: 'symbol', source: 'omt', 'source-layer': 'water_name',
         layout: { 'text-field': name, 'text-font': ['Noto Sans Italic'], 'text-size': 13 },
         paint: { 'text-color': s.waterLabel, 'text-halo-width': 0 } },
-      { id: 'place-label', type: 'symbol', source: 'omt', 'source-layer': 'place',
-        filter: ['match', ['get', 'class'], ['city', 'town', 'village'], true, false],
-        layout: { 'text-field': name, 'text-font': ['Noto Sans Bold'],
-          'text-size': ['match', ['get', 'class'], 'city', TAMANO_LOCALIDAD.city, 'town', TAMANO_LOCALIDAD.town, TAMANO_LOCALIDAD.village],
-          'text-transform': 'uppercase', 'text-letter-spacing': ESPACIADO_LOCALIDAD },
-        paint: { 'text-color': s.place, 'text-halo-color': s.halo, 'text-halo-width': 2 } },
+      capaLocalidades(s),
+    ],
+  }
+}
+
+// El mapa para ubicar un punto (docs/mapa-ubicacion-mockup.html): la piel Claro
+// con los nombres de las calles, para que la persona encuentre su dirección, y
+// los de ciudades y pueblos, para orientarse fuera de Bahía. Sin polígonos de
+// barrio. La casita y el aro son marcadores, no capas.
+const TEXTO_CALLE = '#16233a'
+export function estiloUbicacion() {
+  const s = PIELES.claro
+  const name = ['coalesce', ['get', 'name:es'], ['get', 'name']]
+  const w = (a, b) => ['interpolate', ['exponential', 1.6], ['zoom'], 11, a, 17, b]
+  const notTunnel = ['!=', ['get', 'brunnel'], 'tunnel']
+  const majors = ['match', ['get', 'class'], ['motorway', 'trunk', 'primary', 'secondary'], true, false]
+  const minors = ['match', ['get', 'class'], ['tertiary', 'minor', 'service'], true, false]
+  return {
+    version: 8,
+    glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
+    sources: { omt: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' } },
+    layers: [
+      { id: 'bg', type: 'background', paint: { 'background-color': s.land } },
+      { id: 'park', type: 'fill', source: 'omt', 'source-layer': 'park', paint: { 'fill-color': s.park } },
+      { id: 'green', type: 'fill', source: 'omt', 'source-layer': 'landcover', filter: ['match', ['get', 'class'], ['grass', 'wood'], true, false], paint: { 'fill-color': s.park, 'fill-opacity': 0.7 } },
+      { id: 'water', type: 'fill', source: 'omt', 'source-layer': 'water', paint: { 'fill-color': s.water } },
+      { id: 'road-minor', type: 'line', source: 'omt', 'source-layer': 'transportation', filter: ['all', notTunnel, minors],
+        layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': s.minor, 'line-width': w(0.5, 3.5), 'line-opacity': 0.85 } },
+      { id: 'road-major', type: 'line', source: 'omt', 'source-layer': 'transportation', filter: ['all', notTunnel, majors],
+        layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': s.major, 'line-width': w(1.2, 7) } },
+      { id: 'road-label', type: 'symbol', source: 'omt', 'source-layer': 'transportation_name', minzoom: 14,
+        filter: ['match', ['get', 'class'], ['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'minor'], true, false],
+        layout: { 'symbol-placement': 'line', 'text-field': name, 'text-font': ['Noto Sans Regular'],
+          'text-size': ['interpolate', ['linear'], ['zoom'], 14, 10.5, 17, 13], 'text-letter-spacing': 0.02 },
+        paint: { 'text-color': TEXTO_CALLE, 'text-halo-color': s.land, 'text-halo-width': 1.6 } },
+      capaLocalidades(s),
     ],
   }
 }

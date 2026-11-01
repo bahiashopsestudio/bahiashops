@@ -9,24 +9,31 @@
 // migración 018 el navegador no puede escribir estas columnas.
 //
 // En los dos casos se busca con calle y número.
-//   Con "Sí": la dirección se guarda ("calle número"), con el punto exacto y
-//     el pin arrastrable, como antes.
-//   Con "No": la calle y el número sirven solo para buscar en el mapa. No se
-//     guardan, no se mandan a la ruta y no se escriben en ningún log: al
-//     servidor le llega solo el centro del círculo. El círculo aparece en la
-//     celda de la grilla donde cae la dirección y se arrastra de celda en
-//     celda: lo que se ve es exactamente lo que se guarda.
+//   Dirección exacta: la dirección se guarda ("calle número"), con el punto
+//     exacto y la casita arrastrable.
+//   Solo la zona: la calle y el número sirven solo para buscar en el mapa. No
+//     se guardan, no se mandan a la ruta y no se escriben en ningún log: al
+//     servidor le llega solo el centro del aro. El aro aparece en la celda de
+//     la grilla donde cae la dirección y se arrastra de celda en celda: lo que
+//     se ve es exactamente lo que se guarda.
+//
+// Al cambiar de opción se conserva el punto. En zona, redondeado. Al volver a
+// la dirección exacta, la casita regresa al último punto exacto de esta visita
+// (ultimoExacto), que queda solo acá, en el navegador: nunca va en onChange
+// mientras la opción sea la zona.
 
 import { useEffect, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import {
   inputClasses, selectClasses, fuenteAyuda, ayudaClasses, labelClasses, btnNegro, btnNegroInactivo,
 } from '@/lib/estilosVendedor'
+import LineaBarrio from '@/components/LineaBarrio'
+import { CASA, CASA_VIEWBOX, CLASE_ALTO_MAPA_UBICACION, PIELES } from '@/lib/mapaEstilo'
 
 const MapaUbicacion = dynamic(() => import('@/app/vendedor/nuevo/MapaUbicacion'), {
   ssr: false,
   loading: () => (
-    <div className="h-[350px] bg-[#F5F2EC] rounded-lg flex items-center justify-center text-[#0a0a0a]/30 text-sm font-light">
+    <div className={`${CLASE_ALTO_MAPA_UBICACION} rounded-lg flex items-center justify-center text-[#0a0a0a]/40 text-sm font-light`} style={{ background: PIELES.claro.land }}>
       Cargando mapa...
     </div>
   ),
@@ -34,7 +41,50 @@ const MapaUbicacion = dynamic(() => import('@/app/vendedor/nuevo/MapaUbicacion')
 
 const CENTRO_BB = { lat: -38.7183, lng: -62.2663 }
 
-const NO_ENCONTRADA = 'No encontramos esa dirección. Arrastrá el círculo (o el pin) hasta tu zona.'
+// Zooms de MapLibre. En zona, a 16 el aro no entraría en el mapa de un celular.
+const ZOOM_EXACTA = 16
+const ZOOM_ZONA = 14.5
+const ZOOM_SIN_DIRECCION = 13
+const zoomDe = (direccionVisible) => (direccionVisible ? ZOOM_EXACTA : ZOOM_ZONA)
+
+const NO_ENCONTRADA = 'No encontramos esa dirección. Arrastrá el aro (o la casita) hasta tu zona.'
+
+const VERDE = PIELES.claro.pin
+const NOTA_EXACTA = 'Tu dirección escrita no se muestra en la tienda: la recibe solo quien te compra con retiro.'
+const NOTA_ZONA = 'Tu punto exacto no se guarda: solo el centro del casillero. En la tienda se ve el aro y el barrio. Si alguien te compra con retiro, le pasás la dirección por WhatsApp.'
+
+// Una de las dos tarjetas de "Qué ve el público". Por dentro es una opción de
+// radio, así funciona con el teclado y con los lectores de pantalla.
+function TarjetaOpcion({ elegida, onElegir, icono, titulo, texto }) {
+  return (
+    <label
+      className="flex items-start gap-2.5 cursor-pointer rounded-xl bg-white has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[#4164fe]"
+      style={{
+        padding: '12px 14px',
+        border: `1px solid ${elegida ? '#0a0a0a' : 'rgba(10,10,10,0.12)'}`,
+        boxShadow: elegida ? 'inset 0 0 0 1px #0a0a0a' : 'none',
+      }}
+    >
+      <input type="radio" name="direccion_visible" checked={elegida} onChange={onElegir} className="sr-only" />
+      <svg viewBox={icono.viewBox} aria-hidden="true" style={{ flex: 'none', width: '22px', height: '26px', marginTop: '2px' }}>
+        {icono.dibujo}
+      </svg>
+      <span style={{ fontFamily: "'Inter', sans-serif" }}>
+        <span className="block" style={{ fontWeight: 600, fontSize: '13px', color: '#0a0a0a' }}>{titulo}</span>
+        <span className="block" style={{ fontSize: '12px', lineHeight: 1.4, color: 'rgba(10,10,10,0.58)', marginTop: '2px' }}>{texto}</span>
+      </span>
+    </label>
+  )
+}
+
+const ICONO_ARO = {
+  viewBox: '0 0 26 26',
+  dibujo: <circle cx="13" cy="13" r="10" fill="none" stroke={VERDE} strokeWidth="3.5" />,
+}
+const ICONO_CASITA = {
+  viewBox: CASA_VIEWBOX,
+  dibujo: <path d={CASA} fill={VERDE} />,
+}
 
 // Búsqueda estructurada: calle y número por un lado y la ciudad por otro.
 // Como texto libre, "12 de Octubre 801" puede centrar en el barrio 12 de
@@ -91,10 +141,11 @@ export default function BloqueUbicacion({ localidades = [], barrios = [], inicia
   // Para no perder un barrio elegido a mano cuando el mapa vuelve a cargar
   // el punto guardado y no lo detecta.
   const puntoGuardado = useRef(puntoInicial)
+  const ultimoExacto = useRef(inicial?.direccion_visible === true ? puntoInicial : null)
   const direccionInicial = inicial?.direccion_visible ? separarDireccion(inicial.direccion) : { calle: '', numero: '' }
 
   const [localidadId, setLocalidadId] = useState(inicial?.localidad_id ? String(inicial.localidad_id) : '')
-  // "No" marcado de entrada.
+  // "Solo la zona" marcado de entrada.
   const [direccionVisible, setDireccionVisible] = useState(inicial?.direccion_visible === true)
   const [calle, setCalle] = useState(direccionInicial.calle)
   const [numero, setNumero] = useState(direccionInicial.numero)
@@ -102,10 +153,11 @@ export default function BloqueUbicacion({ localidades = [], barrios = [], inicia
   const [punto, setPunto] = useState(null)
   const [barrioId, setBarrioId] = useState(inicial?.barrio_id ? String(inicial.barrio_id) : '')
   const [barrioDetectado, setBarrioDetectado] = useState(null)
+  const [barrioFallo, setBarrioFallo] = useState(false)
 
   const [mapaVisible, setMapaVisible] = useState(tienePunto)
   const [posicionBuscada, setPosicionBuscada] = useState(
-    puntoInicial ? { ...puntoInicial, zoom: 16, nonce: 0 } : null
+    puntoInicial ? { ...puntoInicial, zoom: zoomDe(inicial?.direccion_visible === true), nonce: 0 } : null
   )
   // Cambia cuando se empieza de nuevo, para que el mapa arranque limpio.
   const [claveMapa, setClaveMapa] = useState(0)
@@ -146,14 +198,26 @@ export default function BloqueUbicacion({ localidades = [], barrios = [], inicia
 
   function empezarDeNuevo() {
     puntoGuardado.current = null
+    ultimoExacto.current = null
     setPunto(null)
     setBarrioId('')
     setBarrioDetectado(null)
+    setBarrioFallo(false)
     setMapaVisible(false)
     setPosicionBuscada(null)
     setAvisoMapa(null)
     setUltimaBusqueda(null)
     setClaveMapa((c) => c + 1)
+  }
+
+  // Conserva el punto: el mapa lo redondea si pasa a zona, y al volver a la
+  // dirección exacta la casita regresa al último punto exacto que hubo.
+  function cambiarOpcion(visible) {
+    if (visible === direccionVisible) return
+    setDireccionVisible(visible)
+    if (!punto) return
+    const destino = (visible && ultimoExacto.current) || punto
+    setPosicionBuscada({ ...destino, zoom: zoomDe(visible), nonce: Date.now() })
   }
 
   // Al apretar "Ubicar" (siempre) o al salir del cuadro del número (solo si
@@ -171,51 +235,44 @@ export default function BloqueUbicacion({ localidades = [], barrios = [], inicia
     setUltimaBusqueda(clave)
     setBuscando(true)
     setAvisoMapa(null)
+    ultimoExacto.current = null
     try {
       const encontrado = await buscarEnNominatim({ calle: calle.trim(), numero: numero.trim(), ciudad: nombreLocalidad })
       setMapaVisible(true)
       if (encontrado) {
-        setPosicionBuscada({ ...encontrado, zoom: 16, nonce: Date.now() })
+        ultimoExacto.current = encontrado
+        setPosicionBuscada({ ...encontrado, zoom: zoomDe(direccionVisible), nonce: Date.now() })
       } else {
         setAvisoMapa(NO_ENCONTRADA)
-        setPosicionBuscada({ ...CENTRO_BB, zoom: 14, nonce: Date.now() })
+        setPosicionBuscada({ ...CENTRO_BB, zoom: ZOOM_SIN_DIRECCION, nonce: Date.now() })
       }
     } catch {
       setMapaVisible(true)
-      setAvisoMapa('Hubo un problema al buscar. Arrastrá el círculo (o el pin) hasta tu zona.')
-      setPosicionBuscada({ ...CENTRO_BB, zoom: 14, nonce: Date.now() })
+      setAvisoMapa('Hubo un problema al buscar. Arrastrá el aro (o la casita) hasta tu zona.')
+      setPosicionBuscada({ ...CENTRO_BB, zoom: ZOOM_SIN_DIRECCION, nonce: Date.now() })
     }
     enCurso.current = false
     setBuscando(false)
   }
 
-  function manejarUbicacion({ lat, lng, barrioDetectado: detectado }) {
+  function manejarUbicacion({ lat, lng, barrioDetectado: detectado, barrioFallo: fallo }) {
     const esElGuardado = puntoGuardado.current
       && puntoGuardado.current.lat === lat && puntoGuardado.current.lng === lng
+    if (direccionVisible) ultimoExacto.current = { lat, lng }
     setPunto({ lat, lng })
     setBarrioDetectado(detectado)
+    setBarrioFallo(fallo)
     if (detectado) setBarrioId(String(detectado.id))
     else if (!esElGuardado) setBarrioId('')
   }
 
-  const barrioElegido = barriosDeLaLocalidad.find((b) => b.id === Number(barrioId))
-
-  const lineaBarrio = barrioDetectado ? (
-    <p className={`${ayudaClasses} m-0`} style={fuenteAyuda}>
-      📍 Barrio: <strong>{barrioDetectado.nombre}</strong>
-      {direccionVisible ? '. Si la ubicación no es exacta, arrastrá el pin.' : ''}
-    </p>
-  ) : (
-    <label className="flex flex-col gap-1.5">
-      <span className={labelClasses}>No pudimos detectar el barrio. Elegilo vos:</span>
-      <select value={barrioId} onChange={(e) => setBarrioId(e.target.value)} className={selectClasses}>
+  const lineaBarrio = (
+    <LineaBarrio nombre={barrioDetectado?.nombre} fallo={barrioFallo}>
+      <select aria-label="Barrio" value={barrioId} onChange={(e) => setBarrioId(e.target.value)} className={selectClasses}>
         <option value="">Elegí un barrio</option>
         {barriosDeLaLocalidad.map((b) => <option key={b.id} value={b.id}>{b.nombre}</option>)}
       </select>
-      {barrioElegido && !direccionVisible && (
-        <span className={ayudaClasses} style={fuenteAyuda}>Barrio: {barrioElegido.nombre}</span>
-      )}
-    </label>
+    </LineaBarrio>
   )
 
   return (
@@ -239,27 +296,23 @@ export default function BloqueUbicacion({ localidades = [], barrios = [], inicia
       {localidadId && localidadTieneBarrios && (
         <>
           <div className="flex flex-col gap-2.5">
-            <span className={labelClasses}>¿Querés que se vea tu dirección exacta? *</span>
-            <label className="flex items-start gap-2 cursor-pointer">
-              <input type="radio" name="direccion_visible" checked={!direccionVisible}
-                onChange={() => { setDireccionVisible(false); empezarDeNuevo() }} className="accent-[#0a0a0a] mt-1" />
-              <span className="text-sm">
-                No, prefiero mostrar una zona
-                <span className={`block ${ayudaClasses} text-[#0a0a0a]/50`} style={fuenteAyuda}>
-                  En el mapa se ve una zona de unas cuadras alrededor, nunca tu dirección. Si alguien te compra con retiro, le pasás la dirección por WhatsApp.
-                </span>
-              </span>
-            </label>
-            <label className="flex items-start gap-2 cursor-pointer">
-              <input type="radio" name="direccion_visible" checked={direccionVisible}
-                onChange={() => { setDireccionVisible(true); empezarDeNuevo() }} className="accent-[#0a0a0a] mt-1" />
-              <span className="text-sm">
-                Sí, mostrar el punto exacto
-                <span className={`block ${ayudaClasses} text-[#0a0a0a]/50`} style={fuenteAyuda}>
-                  En el mapa se ve el punto exacto de tu local. Tu dirección escrita no aparece en tu tienda: quien te compra con retiro la ve en su pedido y en sus mails.
-                </span>
-              </span>
-            </label>
+            <span className={labelClasses} id="que-ve-el-publico">Qué ve el público *</span>
+            <div role="radiogroup" aria-labelledby="que-ve-el-publico" className="grid grid-cols-1 min-[520px]:grid-cols-2 gap-2.5">
+              <TarjetaOpcion
+                elegida={!direccionVisible}
+                onElegir={() => cambiarOpcion(false)}
+                icono={ICONO_ARO}
+                titulo="Solo la zona"
+                texto="Para quienes venden desde su casa. Se ve un aro de unas dos cuadras."
+              />
+              <TarjetaOpcion
+                elegida={direccionVisible}
+                onElegir={() => cambiarOpcion(true)}
+                icono={ICONO_CASITA}
+                titulo="La dirección exacta"
+                texto="Para locales a la calle. Se ve la casita en tu puerta."
+              />
+            </div>
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -292,20 +345,18 @@ export default function BloqueUbicacion({ localidades = [], barrios = [], inicia
                 <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">{avisoMapa}</div>
               )}
 
-              {!direccionVisible && (
-                <p className="text-sm m-0">
-                  Este círculo es lo que se va a ver en el mapa. Podés arrastrarlo para ajustar tu zona. Tu dirección no se guarda ni se muestra.
-                </p>
-              )}
-
               <MapaUbicacion
-                key={`${direccionVisible ? 'exacto' : 'zona'}-${claveMapa}`}
+                key={claveMapa}
                 modo={direccionVisible ? 'exacto' : 'zona'}
                 posicionBuscada={posicionBuscada}
                 onUbicacionChange={manejarUbicacion}
               />
 
               {punto && lineaBarrio}
+
+              <p className="m-0" style={{ fontFamily: "'Inter', sans-serif", fontSize: '12px', lineHeight: 1.5, color: 'rgba(10,10,10,0.58)' }}>
+                {direccionVisible ? NOTA_EXACTA : NOTA_ZONA}
+              </p>
 
               {direccionVisible && punto && (
                 <span className="text-[11px] text-[#0a0a0a]/20 font-mono font-light">
