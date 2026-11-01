@@ -88,6 +88,8 @@ export default function PrivacidadPage() {
               <p>Cuando nos contás que tu emprendimiento está en otra ciudad, guardamos la ciudad que escribís, el email de tu cuenta y la fecha. Lo usamos solo para saber dónde abrir y para escribirte si llegamos a esa ciudad. No lo compartimos con nadie, salvo los proveedores de servicios indicados en esta política.</p>
               <p>Se borra si eliminás tu cuenta, o antes si nos lo pedís escribiendo a <a href={`mailto:${EMAIL_LEGAL}`} className="underline underline-offset-2 hover:text-[#4164fe]">{EMAIL_LEGAL}</a>.</p>
 
+              <p>Si nos pedís Local Shops en tu ciudad, guardamos la provincia, la ciudad y la fecha, sin datos de contacto.</p>
+
               <h3 className="font-semibold text-[#0a0a0a] mt-4 mb-1.5">Datos de navegación</h3>
               <p>Información técnica como dirección IP, tipo de navegador, sistema operativo, páginas visitadas y duración de la visita. Estos datos se recolectan de forma automática y no permiten identificarte personalmente.</p>
             </Seccion>

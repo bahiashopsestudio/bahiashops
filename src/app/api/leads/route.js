@@ -13,14 +13,8 @@
 import { Resend } from 'resend';
 import { getServiceRoleClient } from '@/lib/supabase/admin';
 import { EMAIL_CONTACTO, EMAIL_NOTIFICACIONES, REMITENTE_CONTACTO } from '@/lib/contacto';
-import { escapar } from '@/lib/mailBase';
+import { escapar, enUnaLinea } from '@/lib/mailBase';
 import { validarLead } from '@/lib/formulariosPublicos';
-
-// Para el asunto: una sola línea, sin saltos que se puedan colar en el
-// encabezado del mail.
-function enUnaLinea(valor) {
-  return String(valor ?? '').replace(/[\r\n\u2028\u2029]+/g, ' ');
-}
 
 export async function POST(request) {
   let cuerpo;

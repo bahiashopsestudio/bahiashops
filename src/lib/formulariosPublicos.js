@@ -6,6 +6,8 @@
 // enorme. Cada validación devuelve { ok: true, ...campos limpios } o
 // { ok: false, error } con un texto para mostrar.
 
+import { PROVINCIAS } from './direcciones.js'
+
 export const MAX_TEXTO = 2000
 export const MAX_EMAIL = 254
 export const MAX_WHATSAPP = 30
@@ -47,6 +49,20 @@ export function validarCiudadPedida(cuerpo) {
   if (ciudad.length > MAX_CIUDAD) return { ok: false, error: `Puede tener hasta ${MAX_CIUDAD} caracteres.` }
   if (CONTROL.test(ciudad)) return { ok: false, error: 'Revisá lo que escribiste: tiene caracteres que no van.' }
   return { ok: true, ciudad }
+}
+
+// El pedido del formulario público de /local-shops: { provincia, ciudad }, los
+// dos obligatorios. La provincia, una de la lista.
+export function validarPedidoLocalShops(cuerpo) {
+  if (typeof cuerpo?.provincia !== 'string' || !PROVINCIAS.includes(cuerpo.provincia)) {
+    return { ok: false, error: 'Elegí tu provincia.' }
+  }
+  if (typeof cuerpo?.ciudad !== 'string') return { ok: false, error: 'Escribí tu ciudad.' }
+  const ciudad = cuerpo.ciudad.trim()
+  if (!ciudad) return { ok: false, error: 'Escribí tu ciudad.' }
+  if (ciudad.length > MAX_CIUDAD) return { ok: false, error: `Puede tener hasta ${MAX_CIUDAD} caracteres.` }
+  if (CONTROL.test(ciudad)) return { ok: false, error: 'Revisá lo que escribiste: tiene caracteres que no van.' }
+  return { ok: true, provincia: cuerpo.provincia, ciudad }
 }
 
 // Interesados en vender alimentos: { nombre, queHace } obligatorios;

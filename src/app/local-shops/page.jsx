@@ -3,33 +3,10 @@
 
 import { useState } from 'react'
 import VolverAtras from '@/components/VolverAtras'
+import { PROVINCIAS as TODAS_LAS_PROVINCIAS } from '@/lib/direcciones'
 
-const PROVINCIAS = [
-  'Buenos Aires',
-  'Catamarca',
-  'Chaco',
-  'Chubut',
-  'Ciudad Autónoma de Buenos Aires',
-  'Córdoba',
-  'Corrientes',
-  'Entre Ríos',
-  'Formosa',
-  'Jujuy',
-  'La Pampa',
-  'La Rioja',
-  'Mendoza',
-  'Misiones',
-  'Neuquén',
-  'Río Negro',
-  'Salta',
-  'San Juan',
-  'San Luis',
-  'Santa Cruz',
-  'Santa Fe',
-  'Santiago del Estero',
-  'Tierra del Fuego',
-  'Tucumán',
-]
+// Las mismas que valida el servidor, en orden alfabético.
+const PROVINCIAS = [...TODAS_LAS_PROVINCIAS].sort((a, b) => a.localeCompare(b, 'es'))
 
 const inputClasses =
   'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-[0.95rem] outline-none focus:border-[#0a0a0a] focus:ring-1 focus:ring-[#0a0a0a]/20 transition-colors box-border'
@@ -37,6 +14,8 @@ const inputClasses =
 export default function LocalShopsPage() {
   const [provincia, setProvincia] = useState('')
   const [ciudad, setCiudad] = useState('')
+  // Campo trampa: las personas no lo ven; si llega lleno, el servidor no hace nada.
+  const [empresaWeb, setEmpresaWeb] = useState('')
   const [estado, setEstado] = useState('idle') // idle | enviando | exito | error
 
   async function handleSubmit(e) {
@@ -49,7 +28,7 @@ export default function LocalShopsPage() {
       const res = await fetch('/api/local-shops', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provincia, ciudad: ciudad.trim() }),
+        body: JSON.stringify({ provincia, ciudad: ciudad.trim(), empresa_web: empresaWeb }),
       })
 
       if (res.ok) {
@@ -99,6 +78,16 @@ export default function LocalShopsPage() {
           </p>
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+            <input
+              type="text"
+              name="empresa_web"
+              value={empresaWeb}
+              onChange={(e) => setEmpresaWeb(e.target.value)}
+              tabIndex={-1}
+              autoComplete="off"
+              aria-hidden="true"
+              style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px' }}
+            />
             <div>
               <label className="block text-sm text-gray-500 mb-1">Provincia</label>
               <select
@@ -122,6 +111,7 @@ export default function LocalShopsPage() {
                 value={ciudad}
                 onChange={(e) => setCiudad(e.target.value)}
                 placeholder="Tu ciudad"
+                maxLength={120}
                 className={inputClasses}
                 disabled={estado === 'enviando'}
                 required

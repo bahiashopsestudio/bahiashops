@@ -29,6 +29,12 @@ export function escapar(texto) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
 }
 
+// Para el asunto: una sola línea, sin saltos que se puedan colar en el
+// encabezado del mail.
+export function enUnaLinea(valor) {
+  return String(valor ?? '').replace(/[\r\n\u2028\u2029]+/g, ' ')
+}
+
 // "$ 14.500" o "$ 2,50": punto de miles, dos decimales sólo si hay centavos.
 export function pesos(n) {
   return `$ ${formatearMonto(n)}`

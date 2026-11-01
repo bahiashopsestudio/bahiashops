@@ -501,7 +501,7 @@ export default function AdminDashboard() {
               iconoFondo="#e7f6df"
               iconoColor="#015444"
               titulo="Ciudades pedidas"
-              desc="Quienes quieren sumarse desde una ciudad donde todavía no estamos: ciudad, mail y fecha."
+              desc="Desde dónde nos piden, en el alta de tienda y en Local Shops: origen, ciudad y fecha."
               badge={ciudadesPedidas > 0 ? ciudadesPedidas : null}
               badgeTipo="gris"
               flecha="Ver ciudades →"
