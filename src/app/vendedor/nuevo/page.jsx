@@ -74,11 +74,7 @@ export default function NuevoVendedorPage() {
                 >
                   Sumar mi emprendimiento
                 </h1>
-                <p style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 300, fontSize: '14px', color: 'rgba(10,10,10,0.45)', marginBottom: '32px' }}>
-                  Completá estos datos para crear tu tienda en Bahía Shops.
-                </p>
-
-                {userId && <FormularioVendedor userId={userId} />}
+                {userId &&<FormularioVendedor userId={userId} />}
               </>
             )}
           </div>

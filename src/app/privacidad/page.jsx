@@ -42,7 +42,7 @@ export default function PrivacidadPage() {
               Política de Privacidad
             </h1>
             <p className="text-sm text-[#0a0a0a]/40 mb-10">
-              Última actualización: octubre 2026
+              Última actualización: noviembre 2026
             </p>
 
             {/* Intro */}
@@ -84,6 +84,10 @@ export default function PrivacidadPage() {
               <h3 className="font-semibold text-[#0a0a0a] mt-4 mb-1.5">Datos de vendedores</h3>
               <p>Nombre del emprendimiento, descripción, categoría, dirección del local (si aplica), barrio, horarios de atención, número de WhatsApp, redes sociales, logo e imágenes de portada. Si el vendedor conecta su cuenta de MercadoPago, almacenamos los tokens de acceso necesarios para procesar los pagos (nunca almacenamos datos de tarjeta).</p>
 
+              <h3 className="font-semibold text-[#0a0a0a] mt-4 mb-1.5">Si nos pedís llegar a tu ciudad</h3>
+              <p>Cuando nos contás que tu emprendimiento está en otra ciudad, guardamos la ciudad que escribís, el email de tu cuenta y la fecha. Lo usamos solo para saber dónde abrir y para escribirte si llegamos a esa ciudad. No lo compartimos con nadie, salvo los proveedores de servicios indicados en esta política.</p>
+              <p>Se borra si eliminás tu cuenta, o antes si nos lo pedís escribiendo a <a href={`mailto:${EMAIL_LEGAL}`} className="underline underline-offset-2 hover:text-[#4164fe]">{EMAIL_LEGAL}</a>.</p>
+
               <h3 className="font-semibold text-[#0a0a0a] mt-4 mb-1.5">Datos de navegación</h3>
               <p>Información técnica como dirección IP, tipo de navegador, sistema operativo, páginas visitadas y duración de la visita. Estos datos se recolectan de forma automática y no permiten identificarte personalmente.</p>
             </Seccion>
@@ -98,6 +102,7 @@ export default function PrivacidadPage() {
                 <li>Procesar tus compras y coordinar las entregas.</li>
                 <li>Facilitar la comunicación entre compradores y vendedores cuando sea necesario para completar una transacción.</li>
                 <li>Enviar notificaciones relacionadas con tus pedidos (confirmación de pago, despacho, etc.).</li>
+                <li>Avisarte si Bahía Shops llega a la ciudad que nos indicaste, si nos la pediste.</li>
                 <li>Gestionar la moderación de productos publicados.</li>
                 <li>Mejorar la experiencia de uso de la Plataforma y sus funcionalidades.</li>
                 <li>Cumplir con obligaciones legales y responder a requerimientos de autoridades competentes.</li>

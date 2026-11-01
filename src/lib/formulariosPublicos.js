@@ -9,6 +9,7 @@
 export const MAX_TEXTO = 2000
 export const MAX_EMAIL = 254
 export const MAX_WHATSAPP = 30
+export const MAX_CIUDAD = 120
 
 // Un mail con forma razonable: algo@algo.algo, sin espacios ni comillas ni
 // signos de etiqueta. No pretende ser RFC 5322: alcanza para rechazar basura y
@@ -34,6 +35,18 @@ export function validarContacto(cuerpo) {
   if (!emailValido(email)) return { ok: false, error: 'Revisá el email: no parece válido.' }
   if (mensaje.length > MAX_TEXTO) return { ok: false, error: `El mensaje puede tener hasta ${MAX_TEXTO} caracteres.` }
   return { ok: true, email, mensaje }
+}
+
+// La ciudad que anota quien todavía no puede abrir su tienda: se guarda como la
+// escribe, recortada. Los caracteres de control no son parte de ningún nombre.
+const CONTROL = new RegExp('[\\u0000-\\u001f\\u007f\\u2028\\u2029]')
+export function validarCiudadPedida(cuerpo) {
+  if (typeof cuerpo?.ciudad !== 'string') return { ok: false, error: 'Escribí tu ciudad y provincia.' }
+  const ciudad = cuerpo.ciudad.trim()
+  if (!ciudad) return { ok: false, error: 'Escribí tu ciudad y provincia.' }
+  if (ciudad.length > MAX_CIUDAD) return { ok: false, error: `Puede tener hasta ${MAX_CIUDAD} caracteres.` }
+  if (CONTROL.test(ciudad)) return { ok: false, error: 'Revisá lo que escribiste: tiene caracteres que no van.' }
+  return { ok: true, ciudad }
 }
 
 // Interesados en vender alimentos: { nombre, queHace } obligatorios;

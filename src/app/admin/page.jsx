@@ -64,6 +64,15 @@ function IconoCuadrados() {
   )
 }
 
+function IconoPin() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+    </svg>
+  )
+}
+
 function IconoBombilla() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}>
@@ -236,6 +245,7 @@ export default function AdminDashboard() {
   const [errorConteo, setErrorConteo] = useState('')
   const [tesorosActivos, setTesorosActivos] = useState(0)
   const [ideasPendientes, setIdeasPendientes] = useState(0)
+  const [ciudadesPedidas, setCiudadesPedidas] = useState(0)
   const [votos, setVotos] = useState([])
   const [errorVotos, setErrorVotos] = useState('')
 
@@ -332,6 +342,12 @@ export default function AdminDashboard() {
       if (resIdeas.ok) {
         const { ideas } = await resIdeas.json()
         setIdeasPendientes(ideas?.length || 0)
+      }
+
+      const resCiudades = await fetch('/api/admin/ciudades')
+      if (resCiudades.ok) {
+        const { ciudades } = await resCiudades.json()
+        setCiudadesPedidas(ciudades?.length || 0)
       }
 
       // Resultados de las preguntas "¿te gustaría…?". La tabla está cerrada al
@@ -478,6 +494,17 @@ export default function AdminDashboard() {
               badge={ideasPendientes > 0 ? ideasPendientes : null}
               badgeTipo="gris"
               flecha="Ver ideas →"
+            />
+            <Tarjeta
+              href="/admin/ciudades"
+              icono={<IconoPin />}
+              iconoFondo="#e7f6df"
+              iconoColor="#015444"
+              titulo="Ciudades pedidas"
+              desc="Quienes quieren sumarse desde una ciudad donde todavía no estamos: ciudad, mail y fecha."
+              badge={ciudadesPedidas > 0 ? ciudadesPedidas : null}
+              badgeTipo="gris"
+              flecha="Ver ciudades →"
             />
             <Tarjeta
               href="/admin/cuentas"

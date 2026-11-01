@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { activarCategoria, AVISO_CATEGORIA } from '@/lib/categorias'
 import BloqueHorarios, { HORARIOS_INICIALES } from './BloqueHorarios'
+import PreguntaCiudad from './PreguntaCiudad'
 import ModalContacto from '@/components/ModalContacto'
 import BloqueUbicacion, { guardarUbicacion } from '@/components/BloqueUbicacion'
 import BloqueEntrega, { ENTREGA_VACIA, errorEntrega, guardarEntrega } from '@/components/BloqueEntrega'
@@ -51,6 +52,9 @@ export default function FormularioVendedor({ userId }) {
   const [ubicacion, setUbicacion] = useState(null)
 
   const [localidades, setLocalidades] = useState([])
+  const [estadoLocalidades, setEstadoLocalidades] = useState('cargando')
+  // La que eligió en la pregunta del principio: el paso 2 arranca con ella.
+  const [localidadElegida, setLocalidadElegida] = useState(null)
   const [barrios, setBarrios] = useState([])
   const [categorias, setCategorias] = useState([])
   const [categoriaId, setCategoriaId] = useState('')
@@ -117,7 +121,8 @@ export default function FormularioVendedor({ userId }) {
   // Se guarda después del alta, por /api/vendedor/entrega.
   const [entrega, setEntrega] = useState(ENTREGA_VACIA)
 
-  const [paso, setPaso] = useState(1)
+  // 0 es la pregunta por la ciudad, antes de los pasos numerados.
+  const [paso, setPaso] = useState(0)
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState(null)
   // La tienda se guardó pero su categoría no se pudo abrir, o su ubicación no
@@ -148,6 +153,7 @@ export default function FormularioVendedor({ userId }) {
         .order('orden')
 
       if (locs) setLocalidades(locs)
+      setEstadoLocalidades(locs ? 'ok' : 'error')
       if (brs) setBarrios(brs)
       if (cats) setCategorias(cats)
       if (slls) setSellos(slls)
@@ -170,6 +176,15 @@ export default function FormularioVendedor({ userId }) {
   function armarTelefonoCompleto(numero) {
     if (!numero) return null
     return '+549' + numero.replace(/\D/g, '')
+  }
+
+  // Si cambia de localidad, lo cargado en el paso 2 era de la otra.
+  function elegirLocalidad(id) {
+    if (id !== localidadElegida) setUbicacion(null)
+    setLocalidadElegida(id)
+    setError(null)
+    setPaso(1)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   function irAlAnterior() {
@@ -278,8 +293,17 @@ export default function FormularioVendedor({ userId }) {
     router.push('/vendedor/perfil')
   }
 
+  // Afuera del form de los pasos: tiene su propio formulario.
+  if (paso === 0) {
+    return <PreguntaCiudad localidades={localidades} estado={estadoLocalidades} onElegir={elegirLocalidad} />
+  }
+
   return (
     <>
+      <p style={{ ...fuenteAyuda, fontSize: '14px', color: 'rgba(10,10,10,0.45)', marginBottom: '32px' }}>
+        Completá estos datos para crear tu tienda en Bahía Shops.
+      </p>
+
       <form onSubmit={handleSubmit} className="flex flex-col gap-6">
       {/* Encabezado del paso */}
       <div className="mb-2">
@@ -532,10 +556,10 @@ export default function FormularioVendedor({ userId }) {
           <BloqueUbicacion
             localidades={localidades}
             barrios={barrios}
-            inicial={ubicacion && {
+            inicial={ubicacion ? {
               localidad_id: ubicacion.localidadId, direccion_visible: ubicacion.direccionVisible,
               direccion: ubicacion.direccion, latitud: ubicacion.lat, longitud: ubicacion.lng, barrio_id: ubicacion.barrioId,
-            }}
+            } : { localidad_id: localidadElegida }}
             onChange={setUbicacion}
           />
         </div>
@@ -605,11 +629,9 @@ export default function FormularioVendedor({ userId }) {
 
       {/* Navegación */}
       <div className="flex gap-3 justify-between mt-2">
-        {paso > 1 ? (
-          <button type="button" onClick={irAlAnterior} className={`px-5 py-2.5 ${btnLinea}`}>
-            ← Anterior
-          </button>
-        ) : <div />}
+        <button type="button" onClick={irAlAnterior} className={`px-5 py-2.5 ${btnLinea}`}>
+          ← Anterior
+        </button>
 
         <button type="submit" disabled={guardando}
           className={`px-6 py-2.5 ${guardando ? btnNegroInactivo : btnNegro}`}>
