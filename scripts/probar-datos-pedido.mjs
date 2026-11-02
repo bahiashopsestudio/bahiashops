@@ -61,6 +61,24 @@ const datos = {
   vendedores: [{ id: TIENDA, usuario_id: 'dueno', nombre_negocio: 'Tienda de prueba' }],
   pedidos,
   usuarios: estados.map((_, i) => ({ id: `u-${i}`, nombre_usuario: `Zorro ${i}`, cerrada_en: null })),
+  planes: [
+    { clave: 'gratis', nombre: 'Gratis', orden: 1, carritos_abandonados: false, disponible: true },
+    { clave: 'basico', nombre: 'Básico', orden: 2, carritos_abandonados: true, disponible: true },
+  ],
+}
+
+// El plan de la tienda (rpc_plan_de_tienda, migración 046). Por defecto, con
+// carritos; 'gratis' sin carritos; 'falla' no se puede leer.
+let planDeLaPrueba = 'basico'
+function rpcFalsa(nombre) {
+  if (nombre !== 'rpc_plan_de_tienda') return { error: null }
+  if (planDeLaPrueba === 'falla') return { data: null, error: { code: 'XX000', message: 'falla de mentira' } }
+  const conCarritos = planDeLaPrueba === 'basico'
+  return {
+    data: { plan: planDeLaPrueba, nombre: conCarritos ? 'Básico' : 'Gratis', especial: false, sin_tope: false,
+      tope_productos: conCarritos ? 25 : 10, fotos_por_producto: conCarritos ? 8 : 4, carritos_abandonados: conCarritos, usados: 0 },
+    error: null,
+  }
 }
 
 // Las columnas de primer nivel que pide un select: "id, estado, items:pedido_items ( ... )".
@@ -82,7 +100,7 @@ function columnasPedidas(select) {
 function falso() {
   const consultas = []
   const admin = {
-    rpc: async () => ({ error: null }),
+    rpc: async (nombre) => rpcFalsa(nombre),
     from(tabla) {
       const filtros = []
       let columnas = []
@@ -228,6 +246,37 @@ console.log('\n6. La ruta de recordar también lo verifica')
   ok(rr.status === 409 && rr.body.codigo !== 'SIN_MP' && /contactar/.test(rr.body.error), 'con MercadoPago: pasa la verificación y sigue como siempre')
   rr = await recordar(104)
   ok(rr.status === 409 && /no es un carrito/.test(rr.body.error), 'un pedido que no es carrito sigue dando su propio error')
+  delete datos.mercadopago_cuentas
+}
+
+console.log('\n6b. Los carritos abandonados son del plan (migración 046)')
+{
+  let con = await llamar()
+  ok(con.body.carritos_incluidos === true && con.body.plan_carritos === 'Básico', 'con el Básico: carritos_incluidos = true y plan_carritos = "Básico"')
+  ok(con.body.pedidos.some((p) => p.pestana === 'carritos'), 'y los carritos llegan')
+
+  planDeLaPrueba = 'gratis'
+  con = await llamar()
+  ok(con.status === 200 && con.body.carritos_incluidos === false && con.body.plan_carritos === 'Básico', 'con el Gratis: carritos_incluidos = false, y dice qué plan los trae')
+  ok(!con.body.pedidos.some((p) => p.pestana === 'carritos'), 'no llega ningún carrito')
+  ok(CARRITOS.every((id) => !con.body.pedidos.some((p) => p.id === id)), 'ni como carrito ni como venta')
+  ok(con.body.pedidos.some((p) => p.pestana !== 'carritos'), 'las ventas llegan igual')
+
+  const { POST } = await import('../src/app/api/vendedor/pedidos/recordar/route.js')
+  datos.mercadopago_cuentas = [{ vendedor_id: TIENDA }]
+  globalThis.__falso = falso()
+  let rr = await POST({ json: async () => ({ pedidoId: 202 }) })
+  ok(rr.status === 403 && rr.body.codigo === 'PLAN_SIN_CARRITOS', 'recordar con el Gratis: 403 PLAN_SIN_CARRITOS')
+
+  planDeLaPrueba = 'falla'
+  con = await llamar()
+  ok(con.status === 200 && con.body.carritos_incluidos === null && !con.body.pedidos.some((p) => p.pestana === 'carritos'),
+    'si no se puede leer el plan: carritos_incluidos = null, sin carritos, y las ventas salen igual')
+  globalThis.__falso = falso()
+  rr = await POST({ json: async () => ({ pedidoId: 202 }) })
+  ok(rr.status === 500, 'recordar sin poder leer el plan: 500')
+
+  planDeLaPrueba = 'basico'
   delete datos.mercadopago_cuentas
 }
 

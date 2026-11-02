@@ -5,11 +5,13 @@
 //   · /api/vendedor/productos (alta) y /api/vendedor/productos/[id] (editar,
 //     pausar o reactivar, borrar): la tienda sale de la sesión, la moderación
 //     corre acá, el navegador no elige estado, destacado ni avisos;
-//   · el guardado paso a paso, cuando la función de la 033 todavía no existe;
+//   · el plan (migración 046): el tope de fotos se cuenta acá, y el error del
+//     tope de la base (BS409) sale como 409 con { error, motivo, tope, usados };
 //   · /api/admin/productos/[id]/moderacion.
 //
-// Lo que hace la base de verdad (la función guardar_producto, los permisos y
-// RLS) se prueba con npm run probar:033.
+// Lo que hace la base de verdad (las funciones guardar_producto y
+// cambiar_estado_producto, los topes, los permisos y RLS) se prueba con
+// npm run probar:033 y npm run probar:046.
 //
 //   npm run probar:productos
 //
@@ -66,7 +68,11 @@ function escenario(opciones = {}) {
       sellos: [{ id: 1 }, { id: 2 }],
     },
     rpc: [], removidos: [], inserts: [], updates: [],
-    sinFuncion: false, // la 033 todavía no corrió
+    lecturasPlan: 0,
+    fotosPlan: 4,       // fotos por producto del plan (el Gratis)
+    sinPlan: false,     // rpc_plan_de_tienda falla
+    topeLleno: false,   // rpc_cambiar_estado_producto: el tope de productos está lleno
+    errorGuardar: null, // el error que devuelve rpc_guardar_producto
     falla: {},          // { tabla: 'insert' | 'delete' | codigo }
     esAdmin: false,
     usuario: 'u-1',
@@ -135,9 +141,27 @@ function escenario(opciones = {}) {
       return q
     },
     async rpc(nombre, args) {
+      if (nombre === 'rpc_plan_de_tienda') {
+        e.lecturasPlan++
+        if (e.sinPlan) return { data: null, error: { code: 'XX000', message: 'falla' } }
+        return { data: { plan: 'gratis', nombre: 'Gratis', especial: false, sin_tope: false, tope_productos: 10,
+          fotos_por_producto: e.fotosPlan, carritos_abandonados: false, usados: 3 }, error: null }
+      }
       e.rpc.push({ nombre, args })
-      if (e.sinFuncion) return { data: null, error: { code: 'PGRST202', message: 'Could not find the function' } }
       if (e.falla.rpc) return { data: null, error: { code: e.falla.rpc, message: 'falla' } }
+      if (nombre === 'rpc_cambiar_estado_producto') {
+        const p = e.tablas.productos.find((x) => x.id === args.p_producto_id && x.vendedor_id === args.p_vendedor_id)
+        if (!p) return { data: { ok: false, motivo: 'no_existe' }, error: null }
+        const puede = (args.p_destino === 'pausado' && p.estado === 'activo')
+          || (args.p_destino === 'activo' && ['pausado', 'agotado'].includes(p.estado))
+        if (!puede) return { data: { ok: false, motivo: 'estado', estado: p.estado }, error: null }
+        if (args.p_destino === 'activo' && p.estado === 'pausado' && e.topeLleno) {
+          return { data: { ok: false, motivo: 'tope_productos', tope: 10, usados: 10 }, error: null }
+        }
+        p.estado = args.p_destino
+        return { data: { ok: true, estado: p.estado }, error: null }
+      }
+      if (nombre === 'rpc_guardar_producto' && e.errorGuardar) return { data: null, error: e.errorGuardar }
       if (nombre === 'rpc_rechazar_producto') {
         if (e.sinRechazo) return { data: null, error: { code: 'PGRST202', message: 'Could not find the function' } }
         const p = e.tablas.productos.find((x) => x.id === args.p_producto_id)
@@ -169,7 +193,7 @@ const CUERPO = (extra = {}) => ({
   propiedad_1_nombre: null, variantes: [], fotos: [FOTO('n1')], sellos: [1], ...extra,
 })
 
-const { validarProducto, esFotoDeLaTienda, estadoAlGuardar, origenesPermitidos, textoMotivoRechazo } = await import('../src/lib/productos.js')
+const { validarProducto, esFotoDeLaTienda, origenesPermitidos, textoMotivoRechazo } = await import('../src/lib/productos.js')
 const alta = await import('../src/app/api/vendedor/productos/route.js')
 const uno = await import('../src/app/api/vendedor/productos/[id]/route.js')
 const moderacion = await import('../src/app/api/admin/productos/[id]/moderacion/route.js')
@@ -182,7 +206,14 @@ ok(!esFotoDeLaTienda('https://otro.sitio/storage/v1/object/public/productos/1/x.
 ok(!esFotoDeLaTienda(`${BASE}/storage/v1/object/public/productos/1/../2/x.webp`, 1, BASE) && !esFotoDeLaTienda(`${BASE}/storage/v1/object/public/productos/1/a/b.webp`, 1, BASE), 'ni con ../ ni en una subcarpeta')
 ok(val(CUERPO({ fotos: ['https://otro.sitio/x.jpg'] })).error === 'Alguna de las fotos no es válida. Volvé a subirla.', 'una URL externa: rechazada')
 ok(val(CUERPO({ fotos: ['https://viejo/x.jpg'] }), { fotosExistentes: ['https://viejo/x.jpg'] }).ok, 'una foto que el producto ya tenía: aceptada aunque sea de otra forma')
-ok(!val(CUERPO({ fotos: [] })).ok && !val(CUERPO({ fotos: [1, 2, 3, 4, 5, 6].map((n) => FOTO(n)) })).ok, 'sin fotos o con más de 5: rechazado')
+ok(!val(CUERPO({ fotos: [] })).ok, 'sin fotos: rechazado')
+const muchas = (n) => Array.from({ length: n }, (_, i) => FOTO(`f${i}`))
+ok(val(CUERPO({ fotos: muchas(20) })).ok && !val(CUERPO({ fotos: muchas(21) })).ok && !val(CUERPO({ fotos: muchas(21) })).motivo,
+  'sin topeFotos: hasta 20 (el techo técnico); 21, rechazado sin motivo de plan')
+const deMas = val(CUERPO({ fotos: muchas(5) }), { topeFotos: 4 })
+ok(!deMas.ok && deMas.motivo === 'tope_fotos' && deMas.tope === 4 && deMas.usados === 5, 'con topeFotos 4: 5 fotos, rechazado con motivo tope_fotos, tope 4 y usados 5')
+ok(deMas.error === 'Este producto puede tener hasta 4 fotos con tu plan. Sacá alguna para poder guardarlo.', `y el texto se entiende solo: «${deMas.error}»`)
+ok(val(CUERPO({ fotos: muchas(4) }), { topeFotos: 4 }).ok, 'con topeFotos 4: 4 fotos, aceptado')
 ok(!val(CUERPO({ fotos: [FOTO('a'), FOTO('a')] })).ok, 'una foto repetida: rechazado')
 ok(val(CUERPO({ tiempo_preparacion: null })).error === 'Elegí el tiempo de preparación.', 'sin tiempo de preparación: rechazado')
 ok(!val(CUERPO({ precio: 0 })).ok && !val(CUERPO({ precio_anterior: 1000 })).ok, 'precio 0, o precio anterior menor: rechazado')
@@ -194,8 +225,6 @@ ok(JSON.stringify(v.datos.genero) === '["mujer"]' && v.sellos.join() === '2', 'g
 v = val(CUERPO({ estado: 'activo', destacado: true, destacado_hasta: '2099-01-01', motivo_rechazo: 'x', moderacion_avisos: [], creado_en: '2099-01-01', vendedor_id: 2, id: 5 }))
 ok(v.ok && ['estado', 'destacado', 'destacado_hasta', 'motivo_rechazo', 'moderacion_avisos', 'creado_en', 'vendedor_id', 'id'].every((k) => !(k in v.datos)),
   'estado, destacado, destacado_hasta, motivo_rechazo, moderacion_avisos, creado_en, vendedor_id e id del cuerpo se ignoran')
-ok(estadoAlGuardar(null) === 'en_revision' && estadoAlGuardar('rechazado') === 'en_revision' && estadoAlGuardar('activo') === 'activo' && estadoAlGuardar('agotado') === 'agotado',
-  'la regla de estado al guardar')
 ok(origenesPermitidos('activo').join() === 'pausado,agotado' && origenesPermitidos('pausado').join() === 'activo'
   && origenesPermitidos('en_revision') === null && origenesPermitidos('agotado') === null && origenesPermitidos('toString') === null, 'las transiciones del vendedor')
 
@@ -222,19 +251,31 @@ ok(f.rpc[0].nombre === 'rpc_guardar_producto' && a.p_vendedor_id === 1 && a.p_pr
 ok(a.p_avisos.length === 1 && a.p_avisos[0].tipo === 'mencion_redes', 'los avisos los calcula el servidor (no los que manda el navegador)')
 ok(!('estado' in a.p_datos) && !('destacado' in a.p_datos) && !('vendedor_id' in a.p_datos), 'y no le pasa estado, destacado ni vendedor_id del cuerpo')
 
-console.log('\n3. Alta paso a paso (la 033 todavía no corrió)')
-nuevo({ sinFuncion: true })
-r = await alta.POST(pedir(CUERPO({ fotos: [FOTO('p1'), FOTO('p2')], propiedad_1_nombre: 'Talle', variantes: ['S', 'M'], sellos: [1, 2, 9], estado: 'activo' })))
-const creado = f.tablas.productos.find((p) => p.nombre === 'Taza nueva')
-ok(r.status === 200 && creado?.estado === 'en_revision' && creado.vendedor_id === 1, 'guarda igual, en revisión, en la tienda de la sesión')
-ok(Array.isArray(creado.moderacion_avisos) && creado.moderacion_avisos.length === 0 && !('destacado' in creado), 'con los avisos del servidor y sin destacado')
-const fotos = f.tablas.producto_media.filter((m) => m.producto_id === creado.id)
-ok(fotos.map((m) => m.orden).join() === '0,1' && fotos[0].es_principal && !fotos[1].es_principal, 'las fotos en orden, la primera principal')
-ok(f.tablas.producto_variantes.filter((x) => x.producto_id === creado.id).length === 2, 'las variantes')
-ok(f.tablas.producto_sellos.filter((x) => x.producto_id === creado.id).map((s) => s.sello_id).join() === '1,2', 'los sellos que existen')
-nuevo({ sinFuncion: true, falla: { producto_variantes: 'insert' } })
-r = await alta.POST(pedir(CUERPO({ propiedad_1_nombre: 'Talle', variantes: ['S'] })))
-ok(r.status === 500 && !f.tablas.productos.some((p) => p.nombre === 'Taza nueva'), 'si falla una parte, el alta se borra entera')
+console.log('\n3. El plan en el alta (migración 046)')
+nuevo()
+r = await alta.POST(pedir(CUERPO({ fotos: [1, 2, 3, 4, 5].map((n) => FOTO(`p${n}`)) })))
+ok(r.status === 409 && r.body.motivo === 'tope_fotos' && r.body.tope === 4 && r.body.usados === 5, 'Gratis con 5 fotos: 409 tope_fotos, tope 4, usados 5')
+ok(f.rpc.length === 0, 'y no llega a guardar (las fotos se cuentan antes)')
+r = await alta.POST(pedir(CUERPO({ fotos: [1, 2, 3, 4].map((n) => FOTO(`p${n}`)) })))
+ok(r.status === 200, 'con 4 fotos: guarda')
+nuevo({ errorGuardar: { code: 'BS409', message: 'tope_productos', details: '{"tope": 10, "usados": 10}' } })
+r = await alta.POST(pedir(CUERPO()))
+ok(r.status === 409 && r.body.motivo === 'tope_productos' && r.body.tope === 10 && r.body.usados === 10, 'la base dice tope lleno (BS409): 409 tope_productos, tope 10, usados 10')
+ok(r.body.error === 'Llegaste al tope de 10 productos de tu plan. Para sumar otro, pausá o eliminá alguno de los que tenés publicados o en revisión.',
+  `con un texto que se entiende solo: «${r.body.error}»`)
+nuevo({ errorGuardar: { code: 'BS409', message: 'tope_productos', details: null } })
+r = await alta.POST(pedir(CUERPO()))
+ok(r.status === 409 && r.body.motivo === 'tope_productos' && r.body.tope === null && /^Llegaste al tope de productos de tu plan\./.test(r.body.error),
+  'sin el detalle: 409 igual, sin los números')
+nuevo({ errorGuardar: { code: 'BS409', message: 'tope_fotos', details: '{"tope": 4, "usados": 6}' } })
+r = await alta.POST(pedir(CUERPO()))
+ok(r.status === 409 && r.body.motivo === 'tope_fotos' && r.body.tope === 4 && r.body.usados === 6, 'la base dice tope de fotos: 409 tope_fotos')
+nuevo({ errorGuardar: { code: 'PGRST202', message: 'Could not find the function' } })
+r = await alta.POST(pedir(CUERPO()))
+ok(r.status === 500 && f.inserts.length === 0, 'sin la función de la base: 500, y no guarda paso a paso (ya no hay respaldo)')
+nuevo({ sinPlan: true })
+r = await alta.POST(pedir(CUERPO()))
+ok(r.status === 500 && f.rpc.length === 0 && /No pudimos guardar/.test(r.body.error), 'si no se puede leer el plan: 500 con mensaje, y no guarda')
 
 console.log('\n4. Edición')
 nuevo()
@@ -256,17 +297,26 @@ ok(r.status === 200 && r.body.estado === 'activo' && r.body.revision_posterior =
 r = await uno.PUT(pedir(CUERPO()), ruta(12))
 ok(r.status === 200 && r.body.estado === 'en_revision', 'rechazado: vuelve a revisión')
 
-console.log('\n5. Edición paso a paso (la 033 todavía no corrió)')
-for (const [id, esperado] of [[10, 'activo'], [13, 'pausado'], [14, 'agotado'], [11, 'en_revision'], [12, 'en_revision']]) {
-  nuevo({ sinFuncion: true })
-  r = await uno.PUT(pedir(CUERPO({ nombre: 'Editado', estado: 'activo' })), ruta(id))
-  ok(r.status === 200 && prod(id).estado === esperado && prod(id).nombre === 'Editado', `${escenario().tablas.productos.find((p) => p.id === id).estado} -> ${esperado}`)
-}
-nuevo({ sinFuncion: true })
-const original = f.admin.from
-f.admin.from = (t) => { const q = original(t); if (t === 'productos') { const u = q.update; q.update = (p) => { prod(11).estado = 'activo'; return u(p) } } return q }
-r = await uno.PUT(pedir(CUERPO()), ruta(11))
-ok(r.status === 409 && prod(11).estado === 'activo' && prod(11).nombre === 'Plato', 'si el admin lo aprobó en el medio: 409 y no pisa su decisión')
+console.log('\n5. El plan al editar (migración 046)')
+// El producto 10 tiene 2 fotos. Con un plan de 1 foto por producto, se le
+// aceptan las 2 que ya tenía, pero no una tercera.
+const VIEJA = 'https://x.supabase.co/storage/v1/object/public/productos/viejo/b.webp'
+nuevo({ fotosPlan: 1 })
+r = await uno.PUT(pedir(CUERPO({ fotos: [FOTO('a'), VIEJA] })), ruta(10))
+ok(r.status === 200, 'con más fotos que el plan: guarda las que ya tenía')
+r = await uno.PUT(pedir(CUERPO({ fotos: [FOTO('a'), VIEJA, FOTO('nueva')] })), ruta(10))
+ok(r.status === 409 && r.body.motivo === 'tope_fotos' && r.body.tope === 2 && r.body.usados === 3, 'pero no una más: 409 tope_fotos con tope 2 (las que tenía)')
+nuevo({ fotosPlan: 4 })
+r = await uno.PUT(pedir(CUERPO({ fotos: [FOTO('a'), VIEJA, FOTO('n1'), FOTO('n2')] })), ruta(10))
+ok(r.status === 200, 'con el plan de 4: hasta 4')
+r = await uno.PUT(pedir(CUERPO({ fotos: [FOTO('a'), VIEJA, FOTO('n1'), FOTO('n2'), FOTO('n3')] })), ruta(10))
+ok(r.status === 409 && r.body.tope === 4, 'una quinta: 409 con tope 4')
+nuevo({ errorGuardar: { code: 'BS409', message: 'tope_productos', details: '{"tope": 10, "usados": 10}' } })
+r = await uno.PUT(pedir(CUERPO()), ruta(12))
+ok(r.status === 409 && r.body.motivo === 'tope_productos' && r.body.usados === 10, 'reenviar un rechazado con el tope lleno (la base lo frena): 409 tope_productos')
+nuevo({ sinPlan: true })
+r = await uno.PUT(pedir(CUERPO()), ruta(10))
+ok(r.status === 500 && f.rpc.length === 0, 'si no se puede leer el plan: 500, y no guarda')
 
 console.log('\n6. Pausar y reactivar')
 const cambiar = (id, estado) => uno.PATCH(pedir({ estado }), ruta(id))
@@ -289,6 +339,20 @@ for (const destino of ['en_revision', 'rechazado', 'agotado', 'cualquiera', unde
 }
 r = await cambiar(20, 'pausado')
 ok(r.status === 404 && prod(20).estado === 'activo', 'un producto de otra tienda: 404')
+ok(f.rpc.every((x) => x.nombre === 'rpc_cambiar_estado_producto' && x.args.p_vendedor_id === 1) && f.updates.length === 0,
+  'todo va por rpc_cambiar_estado_producto, con la tienda de la sesión (ya no hay UPDATE suelto)')
+nuevo({ topeLleno: true })
+r = await cambiar(13, 'activo')
+ok(r.status === 409 && r.body.motivo === 'tope_productos' && r.body.tope === 10 && r.body.usados === 10 && prod(13).estado === 'pausado',
+  'reactivar un pausado con el tope lleno: 409 tope_productos, y sigue pausado')
+ok(/^Llegaste al tope de 10 productos de tu plan\./.test(r.body.error), 'con el texto del tope (lo muestra el alert de hoy)')
+r = await cambiar(14, 'activo')
+ok(r.status === 200 && prod(14).estado === 'activo', 'agotado -> activo con el tope lleno: pasa (ya contaba)')
+r = await cambiar(10, 'pausado')
+ok(r.status === 200 && prod(10).estado === 'pausado', 'pausar con el tope lleno: pasa')
+nuevo({ falla: { rpc: 'XX000' } })
+r = await cambiar(10, 'pausado')
+ok(r.status === 500 && prod(10).estado === 'activo', 'si la base falla: 500, no cambia')
 
 console.log('\n7. Borrar')
 nuevo()

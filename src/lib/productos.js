@@ -8,8 +8,11 @@
 // No toca la base: recibe datos y devuelve resultados.
 
 import { revisarPublicacion } from '@/lib/moderacion'
+import { textoDeTope } from '@/lib/planes'
 
-export const MAX_FOTOS = 5
+// El techo técnico de fotos por producto (el mismo de planes_fotos_check,
+// migración 046). El límite de cada tienda es el de su plan: topeFotos.
+export const MAX_FOTOS = 20
 
 // Los del CHECK productos_tiempo_preparacion_check.
 export const TIEMPOS_PREPARACION = ['inmediata', 'durante_el_dia', 'manana', '2_a_4_dias', '1_a_2_semanas', 'mas_2_semanas']
@@ -18,14 +21,12 @@ export const GENEROS = ['mujer', 'hombre', 'ninos', 'sin_genero']
 // Las únicas transiciones de estado que decide el vendedor (Pausar y
 // Reactivar en Mis productos). Destino -> desde dónde se puede llegar.
 // 'en_revision' y 'rechazado' nunca pasan a activo por acá: eso lo decide la
-// moderación.
+// moderación. privado.cambiar_estado_producto (migración 046) repite estas
+// transiciones: si cambian acá, cambian allá.
 export const TRANSICIONES = {
   pausado: ['activo'],
   activo: ['pausado', 'agotado'],
 }
-
-// Ya aprobados: editarlos no los vuelve a moderar.
-export const ESTADOS_APROBADOS = ['activo', 'pausado', 'agotado']
 
 // Lo que ve el vendedor de un producto rechazado: el motivo tal como lo
 // guardó la moderación, o este texto si no tiene (productos viejos).
@@ -64,11 +65,16 @@ export function esFotoDeLaTienda(url, vendedorId, baseSupabase) {
 // Valida el cuerpo que manda la pantalla. Devuelve
 //   { ok: true, datos, fotos, variantes, sellos }
 //   { ok: false, error }  (un texto para mostrarle a la persona)
+//   { ok: false, error, motivo: 'tope_fotos', tope, usados }  (más fotos de
+//                         las que permite el plan: la ruta responde 409)
 //
 //   fotosExistentes  las URL que el producto ya tiene (en una edición): se
 //                    aceptan aunque no sigan la carpeta de la tienda, para no
 //                    trabar un producto viejo.
-export function validarProducto(cuerpo, { vendedorId, baseSupabase, fotosExistentes = [] } = {}) {
+//   topeFotos        cuántas fotos acepta: las del plan (en una edición, las
+//                    del plan o las que ya tenía, lo que sea mayor). La base
+//                    lo vuelve a verificar.
+export function validarProducto(cuerpo, { vendedorId, baseSupabase, fotosExistentes = [], topeFotos = MAX_FOTOS } = {}) {
   const c = cuerpo && typeof cuerpo === 'object' ? cuerpo : {}
   const error = (e) => ({ ok: false, error: e })
 
@@ -125,6 +131,10 @@ export function validarProducto(cuerpo, { vendedorId, baseSupabase, fotosExisten
   const fotos = Array.isArray(c.fotos) ? c.fotos : []
   if (fotos.length === 0) return error('Subí al menos una foto.')
   if (fotos.length > MAX_FOTOS) return error(`Podés subir hasta ${MAX_FOTOS} fotos.`)
+  if (fotos.length > topeFotos) {
+    const tope = { motivo: 'tope_fotos', tope: topeFotos, usados: fotos.length }
+    return { ok: false, error: textoDeTope(tope), ...tope }
+  }
   const existentes = new Set(fotosExistentes)
   if (new Set(fotos).size !== fotos.length) return error('Hay una foto repetida.')
   if (!fotos.every((u) => existentes.has(u) || esFotoDeLaTienda(u, vendedorId, baseSupabase))) {
@@ -157,15 +167,6 @@ export function validarProducto(cuerpo, { vendedorId, baseSupabase, fotosExisten
 // escribe (nombre + descripción + marca).
 export function moderarProducto(datos) {
   return revisarPublicacion(`${datos.nombre} ${datos.descripcion} ${datos.marca || ''}`)
-}
-
-// En qué estado queda un producto al guardarlo (la misma regla que
-// privado.guardar_producto de la migración 033; esta la usa el guardado paso a
-// paso, cuando la función todavía no existe).
-//   estadoActual  null en el alta
-export function estadoAlGuardar(estadoActual) {
-  if (!estadoActual) return 'en_revision'
-  return ESTADOS_APROBADOS.includes(estadoActual) ? estadoActual : 'en_revision'
 }
 
 // Desde qué estados se puede llegar a 'destino', o null si el vendedor no

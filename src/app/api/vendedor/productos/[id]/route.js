@@ -15,13 +15,22 @@
 //     (productos.revision_posterior_desde). Limpio, guarda y mantiene el estado.
 //
 // Pausar y reactivar: solo activo -> pausado, pausado -> activo y
-// agotado -> activo (ver TRANSICIONES en lib/productos). El estado actual se
-// verifica en el mismo UPDATE.
+// agotado -> activo (ver TRANSICIONES en lib/productos). Lo hace la base
+// (rpc_cambiar_estado_producto, migración 046), con la tienda y el producto
+// bloqueados: verifica el estado actual y, al reactivar un pausado, el tope
+// de productos del plan.
+//
+// El plan (migración 046): con el tope lleno, o con más fotos de las que
+// acepta, responde 409 con { error, motivo: 'tope_productos' | 'tope_fotos',
+// tope, usados }. Al editar se aceptan las fotos del plan o las que el
+// producto ya tenía, lo que sea mayor.
 
 import { NextResponse } from 'next/server'
 import { tiendaDeLaSesion } from '@/lib/tiendaDeLaSesion'
 import { validarProducto, moderarProducto, origenesPermitidos, MENSAJE_CON_PEDIDOS } from '@/lib/productos'
 import { guardarProducto } from '@/lib/guardarProducto'
+import { planDeLaTienda } from '@/lib/planDeLaTienda'
+import { cuerpoDeTope } from '@/lib/planes'
 import { rutaEnBucket } from '@/lib/storageTienda'
 
 const NO_ENCONTRADO = 'No encontramos ese producto.'
@@ -36,7 +45,7 @@ function idDeLaRuta(valor) {
 async function productoDeLaTienda(admin, id, vendedorId, contexto) {
   const { data, error } = await admin
     .from('productos')
-    .select('id, estado, producto_media ( url ), producto_variantes ( imagen_url )')
+    .select('id, estado, producto_media ( url, tipo ), producto_variantes ( imagen_url )')
     .eq('id', id)
     .eq('vendedor_id', vendedorId)
     .maybeSingle()
@@ -86,13 +95,20 @@ export async function PUT(request, { params }) {
   const { respuesta: sinProducto, producto } = await productoDeLaTienda(admin, id, vendedor.id, 'editar')
   if (sinProducto) return sinProducto
 
+  const { plan } = await planDeLaTienda(admin, vendedor.id, 'productos/editar')
+  if (!plan) return NextResponse.json({ error: NO_SE_PUDO }, { status: 500 })
+  const fotosQueTenia = (producto.producto_media || []).filter((m) => (m.tipo ?? 'foto') === 'foto').length
+
   const cuerpo = await request.json().catch(() => null)
   const validado = validarProducto(cuerpo, {
     vendedorId: vendedor.id,
     baseSupabase: process.env.NEXT_PUBLIC_SUPABASE_URL,
     fotosExistentes: (producto.producto_media || []).map((m) => m.url),
+    topeFotos: Math.max(plan.fotosPorProducto, fotosQueTenia),
   })
-  if (!validado.ok) return NextResponse.json({ error: validado.error }, { status: 400 })
+  if (!validado.ok) {
+    return NextResponse.json(validado.motivo ? cuerpoDeTope(validado) : { error: validado.error }, { status: validado.motivo ? 409 : 400 })
+  }
 
   const moderacion = moderarProducto(validado.datos)
   if (moderacion.nivel === 'bloqueo') {
@@ -100,7 +116,7 @@ export async function PUT(request, { params }) {
   }
 
   const r = await guardarProducto(admin, { vendedorId: vendedor.id, productoId: id, validado, avisos: moderacion.avisos })
-  if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status })
+  if (!r.ok) return NextResponse.json(r.motivo ? cuerpoDeTope(r) : { error: r.error }, { status: r.status })
 
   await borrarFotosQueSeSacaron(admin, {
     vendedorId: vendedor.id,
@@ -127,27 +143,27 @@ export async function PATCH(request, { params }) {
   const origenes = origenesPermitidos(destino)
   if (!origenes) return NextResponse.json({ error: 'Ese cambio de estado no se puede hacer.' }, { status: 400 })
 
-  const { data, error } = await admin
-    .from('productos')
-    .update({ estado: destino, actualizado_en: new Date().toISOString() })
-    .eq('id', id)
-    .eq('vendedor_id', vendedor.id)
-    .in('estado', origenes)
-    .select('id, estado')
-    .maybeSingle()
-  if (error) {
-    console.error('[productos/estado]', id, error.message)
+  const { data, error } = await admin.rpc('rpc_cambiar_estado_producto', {
+    p_vendedor_id: vendedor.id,
+    p_producto_id: id,
+    p_destino: destino,
+  })
+  if (error || !data) {
+    console.error('[productos/estado]', id, error?.code, error?.message || 'sin datos')
     return NextResponse.json({ error: NO_SE_PUDO }, { status: 500 })
   }
-  if (data) return NextResponse.json({ ok: true, estado: data.estado })
+  if (data.ok) return NextResponse.json({ ok: true, estado: data.estado })
 
-  // No cambió nada: o no es suyo, o está en un estado desde el que no se puede.
-  const { respuesta: sinProducto, producto } = await productoDeLaTienda(admin, id, vendedor.id, 'estado')
-  if (sinProducto) return sinProducto
-  return NextResponse.json(
-    { error: 'Este producto no se puede pausar ni reactivar en su estado actual.', estado: producto.estado },
-    { status: 409 },
-  )
+  if (data.motivo === 'no_existe') return NextResponse.json({ error: NO_ENCONTRADO }, { status: 404 })
+  if (data.motivo === 'tope_productos') return NextResponse.json(cuerpoDeTope(data), { status: 409 })
+  if (data.motivo === 'estado') {
+    return NextResponse.json(
+      { error: 'Este producto no se puede pausar ni reactivar en su estado actual.', estado: data.estado },
+      { status: 409 },
+    )
+  }
+  // 'destino' no llega: origenesPermitidos ya lo frenó arriba.
+  return NextResponse.json({ error: 'Ese cambio de estado no se puede hacer.' }, { status: 400 })
 }
 
 export async function DELETE(_request, { params }) {

@@ -15,6 +15,8 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getServiceRoleClient } from '@/lib/supabase/admin';
 import { pedidoTuvoPago, pedidoParaLaTienda, pestanaDePedido, esCarritoAbandonado } from '@/lib/pedidos';
+import { planDeLaTienda } from '@/lib/planDeLaTienda';
+import { planConCarritos } from '@/lib/planes';
 
 export async function GET() {
   const supabase = await createClient();
@@ -49,6 +51,18 @@ export async function GET() {
     console.error('No se pudieron cancelar los pedidos vencidos', vendedor.id, errorVencidos.message);
   }
 
+  // Los carritos abandonados son del plan (migración 046): si el plan de la
+  // tienda no los trae, ni se arman ni se mandan. Si no se puede leer el plan,
+  // tampoco (carritos_incluidos: null, y la pantalla avisa): las ventas salen
+  // igual. plan_carritos es el nombre del plan que los trae, para el cartelito.
+  const [{ plan }, planes] = await Promise.all([
+    planDeLaTienda(admin, vendedor.id, 'pedidos'),
+    admin.from('planes').select('nombre, orden, carritos_abandonados, disponible'),
+  ]);
+  const carritosIncluidos = plan ? plan.carritos : null;
+  if (planes.error) console.error('No se pudo leer la lista de planes', vendedor.id, planes.error.message);
+  const planCarritos = planes.error ? null : planConCarritos(planes.data);
+
   // Sólo los suyos. El filtro va acá, no en el cliente.
   //
   // Esta primera lectura NO trae ningún dato de contacto de quien compra: la
@@ -78,13 +92,14 @@ export async function GET() {
   // nunca se pagó, o un cupón que venció sin pagarse, es un carrito abandonado y
   // no es una venta: va aparte, a la pestaña de carritos abandonados, solo con
   // el apodo. El filtro va acá, en el servidor (pestanaDePedido y
-  // esCarritoAbandonado en src/lib/pedidos.js dicen qué es cada uno).
+  // esCarritoAbandonado en src/lib/pedidos.js dicen qué es cada uno). Sin
+  // carritos en el plan, los carritos ni se juntan.
   const ahoraMs = Date.now();
   const ventas = [];
   const carritos = [];
   for (const p of pedidos || []) {
     if (pestanaDePedido(p, ahoraMs) !== null) ventas.push(p);
-    else if (esCarritoAbandonado(p, ahoraMs)) carritos.push(p);
+    else if (carritosIncluidos === true && esCarritoAbandonado(p, ahoraMs)) carritos.push(p);
   }
 
   // Los datos de contacto, SOLO de los pedidos que se pagaron (una segunda
@@ -207,6 +222,8 @@ export async function GET() {
   return NextResponse.json({
     vendedor: { id: vendedor.id, nombre_negocio: vendedor.nombre_negocio },
     mp_conectado: errorCuentaMp ? null : !!cuentaMp,
+    carritos_incluidos: carritosIncluidos,
+    plan_carritos: planCarritos,
     pedidos: [...respuesta, ...carritosRespuesta],
   });
 }

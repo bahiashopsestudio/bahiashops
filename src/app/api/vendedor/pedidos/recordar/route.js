@@ -14,6 +14,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getServiceRoleClient } from '@/lib/supabase/admin';
 import { esCarritoAbandonado } from '@/lib/pedidos';
+import { planDeLaTienda } from '@/lib/planDeLaTienda';
 import { armarMailRecordatorio } from '@/lib/mailsCarritos';
 import { enviarPorResend } from '@/lib/mailBase';
 import { REMITENTE_NO_REPLY, EMAIL_CONTACTO } from '@/lib/contacto';
@@ -38,6 +39,17 @@ export async function POST(request) {
     return NextResponse.json({ error: NO_SE_PUDO }, { status: 500 });
   }
   if (!vendedor) return NextResponse.json({ error: 'No encontramos tu cuenta de vendedor.' }, { status: 403 });
+
+  // Los carritos abandonados son del plan (migración 046). La pestaña ya no los
+  // muestra sin el plan; esto es la red de seguridad.
+  const { plan } = await planDeLaTienda(admin, vendedor.id, 'recordar');
+  if (!plan) return NextResponse.json({ error: NO_SE_PUDO }, { status: 500 });
+  if (!plan.carritos) {
+    return NextResponse.json(
+      { error: 'Los recordatorios de carritos abandonados no están incluidos en tu plan.', codigo: 'PLAN_SIN_CARRITOS' },
+      { status: 403 }
+    );
+  }
 
   let body;
   try { body = await request.json(); } catch {
