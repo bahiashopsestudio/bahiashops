@@ -56,6 +56,7 @@
     "probar:045": "node scripts/probar-045.mjs",
     "probar:046": "node scripts/probar-046.mjs",
     "probar:planes": "node scripts/probar-planes.mjs",
+    "probar:vender": "node scripts/probar-vender.mjs",
     "probar:tope-paralelo": "node --env-file=.env.local scripts/probar-tope-paralelo.mjs",
     "tarea-diaria": "node scripts/correr-tarea-diaria.mjs",
     "probar:denuncias": "node scripts/probar-denuncias.mjs",

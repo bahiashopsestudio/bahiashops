@@ -27,8 +27,9 @@ const MapaVendedores = dynamic(() => import('@/components/MapaVendedores'), {
 const TINTA = '#0a0a0a'
 
 // En la home el mapa arranca más alejado que en /mapa: casi toda la ciudad,
-// con la Plaza Rivadavia un poco por debajo del centro.
-const VISTA_HOME = { center: [-62.2626, -38.7099], zoom: 12 }
+// con la Plaza Rivadavia un poco por debajo del centro. La usa también la
+// portada de /vender.
+export const VISTA_HOME = { center: [-62.2626, -38.7099], zoom: 12 }
 
 const textoChico = {
   fontFamily: 'Poppins, sans-serif',
@@ -105,7 +106,7 @@ export default function MapaDestacado({ vendedores = [] }) {
         </p>
 
         <Link
-          href="/vendedor/nuevo"
+          href="/vender"
           className="inline-block bg-[#015444] text-white border border-[#015444] hover:bg-transparent hover:text-[#015444] transition-colors cursor-pointer"
           style={{
             fontFamily: "'Inter', sans-serif",

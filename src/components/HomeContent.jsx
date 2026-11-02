@@ -193,7 +193,7 @@ export default function HomeContent({ categorias, recientes, elegidos, vendedore
               </p>
 
               <Link
-                href="/vendedor/nuevo"
+                href="/vender"
                 className="inline-block text-[13px] md:text-[14px] px-6 py-3 md:px-7 md:py-3.5"
                 style={{
                   fontFamily: 'Inter, sans-serif',
@@ -435,7 +435,7 @@ function CtaVender() {
           </p>
 
           <Link
-            href="/vendedor/nuevo"
+            href="/vender"
             className="inline-block bg-white text-[#0a0a0a] border border-white hover:bg-transparent hover:text-white transition-colors cursor-pointer"
             style={{
               fontFamily: "'Inter', sans-serif",
@@ -543,7 +543,7 @@ function RecienLlegados({ productos }) {
           })}
 
           {productos.length < 4 && (
-            <Link href="/vendedor/nuevo" className="shrink-0 w-48 md:w-56 snap-start">
+            <Link href="/vender" className="shrink-0 w-48 md:w-56 snap-start">
               <div className="aspect-square bg-white rounded-xl overflow-hidden flex flex-col items-center justify-center border-2 border-dashed border-[#0a0a0a]/10 hover:border-[#0a0a0a]/30 transition group p-4">
                 <svg className="w-8 h-8 text-[#0a0a0a]/15 group-hover:text-[#0a0a0a]/40 transition mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349M3.75 21V9.349m0 0a3.001 3.001 0 0 0 3.75-.615A2.993 2.993 0 0 0 9.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 0 0 2.25 1.016c.896 0 1.7-.393 2.25-1.015a3.001 3.001 0 0 0 3.75.614m-16.5 0a3.004 3.004 0 0 1-.621-4.72l1.189-1.19A1.5 1.5 0 0 1 5.378 3h13.243a1.5 1.5 0 0 1 1.06.44l1.19 1.189a3 3 0 0 1-.621 4.72M6.75 18h3.75a.75.75 0 0 0 .75-.75V13.5a.75.75 0 0 0-.75-.75H6.75a.75.75 0 0 0-.75.75v3.75c0 .414.336.75.75.75Z" />

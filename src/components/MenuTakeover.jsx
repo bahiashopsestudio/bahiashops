@@ -9,6 +9,7 @@ const NAV_LINKS = [
   { href: '/tesoros', label: 'Descubrí tesoros' },
   { href: '/mapa', label: 'Mapa' },
   { href: '/sobre-nosotros', label: 'Quiénes somos' },
+  { href: '/vender', label: 'Vendé en Bahía Shops' },
 ]
 
 function HeaderSeccion({ children }) {

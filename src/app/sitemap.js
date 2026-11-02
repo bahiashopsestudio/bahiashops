@@ -12,7 +12,7 @@ export const revalidate = 3600
 
 const PAGINAS_FIJAS = [
   '/', '/categorias', '/tesoros', '/mapa', '/local-shops', '/resenas',
-  '/sobre-nosotros', '/terminos', '/privacidad',
+  '/vender', '/sobre-nosotros', '/terminos', '/privacidad',
 ]
 
 async function leer(nombre, consulta) {

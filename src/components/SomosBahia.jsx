@@ -178,7 +178,7 @@ export default function SomosBahia() {
             ¿Tenés un emprendimiento?{' '}
           </span>
           <Link
-            href="/vendedor/nuevo"
+            href="/vender"
             style={{
               fontFamily: "'Inter', sans-serif",
               fontWeight: 700,

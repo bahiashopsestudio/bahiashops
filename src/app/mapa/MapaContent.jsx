@@ -99,7 +99,7 @@ export default function MapaContent({ vendedores = [], categorias = [] }) {
               </p>
 
               <Link
-                href="/vendedor/nuevo"
+                href="/vender"
                 className="inline-block bg-[#0a0a0a] text-white border border-[#0a0a0a] no-underline hover:bg-transparent hover:text-[#0a0a0a] transition-colors"
                 style={{
                   fontFamily: "'Inter', sans-serif",

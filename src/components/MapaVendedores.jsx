@@ -168,8 +168,10 @@ function reservasLocalidades(mapa) {
 // cooperativo: la página se scrollea pasando por encima del mapa y el zoom va
 // con Ctrl (⌘ en Mac) + rueda o con dos dedos. Lo usa la home; se lee al
 // montar el mapa. vista: { center, zoom } con que arranca (la home usa una
-// más alejada); también se lee al montar.
-export default function MapaVendedores({ vendedores = [], piel = PIEL_INICIAL, onCambiarPiel, cooperativo = false, vista = VISTA_INICIAL }) {
+// más alejada); también se lee al montar. selectorPiel: false saca los
+// botones Claro / Oscuro (la portada de /vender va siempre en Claro).
+// fondoError: el fondo del cartel «No se pudo cargar el mapa».
+export default function MapaVendedores({ vendedores = [], piel = PIEL_INICIAL, onCambiarPiel, cooperativo = false, vista = VISTA_INICIAL, selectorPiel = true, fondoError }) {
   const supabase = createClient()
   const contenedorRef = useRef(null)
   const mapaRef = useRef(null)
@@ -584,16 +586,20 @@ export default function MapaVendedores({ vendedores = [], piel = PIEL_INICIAL, o
       />
 
       {errorFondo && (
-        <div className="mapa-error">No se pudo cargar el mapa. Probá recargar la página.</div>
+        <div className="mapa-error" style={fondoError ? { background: fondoError } : undefined}>No se pudo cargar el mapa. Probá recargar la página.</div>
       )}
 
-      <div className="mapa-modo" role="group" aria-label="Versión del mapa">
-        <button type="button" aria-pressed={piel === 'claro'} onClick={() => onCambiarPiel?.('claro')}>Claro</button>
-        <button type="button" aria-pressed={piel === 'oscuro'} onClick={() => onCambiarPiel?.('oscuro')}>Oscuro</button>
-      </div>
+      {selectorPiel && (
+        <div className="mapa-modo" role="group" aria-label="Versión del mapa">
+          <button type="button" aria-pressed={piel === 'claro'} onClick={() => onCambiarPiel?.('claro')}>Claro</button>
+          <button type="button" aria-pressed={piel === 'oscuro'} onClick={() => onCambiarPiel?.('oscuro')}>Oscuro</button>
+        </div>
+      )}
       <button
         type="button"
         className="mapa-lamp"
+        // Sin los botones de la piel, la lamparita sube a su lugar.
+        style={selectorPiel ? undefined : { top: '16px' }}
         aria-pressed={nombresPrendidos}
         aria-label="Nombres de barrios"
         title="Nombres de barrios"

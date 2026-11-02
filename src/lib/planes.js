@@ -107,3 +107,52 @@ export function textoDeTope({ motivo, tope } = {}) {
 export function cuerpoDeTope({ motivo, tope = null, usados = null }) {
   return { error: textoDeTope({ motivo, tope }), motivo, tope, usados }
 }
+
+// ── La página pública /vender ──
+
+// Un precio en pesos como lo muestra /vender: '$0', '$10.000'.
+function textoPrecio(pesos) {
+  return `$${Number(pesos).toLocaleString('es-AR', { maximumFractionDigits: 0 })}`
+}
+
+const enteroPositivo = (v) => Number.isInteger(v) && v > 0
+
+// Los planes como los muestra /vender, desde las filas de public.planes (lo
+// que lee anon). El Gratis y el Básico tienen que estar completos y
+// disponibles: si falta alguno, o falta un dato, devuelve null y la página
+// muestra la sección sin números (nunca un precio o un tope inventado).
+//
+// El Pro: si no se puede elegir o no tiene precio, «Próximamente». Si no hay
+// fila, también.
+export function planesParaLaVenta(filas) {
+  if (!Array.isArray(filas)) return null
+  const fila = (clave) => filas.find((p) => p?.clave === clave)
+
+  const completo = (p) =>
+    p && p.disponible === true && Number.isInteger(p.precio_mensual) && p.precio_mensual >= 0 &&
+    enteroPositivo(p.tope_productos) && enteroPositivo(p.fotos_por_producto)
+  const vendible = (p) => ({
+    nombre: p.nombre,
+    precio: textoPrecio(p.precio_mensual),
+    tope: p.tope_productos,
+    fotos: p.fotos_por_producto,
+    carritos: p.carritos_abandonados === true,
+  })
+
+  const gratis = fila('gratis')
+  const basico = fila('basico')
+  if (!completo(gratis) || !completo(basico)) return null
+
+  const pro = fila('pro')
+  const proElegible = !!pro && pro.disponible === true && Number.isInteger(pro.precio_mensual)
+  return {
+    gratis: vendible(gratis),
+    basico: vendible(basico),
+    pro: proElegible
+      ? { nombre: pro.nombre, proximamente: false, precio: textoPrecio(pro.precio_mensual),
+          tope: enteroPositivo(pro.tope_productos) ? pro.tope_productos : null,
+          fotos: enteroPositivo(pro.fotos_por_producto) ? pro.fotos_por_producto : null,
+          carritos: pro.carritos_abandonados === true }
+      : { nombre: pro?.nombre || 'Pro', proximamente: true },
+  }
+}

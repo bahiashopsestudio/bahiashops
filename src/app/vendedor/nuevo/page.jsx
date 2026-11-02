@@ -64,7 +64,7 @@ export default function NuevoVendedorPage() {
 
         <div className="pt-20 pb-24 px-4 md:px-8">
           <div className="max-w-xl mx-auto">
-            <VolverAtras href="/" texto="Volver al inicio" />
+            <VolverAtras href="/vender" texto="Volver" />
 
             {!verificando && (
               <>

@@ -49,6 +49,12 @@ export default function Footer() {
             style={{ fontFamily: "'Inter', sans-serif", fontWeight: 400, fontSize: '13px', color: '#9cc3ea' }}
           >
             <Link
+              href="/vender"
+              className="hover:text-[#9cc3ea] transition-colors underline-offset-2 hover:underline"
+            >
+              Vendé en Bahía Shops
+            </Link>
+            <Link
               href="/terminos"
               className="hover:text-[#9cc3ea] transition-colors underline-offset-2 hover:underline"
             >
