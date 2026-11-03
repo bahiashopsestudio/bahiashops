@@ -1,10 +1,13 @@
-// Los planes de las tiendas (migración 046), del lado del servidor: cómo se
-// lee el plan que devuelve la base, qué dice el contador, cuál es el plan
-// siguiente y cómo se lee el error del tope.
+// Los planes de las tiendas (migraciones 046 y 047), del lado del servidor:
+// cómo se lee el plan que devuelve la base, qué dice el contador, cuál es el
+// plan siguiente y cómo se lee el error del tope.
 //
 // Lo que vale de verdad lo decide la base (privado.plan_efectivo,
-// privado.tope_lleno y privado.guardar_producto): estas funciones solo leen lo
-// que devuelve. No tocan la base.
+// privado.tope_lleno, privado.tope_superado y privado.guardar_producto):
+// estas funciones solo leen lo que devuelve. No tocan la base.
+//
+// Desde la 047 cuentan todos los productos guardados de la tienda (también
+// los pausados y los rechazados): usados es ese número.
 //
 //   npm run probar:planes
 
@@ -76,36 +79,52 @@ export function planConCarritos(planes) {
 }
 
 // El error del tope que lanza privado.guardar_producto (SQLSTATE BS409, el
-// mensaje 'tope_productos' o 'tope_fotos', y { tope, usados } en el detalle).
-// Devuelve { motivo, tope, usados } o null si no es ese error. Si el detalle
-// no llegó o no se entiende, tope y usados van null: el tope igual valió.
+// mensaje 'tope_productos', 'tope_superado' o 'tope_fotos', y { tope, usados }
+// en el detalle). Devuelve { motivo, tope, usados, accion } o null si no es
+// ese error. Si el detalle no llegó o no se entiende, tope y usados van null:
+// el tope igual valió.
+// guardar_producto solo lanza 'tope_superado' al reenviar un rechazado (por
+// eso accion: 'reenviar'); al reactivar, el motivo llega de
+// cambiar_estado_producto y la ruta pasa accion: 'activar'.
 export function errorDeTope(error) {
   if (error?.code !== 'BS409') return null
-  const motivo = ['tope_productos', 'tope_fotos'].includes(error.message) ? error.message : 'tope_productos'
+  const motivo = ['tope_productos', 'tope_superado', 'tope_fotos'].includes(error.message) ? error.message : 'tope_productos'
   let detalle = {}
   try {
     detalle = typeof error.details === 'string' ? JSON.parse(error.details) : (error.details || {})
   } catch { /* sin detalle: el mensaje va sin los números */ }
   const numero = (v) => (Number.isInteger(Number(v)) && v !== null && v !== '' ? Number(v) : null)
-  return { motivo, tope: numero(detalle?.tope), usados: numero(detalle?.usados) }
+  const leido = { motivo, tope: numero(detalle?.tope), usados: numero(detalle?.usados) }
+  return motivo === 'tope_superado' ? { ...leido, accion: 'reenviar' } : leido
 }
 
 // El texto del 409, para mostrar tal cual (hoy, en el alert() de la pantalla).
-export function textoDeTope({ motivo, tope } = {}) {
+//   'tope_productos'  cargar uno nuevo con el tope lleno (cuentan todos los
+//                     guardados, también los pausados)
+//   'tope_superado'   activar un pausado o reenviar un rechazado con más
+//                     guardados que el tope (accion: 'activar' | 'reenviar')
+//   'tope_fotos'      más fotos de las que acepta el producto
+export function textoDeTope({ motivo, tope, usados, accion = 'activar' } = {}) {
   if (motivo === 'tope_fotos') {
     return tope
       ? `Este producto puede tener hasta ${tope} fotos con tu plan. Sacá alguna para poder guardarlo.`
       : 'Este producto tiene más fotos de las que permite tu plan. Sacá alguna para poder guardarlo.'
   }
-  const cuantos = tope ? `tope de ${tope} productos` : 'tope de productos'
-  return `Llegaste al ${cuantos} de tu plan. Para sumar otro, pausá o eliminá alguno de los que tenés publicados o en revisión.`
+  if (motivo === 'tope_superado') {
+    const verbo = accion === 'reenviar' ? 'reenviar' : 'activar'
+    if (tope && usados) return `Tenés ${usados} productos y tu plan guarda ${tope}. Para ${verbo} este, eliminá productos hasta tener ${tope}.`
+    if (tope) return `Tenés más productos de los ${tope} que guarda tu plan. Para ${verbo} este, eliminá productos hasta tener ${tope}.`
+    return `Tenés más productos de los que guarda tu plan. Para ${verbo} este, eliminá productos hasta llegar al tope.`
+  }
+  const inicio = tope ? `Llegaste a los ${tope} productos de tu plan.` : 'Llegaste al tope de productos de tu plan.'
+  return `${inicio} Cuentan todos, también los pausados: para cargar otro, eliminá uno.`
 }
 
 // El cuerpo del 409 de las rutas: { error, motivo, tope, usados }, con el
-// texto armado. Recibe { motivo, tope, usados } (lo de validarProducto,
-// guardarProducto o cambiar_estado_producto).
-export function cuerpoDeTope({ motivo, tope = null, usados = null }) {
-  return { error: textoDeTope({ motivo, tope }), motivo, tope, usados }
+// texto armado. Recibe { motivo, tope, usados, accion } (lo de
+// validarProducto, guardarProducto o cambiar_estado_producto).
+export function cuerpoDeTope({ motivo, tope = null, usados = null, accion }) {
+  return { error: textoDeTope({ motivo, tope, usados, accion }), motivo, tope, usados }
 }
 
 // ── La página pública /vender ──

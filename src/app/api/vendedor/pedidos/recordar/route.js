@@ -13,7 +13,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getServiceRoleClient } from '@/lib/supabase/admin';
-import { esCarritoAbandonado } from '@/lib/pedidos';
+import { esCarritoAbandonado, tieneProductoEliminado } from '@/lib/pedidos';
 import { planDeLaTienda } from '@/lib/planDeLaTienda';
 import { armarMailRecordatorio } from '@/lib/mailsCarritos';
 import { enviarPorResend } from '@/lib/mailBase';
@@ -66,7 +66,7 @@ export async function POST(request) {
     .select(`
       id, estado, cancelado_motivo, vendedor_id, comprador_id, vence_en, efectivo_vence_en,
       mp_payment_id, recordatorio_enviado_en,
-      items:pedido_items ( nombre, variante, cantidad, precio )
+      items:pedido_items ( producto_id, nombre, variante, cantidad, precio )
     `)
     .eq('id', pedidoId)
     .eq('vendedor_id', vendedor.id)
@@ -83,6 +83,14 @@ export async function POST(request) {
   }
   if (pedido.recordatorio_enviado_en) {
     return NextResponse.json({ error: 'El recordatorio ya se envió.' }, { status: 409 });
+  }
+  // Un producto que la tienda eliminó (migración 047) no se puede volver a
+  // comprar: el mail invitaría a buscar algo que ya no está.
+  if (tieneProductoEliminado(pedido.items)) {
+    return NextResponse.json(
+      { error: 'Uno de los productos de este carrito ya no está en tu tienda: no mandamos el recordatorio.', codigo: 'PRODUCTO_ELIMINADO' },
+      { status: 409 }
+    );
   }
 
   // Sin una cuenta de MercadoPago conectada, quien compró llegaría a una tienda

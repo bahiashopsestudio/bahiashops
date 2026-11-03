@@ -35,9 +35,6 @@ export function textoMotivoRechazo(motivo) {
   return texto || 'No pudimos publicarlo. Revisá el texto y las fotos y volvé a enviarlo.'
 }
 
-export const MENSAJE_CON_PEDIDOS =
-  'Este producto tiene pedidos asociados y no se puede eliminar.\n\nSi no querés que los compradores lo vean, podés pausarlo.'
-
 const LIMITES = { nombre: 300, descripcion: 10000, marca: 200, personalizada: 200, propiedad: 100, valor: 100, valores: 100 }
 
 const texto = (v) => (typeof v === 'string' ? v.trim() : '')

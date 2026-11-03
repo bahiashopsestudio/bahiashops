@@ -6,7 +6,8 @@
 //            carritos, especial, sinTope, contador, siguiente }
 //
 //   tope        productos que puede tener (null = sin tope)
-//   usados      los que cuentan: activos, en revisión y agotados
+//   usados      los que cuentan: todos los guardados, también los pausados y
+//               los rechazados (migración 047)
 //   contador    'sin_tope' | 'normal' | 'cerca' | 'en_el_tope' | 'por_encima'
 //               (estadoDelContador, src/lib/planes.js)
 //   especial    tiene condiciones especiales del admin. Sin el motivo ni el

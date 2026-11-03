@@ -80,12 +80,16 @@ export async function POST(request, { params }) {
 
   const { data: items, error: errorItems } = await admin
     .from('pedido_items')
-    .select('producto_id, nombre, variante, precio, cantidad, foto_url')
+    .select('id, producto_id, nombre, variante, precio, cantidad, foto_url')
     .eq('pedido_id', pedido.id);
   if (errorItems) {
     console.error(`Pagar ahora, pedido ${id}: no se pudieron leer los productos —`, errorItems.message);
     return NextResponse.json({ error: ERROR_GENERICO }, { status: 500 });
   }
+  // Un producto que la tienda eliminó (migración 047) no frena el pago: es una
+  // venta en curso (cupón vigente), el ítem guarda nombre, precio y foto, y la
+  // tienda la entrega igual. Sin producto_id, el id del ítem de MercadoPago
+  // sale del id del ítem (armarPreferenciaNueva).
 
   // El sitio publicado, o el túnel hacia la máquina de quien desarrolla
   // (src/lib/sitio.js: solo fuera de producción).

@@ -165,7 +165,8 @@ export default function MisProductosPage() {
 
   // Pausar, reactivar y borrar van por el servidor (migración 033: el
   // navegador no puede escribir en productos). El servidor verifica el estado
-  // actual y borra también las fotos de Storage.
+  // actual y borra también las fotos de Storage (menos las que usa un pedido:
+  // desde la migración 047 se puede eliminar un producto con ventas).
   async function toggleEstado(producto) {
     const nuevoEstado = producto.estado === 'activo' ? 'pausado' : 'activo';
     try {
@@ -183,7 +184,7 @@ export default function MisProductosPage() {
   }
 
   async function eliminarProducto(producto) {
-    const confirmar = window.confirm(`¿Seguro que querés eliminar "${producto.nombre}"? Esta acción no se puede deshacer.`);
+    const confirmar = window.confirm(`¿Seguro que querés eliminar “${producto.nombre}”? Desaparece de tu tienda y no se puede deshacer. Si alguien ya lo compró, lo sigue viendo en sus pedidos.`);
     if (!confirmar) return;
 
     setEliminando(producto.id);

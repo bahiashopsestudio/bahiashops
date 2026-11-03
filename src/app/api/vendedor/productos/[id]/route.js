@@ -2,7 +2,7 @@
 //
 //   PUT     editarlo (el mismo cuerpo que el alta) -> { ok, id, estado, revision_posterior }
 //   PATCH   { estado } pausar o reactivar          -> { ok, estado }
-//   DELETE  borrarlo                               -> { ok }
+//   DELETE  eliminarlo, con ventas o sin ellas      -> { ok }
 //
 // La tienda sale de la sesión: un producto ajeno da 404, igual que uno que no
 // existe. Escribe con service_role (migración 033: el navegador ya no puede).
@@ -16,18 +16,22 @@
 //
 // Pausar y reactivar: solo activo -> pausado, pausado -> activo y
 // agotado -> activo (ver TRANSICIONES en lib/productos). Lo hace la base
-// (rpc_cambiar_estado_producto, migración 046), con la tienda y el producto
-// bloqueados: verifica el estado actual y, al reactivar un pausado, el tope
-// de productos del plan.
+// (rpc_cambiar_estado_producto, migraciones 046 y 047), con la tienda y el
+// producto bloqueados: verifica el estado actual y, al reactivar un pausado,
+// que la tienda no tenga más productos guardados que el tope.
 //
-// El plan (migración 046): con el tope lleno, o con más fotos de las que
-// acepta, responde 409 con { error, motivo: 'tope_productos' | 'tope_fotos',
-// tope, usados }. Al editar se aceptan las fotos del plan o las que el
-// producto ya tenía, lo que sea mayor.
+// El plan (migraciones 046 y 047): responde 409 con { error, motivo, tope,
+// usados } si reenviar un rechazado o reactivar un pausado encuentra la
+// tienda por encima del tope ('tope_superado'), o si trae más fotos de las
+// que acepta ('tope_fotos'). Al editar se aceptan las fotos del plan o las
+// que el producto ya tenía, lo que sea mayor.
+//
+// Eliminar (migración 047): lo hace la base (rpc_eliminar_producto), también
+// con ventas: los pedidos se quedan con su nombre, variante, precio y foto.
 
 import { NextResponse } from 'next/server'
 import { tiendaDeLaSesion } from '@/lib/tiendaDeLaSesion'
-import { validarProducto, moderarProducto, origenesPermitidos, MENSAJE_CON_PEDIDOS } from '@/lib/productos'
+import { validarProducto, moderarProducto, origenesPermitidos } from '@/lib/productos'
 import { guardarProducto } from '@/lib/guardarProducto'
 import { planDeLaTienda } from '@/lib/planDeLaTienda'
 import { cuerpoDeTope } from '@/lib/planes'
@@ -57,32 +61,38 @@ async function productoDeLaTienda(admin, id, vendedorId, contexto) {
   return { producto: data }
 }
 
+// Las rutas de Storage que se pueden borrar: las de `urls` que están en la
+// carpeta de la tienda, salvo las de `quedan` y las que usa un pedido
+// (pedido_items.foto_url: el historial y los mails la siguen mostrando).
+function rutasParaBorrar({ vendedorId, urls, quedan = [], enPedidos = [] }) {
+  const ruta = (url) => rutaEnBucket(url, 'productos')
+  const noSeBorran = new Set([...quedan, ...enPedidos].map(ruta).filter(Boolean))
+  return [...new Set(urls.map(ruta))].filter((r) => r && r.startsWith(`${vendedorId}/`) && !noSeBorran.has(r))
+}
+
+// Es limpieza: si falla, queda en el log.
+async function borrarDeStorage(admin, rutas, contexto, productoId) {
+  if (rutas.length === 0) return
+  const { error } = await admin.storage.from('productos').remove(rutas)
+  if (error) console.error(`[productos/${contexto}/storage]`, productoId, error.message)
+}
+
 // Al editar: las fotos que el producto tenía y ya no tiene se borran de
 // Storage (antes lo hacía la pantalla, y si fallaba no se enteraba nadie). Las
 // de las variantes también: guardarProducto rehace las variantes sin foto.
-// Solo las de la carpeta de la tienda, y nunca una que use un pedido
-// (pedido_items.foto_url: el historial y los mails la siguen mostrando). Si
-// no se puede leer qué usan los pedidos, no se borra nada. Es limpieza: el
-// producto ya quedó guardado, y si algo falla queda en el log.
+// Solo las de la carpeta de la tienda, y nunca una que use un pedido. Si no se
+// puede leer qué usan los pedidos, no se borra nada. El producto ya quedó
+// guardado.
 async function borrarFotosQueSeSacaron(admin, { vendedorId, productoId, antes, ahora }) {
-  const quedan = new Set(ahora.map((url) => rutaEnBucket(url, 'productos')).filter(Boolean))
-  const sacadas = new Set(
-    antes
-      .map((url) => rutaEnBucket(url, 'productos'))
-      .filter((ruta) => ruta && ruta.startsWith(`${vendedorId}/`) && !quedan.has(ruta))
-  )
-  if (sacadas.size === 0) return
+  if (rutasParaBorrar({ vendedorId, urls: antes, quedan: ahora }).length === 0) return
 
   const { data: items, error } = await admin.from('pedido_items').select('foto_url').eq('producto_id', productoId)
   if (error) {
     console.error('[productos/editar/fotos-en-pedidos]', productoId, error.message)
     return
   }
-  for (const item of items || []) sacadas.delete(rutaEnBucket(item.foto_url, 'productos'))
-  if (sacadas.size === 0) return
-
-  const { error: errorStorage } = await admin.storage.from('productos').remove([...sacadas])
-  if (errorStorage) console.error('[productos/editar/storage]', productoId, errorStorage.message)
+  const enPedidos = (items || []).map((item) => item.foto_url)
+  await borrarDeStorage(admin, rutasParaBorrar({ vendedorId, urls: antes, quedan: ahora, enPedidos }), 'editar', productoId)
 }
 
 export async function PUT(request, { params }) {
@@ -155,7 +165,7 @@ export async function PATCH(request, { params }) {
   if (data.ok) return NextResponse.json({ ok: true, estado: data.estado })
 
   if (data.motivo === 'no_existe') return NextResponse.json({ error: NO_ENCONTRADO }, { status: 404 })
-  if (data.motivo === 'tope_productos') return NextResponse.json(cuerpoDeTope(data), { status: 409 })
+  if (data.motivo === 'tope_superado') return NextResponse.json(cuerpoDeTope({ ...data, accion: 'activar' }), { status: 409 })
   if (data.motivo === 'estado') {
     return NextResponse.json(
       { error: 'Este producto no se puede pausar ni reactivar en su estado actual.', estado: data.estado },
@@ -173,30 +183,22 @@ export async function DELETE(_request, { params }) {
   const id = idDeLaRuta((await params).id)
   if (!id) return NextResponse.json({ error: NO_ENCONTRADO }, { status: 404 })
 
-  const { respuesta: sinProducto, producto } = await productoDeLaTienda(admin, id, vendedor.id, 'borrar')
-  if (sinProducto) return sinProducto
-
-  // Fotos, variantes, sellos, favoritos, colecciones y tesoros van en cascada.
-  // Lo único que lo frena son los pedidos (pedido_items, sin cascada).
-  const { error } = await admin.from('productos').delete().eq('id', id).eq('vendedor_id', vendedor.id)
-  if (error) {
-    if (error.code === '23503') return NextResponse.json({ error: MENSAJE_CON_PEDIDOS }, { status: 409 })
-    console.error('[productos/borrar]', id, error.message)
+  // La base verifica que sea de la tienda, suelta los pedidos (se quedan con
+  // su foto del producto) y borra el producto con todo lo que lo apunta.
+  const { data, error } = await admin.rpc('rpc_eliminar_producto', { p_vendedor_id: vendedor.id, p_producto_id: id })
+  if (error || !data) {
+    console.error('[productos/borrar]', id, error?.code, error?.message || 'sin datos')
     return NextResponse.json({ error: 'Hubo un error al eliminar. Intentá de nuevo.' }, { status: 500 })
   }
+  if (!data.ok) return NextResponse.json({ error: NO_ENCONTRADO }, { status: 404 })
 
-  // Los archivos, solo los de la carpeta de la tienda. Es limpieza: si falla,
-  // el producto ya está borrado y queda en el log.
-  const rutas = [
-    ...(producto.producto_media || []).map((m) => m.url),
-    ...(producto.producto_variantes || []).map((v) => v.imagen_url),
-  ]
-    .map((url) => rutaEnBucket(url, 'productos'))
-    .filter((ruta) => ruta && ruta.startsWith(`${vendedor.id}/`))
-  if (rutas.length > 0) {
-    const { error: errorStorage } = await admin.storage.from('productos').remove(rutas)
-    if (errorStorage) console.error('[productos/borrar/storage]', id, errorStorage.message)
-  }
+  // Los archivos: los de la carpeta de la tienda, menos los que usa algún
+  // pedido. El producto ya está eliminado.
+  await borrarDeStorage(admin, rutasParaBorrar({
+    vendedorId: vendedor.id,
+    urls: Array.isArray(data.fotos) ? data.fotos : [],
+    enPedidos: Array.isArray(data.fotos_en_pedidos) ? data.fotos_en_pedidos : [],
+  }), 'borrar', id)
 
   return NextResponse.json({ ok: true })
 }

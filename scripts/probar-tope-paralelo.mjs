@@ -9,7 +9,7 @@
 //
 //   node --env-file=.env.local scripts/probar-tope-paralelo.mjs 16
 //
-// Correrlo DESPUÉS de correr la 046. Solo acepta las tiendas de prueba 15, 16
+// Correrlo DESPUÉS de correr la 046 y la 047. Solo acepta las tiendas de prueba 15, 16
 // o 18. Usa la service_role (SUPABASE_SERVICE_ROLE_KEY de .env.local), como el
 // servidor.
 //
@@ -20,7 +20,10 @@
 //   3. Dispara 5 altas a la vez: tiene que entrar una y las otras 4 dar BS409
 //      'tope_productos' con { tope, usados }.
 //   4. Edita el que entró con 9 fotos (el Básico permite 8): BS409 'tope_fotos'.
-//   5. Lo pausa, carga otro (entra), y reactiva el pausado: tope_productos.
+//   5. Con la 047: lo pausa y otra alta sigue dando BS409 (pausar no hace
+//      lugar); reactivarlo en el tope pasa. Después baja el tope de prueba en
+//      uno (queda por encima): reactivar da 'tope_superado', y reenviarlo
+//      como rechazado da BS409 'tope_superado' con { tope, usados, cuenta }.
 //   6. AL FINAL, SIEMPRE (aunque algo falle): borra los productos que creó y
 //      devuelve la condición especial a como estaba (o la borra si no había).
 //      Verifica que quedó igual que antes.
@@ -159,20 +162,39 @@ try {
     ok(r.error?.code === 'BS409' && r.error.message === 'tope_fotos', `9 fotos: ${r.error?.code} '${r.error?.message}'`)
     ok(detalle(r.error)?.tope === 8 && detalle(r.error)?.usados === 9, `details: ${r.error?.details}`)
 
-    console.log('\n4. Reactivar en el tope')
-    r = await admin.rpc('rpc_cambiar_estado_producto', { p_vendedor_id: tienda, p_producto_id: nuevoId, p_destino: 'pausado' })
+    console.log('\n4. En el tope: pausar no hace lugar, reactivar sí se puede (047)')
+    const cambiar = (destino) => admin.rpc('rpc_cambiar_estado_producto', { p_vendedor_id: tienda, p_producto_id: nuevoId, p_destino: destino })
+    r = await cambiar('pausado')
     ok(r.error || r.data?.ok === false, `pausar uno en revisión: no se puede (motivo '${r.data?.motivo}')`)
     // Para tener un pausado: lo marcamos activo y lo pausamos (como si lo
     // hubiera aprobado el admin).
     const { error: errorAprobar } = await admin.from('productos').update({ estado: 'activo' }).eq('id', nuevoId).eq('nombre', NOMBRE)
     if (errorAprobar) throw new Error(`No se pudo aprobar el producto de prueba: ${errorAprobar.message}`)
-    r = await admin.rpc('rpc_cambiar_estado_producto', { p_vendedor_id: tienda, p_producto_id: nuevoId, p_destino: 'pausado' })
-    ok(r.data?.ok === true && r.data.estado === 'pausado', 'pausarlo: pasa y libera el lugar')
+    r = await cambiar('pausado')
+    ok(r.data?.ok === true && r.data.estado === 'pausado', 'pausarlo: pasa')
     r = await guardar(DATOS, null, fotos(1, 'otro'))
-    ok(!r.error, 'otra alta ocupa el lugar')
-    r = await admin.rpc('rpc_cambiar_estado_producto', { p_vendedor_id: tienda, p_producto_id: nuevoId, p_destino: 'activo' })
-    ok(r.data?.ok === false && r.data.motivo === 'tope_productos' && r.data.tope === usados + 1 && r.data.usados === usados + 1,
-      `reactivar el pausado: ${JSON.stringify(r.data)}`)
+    ok(r.error?.code === 'BS409' && r.error.message === 'tope_productos', `pero no hace lugar: otra alta da ${r.error?.code} '${r.error?.message}'`)
+    r = await cambiar('activo')
+    ok(r.data?.ok === true && r.data.estado === 'activo', `reactivarlo en el tope (${usados + 1} de ${usados + 1}): pasa (ya contaba)`)
+
+    console.log('\n5. Por encima del tope: no reactiva ni reenvía (047)')
+    if (usados === 0) {
+      console.log('  · la tienda no tenía productos: no se puede bajar el tope a 0; se saltea')
+    } else {
+      r = await cambiar('pausado')
+      ok(r.data?.ok === true, 'lo vuelve a pausar')
+      const { error: errorBajar } = await admin.from('vendedor_planes').update({ tope_productos: usados }).eq('vendedor_id', tienda).eq('motivo', MOTIVO)
+      if (errorBajar) throw new Error(`No se pudo bajar el tope de prueba: ${errorBajar.message}`)
+      r = await cambiar('activo')
+      ok(r.data?.ok === false && r.data.motivo === 'tope_superado' && r.data.tope === usados && r.data.usados === usados + 1,
+        `con el tope en ${usados} y ${usados + 1} guardados, reactivar: ${JSON.stringify(r.data)}`)
+      const { error: errorRechazar } = await admin.from('productos').update({ estado: 'rechazado' }).eq('id', nuevoId).eq('nombre', NOMBRE)
+      if (errorRechazar) throw new Error(`No se pudo marcar rechazado el producto de prueba: ${errorRechazar.message}`)
+      r = await guardar(DATOS, nuevoId, fotos(1, 'reenvio'))
+      ok(r.error?.code === 'BS409' && r.error.message === 'tope_superado', `reenviar un rechazado: ${r.error?.code} '${r.error?.message}'`)
+      ok(detalle(r.error)?.tope === usados && detalle(r.error)?.usados === usados + 1 && detalle(r.error)?.cuenta === 'guardados',
+        `details por PostgREST: ${r.error?.details}`)
+    }
   }
 } catch (err) {
   fallas++

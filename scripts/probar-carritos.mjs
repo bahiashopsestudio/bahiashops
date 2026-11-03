@@ -1,10 +1,11 @@
 // Prueba la pestaña de carritos abandonados: qué pedido es un carrito
 // abandonado (y cuál no), que en el panel caiga en su pestaña, y el mail de
-// "Recordarle" con su pie legal (retiro o bloqueo de los datos, Ley 25.326).
+// "Recordarle" con su pie legal (retiro o bloqueo de los datos, Ley 25.326), y
+// que un carrito con un producto eliminado no se recuerde (migración 047).
 //
 //   npm run probar:carritos
 
-import { esCarritoAbandonado, pestanaEnElPanel } from '../src/lib/pedidos.js'
+import { esCarritoAbandonado, pestanaEnElPanel, tieneProductoEliminado } from '../src/lib/pedidos.js'
 
 let fallas = 0
 const ok = (c, m) => { if (!c) { fallas++; console.log('  ✗ FALLA:', m) } else console.log('  ✓', m) }
@@ -76,6 +77,12 @@ for (const [nombre, contenido] of [['HTML', mail.html], ['texto', mail.texto]]) 
 
 const sinItems = armarMailRecordatorio({ tienda: 'T', slugTienda: 't', apodo: null, items: [] })
 ok(!sinItems.html.includes('LO QUE HABÍAS ELEGIDO') && sinItems.texto.startsWith('Tu carrito en T te espera\n\nHola. '), 'sin productos ni apodo: sin la tarjeta y con un "Hola." solo')
+
+console.log('\n6. Un carrito con un producto que la tienda eliminó (migración 047)')
+ok(tieneProductoEliminado([{ producto_id: 4, nombre: 'Taza' }, { producto_id: null, nombre: 'Mate' }]), 'un ítem con producto_id null: tiene un producto eliminado (no se recuerda)')
+ok(!tieneProductoEliminado([{ producto_id: 4 }, { producto_id: 9 }]), 'todos con su producto: no')
+ok(!tieneProductoEliminado([{ nombre: 'Taza' }]), 'sin producto_id en la lectura (undefined): no se sabe, no cuenta como eliminado')
+ok(!tieneProductoEliminado([]) && !tieneProductoEliminado(null) && !tieneProductoEliminado(undefined), 'sin ítems: no')
 
 console.log(fallas ? `\n${fallas} falla(s).` : '\nTodo bien.')
 process.exit(fallas ? 1 : 0)

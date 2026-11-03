@@ -16,7 +16,8 @@
 // creado_en. Las fotos ya están subidas a Storage (productos/<tienda>/): se
 // acepta solo una URL de esa carpeta.
 //
-// El plan de la tienda (migración 046): con el tope de productos lleno, o con
+// El plan de la tienda (migraciones 046 y 047; cuentan todos los productos
+// guardados, también los pausados): con el tope de productos lleno, o con
 // más fotos de las del plan, responde 409 con { error, motivo: 'tope_productos'
 // | 'tope_fotos', tope, usados }. Las fotos se cuentan acá y en la base; el
 // tope de productos, solo en la base (con la tienda bloqueada).

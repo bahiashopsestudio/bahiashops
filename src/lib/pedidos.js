@@ -372,3 +372,13 @@ export function mensajeReclamo(pedido) {
   const productos = resumenProductos(pedido?.items)
   return `Hola, te escribo por mi pedido #${pedido?.id} en Bahía Shops${productos ? ` (${productos})` : ''}.`
 }
+
+// ¿Algún producto del pedido ya no existe? La tienda lo eliminó (migración
+// 047): el ítem guarda nombre, variante, precio y foto, pero producto_id
+// quedó en null. Un carrito así no se recuerda (Pagar ahora, en cambio, sigue:
+// es una venta en curso con su cupón).
+// Los ítems tienen que venir con producto_id: sin él (undefined) no se sabe,
+// y no cuenta como eliminado.
+export function tieneProductoEliminado(items) {
+  return Array.isArray(items) && items.some((it) => it && it.producto_id === null)
+}

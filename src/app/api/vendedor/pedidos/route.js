@@ -77,7 +77,7 @@ export async function GET() {
       vence_en, efectivo_vence_en, cancelado_motivo, mp_payment_id,
       recordatorio_enviado_en,
       comprador_id,
-      items:pedido_items ( id, nombre, variante, cantidad, precio, foto_url )
+      items:pedido_items ( id, producto_id, nombre, variante, cantidad, precio, foto_url )
     `)
     .eq('vendedor_id', vendedor.id)
     .order('creado_en', { ascending: false });

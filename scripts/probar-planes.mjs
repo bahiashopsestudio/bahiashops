@@ -1,4 +1,5 @@
-// Prueba las funciones puras de los planes (src/lib/planes.js, migración 046):
+// Prueba las funciones puras de los planes (src/lib/planes.js, migraciones
+// 046 y 047):
 // cómo se lee el plan que devuelve la base, qué dice el contador, cuál es el
 // plan siguiente, qué plan trae los carritos y cómo se lee el error del tope
 // (BS409) con su texto.
@@ -65,16 +66,34 @@ ok(t?.motivo === 'tope_productos' && t.tope === null && t.usados === null, 'un d
 t = errorDeTope({ code: 'BS409', message: 'otra cosa' })
 ok(t?.motivo === 'tope_productos', 'un mensaje desconocido con BS409: se toma como tope de productos')
 ok(errorDeTope({ code: 'P0002', message: 'No encontramos ese producto.' }) === null && errorDeTope(null) === null, 'otro error: null')
+t = errorDeTope({ code: 'BS409', message: 'tope_superado', details: '{"tope": 10, "usados": 11, "cuenta": "guardados"}' })
+ok(t?.motivo === 'tope_superado' && t.tope === 10 && t.usados === 11 && t.accion === 'reenviar',
+  'tope superado (047): solo lo lanza el reenvío de un rechazado, así que accion: reenviar')
+ok(!('accion' in errorDeTope({ code: 'BS409', message: 'tope_productos', details: '{"tope": 10, "usados": 10}' })), 'el del alta, sin accion')
 
 console.log('\n6. Los textos del 409')
-ok(textoDeTope({ motivo: 'tope_productos', tope: 10 }) === 'Llegaste al tope de 10 productos de tu plan. Para sumar otro, pausá o eliminá alguno de los que tenés publicados o en revisión.',
+ok(textoDeTope({ motivo: 'tope_productos', tope: 10 }) === 'Llegaste a los 10 productos de tu plan. Cuentan todos, también los pausados: para cargar otro, eliminá uno.',
   `productos: «${textoDeTope({ motivo: 'tope_productos', tope: 10 })}»`)
-ok(textoDeTope({ motivo: 'tope_productos' }).startsWith('Llegaste al tope de productos de tu plan.'), 'productos, sin el número')
+ok(textoDeTope({ motivo: 'tope_productos' }) === 'Llegaste al tope de productos de tu plan. Cuentan todos, también los pausados: para cargar otro, eliminá uno.',
+  `productos, sin el número: «${textoDeTope({ motivo: 'tope_productos' })}»`)
+ok(!/paus[aá] o elimin/.test(textoDeTope({ motivo: 'tope_productos', tope: 10 })), 'ya no dice «pausá o eliminá»')
+ok(textoDeTope({ motivo: 'tope_superado', tope: 10, usados: 11, accion: 'activar' }) === 'Tenés 11 productos y tu plan guarda 10. Para activar este, eliminá productos hasta tener 10.',
+  `activar por encima: «${textoDeTope({ motivo: 'tope_superado', tope: 10, usados: 11, accion: 'activar' })}»`)
+ok(textoDeTope({ motivo: 'tope_superado', tope: 10, usados: 11, accion: 'reenviar' }) === 'Tenés 11 productos y tu plan guarda 10. Para reenviar este, eliminá productos hasta tener 10.',
+  `reenviar por encima: «${textoDeTope({ motivo: 'tope_superado', tope: 10, usados: 11, accion: 'reenviar' })}»`)
+ok(textoDeTope({ motivo: 'tope_superado', tope: 10, usados: 11 }).includes('Para activar este'), 'sin accion: activar')
+ok(textoDeTope({ motivo: 'tope_superado', tope: 10 }) === 'Tenés más productos de los 10 que guarda tu plan. Para activar este, eliminá productos hasta tener 10.',
+  `por encima, sin usados: «${textoDeTope({ motivo: 'tope_superado', tope: 10 })}»`)
+ok(textoDeTope({ motivo: 'tope_superado', accion: 'reenviar' }) === 'Tenés más productos de los que guarda tu plan. Para reenviar este, eliminá productos hasta llegar al tope.',
+  `por encima, sin números: «${textoDeTope({ motivo: 'tope_superado', accion: 'reenviar' })}»`)
 ok(textoDeTope({ motivo: 'tope_fotos', tope: 4 }) === 'Este producto puede tener hasta 4 fotos con tu plan. Sacá alguna para poder guardarlo.',
   `fotos: «${textoDeTope({ motivo: 'tope_fotos', tope: 4 })}»`)
 ok(/más fotos de las que permite tu plan/.test(textoDeTope({ motivo: 'tope_fotos' })), 'fotos, sin el número')
 const cuerpo = cuerpoDeTope({ motivo: 'tope_productos', tope: 10, usados: 10, otra: 'cosa' })
 ok(JSON.stringify(Object.keys(cuerpo)) === '["error","motivo","tope","usados"]' && cuerpo.tope === 10, 'el cuerpo del 409: { error, motivo, tope, usados } y nada más')
+const cuerpoReenvio = cuerpoDeTope({ motivo: 'tope_superado', tope: 10, usados: 12, accion: 'reenviar', cuenta: 'guardados' })
+ok(cuerpoReenvio.error.includes('Para reenviar este') && !('accion' in cuerpoReenvio) && !('cuenta' in cuerpoReenvio),
+  'el de reenviar: el texto con «reenviar», sin accion ni cuenta en el cuerpo')
 
 console.log(fallas === 0 ? '\nTODO OK' : `\n${fallas} FALLAS`)
 process.exit(fallas ? 1 : 0)

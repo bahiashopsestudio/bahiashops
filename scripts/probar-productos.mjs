@@ -1,17 +1,20 @@
-// Prueba el guardado, la pausa, el borrado y la moderación de productos por el
+// Prueba el guardado, la pausa, la eliminación y la moderación de productos por el
 // servidor, con las rutas REALES y una base de mentira:
 //
 //   · lib/productos: qué datos y qué fotos se aceptan;
 //   · /api/vendedor/productos (alta) y /api/vendedor/productos/[id] (editar,
 //     pausar o reactivar, borrar): la tienda sale de la sesión, la moderación
 //     corre acá, el navegador no elige estado, destacado ni avisos;
-//   · el plan (migración 046): el tope de fotos se cuenta acá, y el error del
-//     tope de la base (BS409) sale como 409 con { error, motivo, tope, usados };
+//   · el plan (migraciones 046 y 047): el tope de fotos se cuenta acá, y el
+//     error del tope de la base (BS409, o motivo 'tope_superado' al
+//     reactivar) sale como 409 con { error, motivo, tope, usados };
+//   · eliminar (047): va por rpc_eliminar_producto, también con ventas, y de
+//     Storage se borra solo lo que no usa ningún pedido;
 //   · /api/admin/productos/[id]/moderacion.
 //
 // Lo que hace la base de verdad (las funciones guardar_producto y
-// cambiar_estado_producto, los topes, los permisos y RLS) se prueba con
-// npm run probar:033 y npm run probar:046.
+// cambiar_estado_producto, eliminar_producto, los topes, los permisos y RLS)
+// se prueba con npm run probar:033, probar:046 y probar:047.
 //
 //   npm run probar:productos
 //
@@ -66,12 +69,13 @@ function escenario(opciones = {}) {
       producto_variantes: [{ producto_id: 10, imagen_url: FOTO('v') }, { producto_id: 10, imagen_url: FOTO('ajena', 2) }],
       producto_sellos: [],
       sellos: [{ id: 1 }, { id: 2 }],
+      pedido_items: [],
     },
     rpc: [], removidos: [], inserts: [], updates: [],
     lecturasPlan: 0,
     fotosPlan: 4,       // fotos por producto del plan (el Gratis)
     sinPlan: false,     // rpc_plan_de_tienda falla
-    topeLleno: false,   // rpc_cambiar_estado_producto: el tope de productos está lleno
+    topeSuperado: false, // rpc_cambiar_estado_producto: la tienda está por encima del tope
     errorGuardar: null, // el error que devuelve rpc_guardar_producto
     falla: {},          // { tabla: 'insert' | 'delete' | codigo }
     esAdmin: false,
@@ -123,9 +127,6 @@ function escenario(opciones = {}) {
         }
         if (op === 'delete') {
           const borrar = new Set(filas())
-          if (nombre === 'productos' && [...borrar].some((r) => r.conPedidos)) {
-            return { data: null, error: { code: '23503', message: 'violates foreign key constraint' } }
-          }
           e.tablas[nombre] = e.tablas[nombre].filter((r) => !borrar.has(r))
           if (nombre === 'productos') {
             const ids = new Set([...borrar].map((r) => r.id))
@@ -155,11 +156,24 @@ function escenario(opciones = {}) {
         const puede = (args.p_destino === 'pausado' && p.estado === 'activo')
           || (args.p_destino === 'activo' && ['pausado', 'agotado'].includes(p.estado))
         if (!puede) return { data: { ok: false, motivo: 'estado', estado: p.estado }, error: null }
-        if (args.p_destino === 'activo' && p.estado === 'pausado' && e.topeLleno) {
-          return { data: { ok: false, motivo: 'tope_productos', tope: 10, usados: 10 }, error: null }
+        if (args.p_destino === 'activo' && p.estado === 'pausado' && e.topeSuperado) {
+          return { data: { ok: false, motivo: 'tope_superado', tope: 10, usados: 11, cuenta: 'guardados' }, error: null }
         }
         p.estado = args.p_destino
         return { data: { ok: true, estado: p.estado }, error: null }
+      }
+      if (nombre === 'rpc_eliminar_producto') {
+        const p = e.tablas.productos.find((x) => x.id === args.p_producto_id && x.vendedor_id === args.p_vendedor_id)
+        if (!p) return { data: { ok: false, motivo: 'no_existe' }, error: null }
+        const fotos = [
+          ...e.tablas.producto_media.filter((m) => m.producto_id === p.id).map((m) => m.url),
+          ...e.tablas.producto_variantes.filter((v) => v.producto_id === p.id && v.imagen_url).map((v) => v.imagen_url),
+        ]
+        const items = e.tablas.pedido_items.filter((i) => i.producto_id === p.id)
+        for (const i of items) i.producto_id = null
+        e.tablas.productos = e.tablas.productos.filter((x) => x !== p)
+        for (const t of ['producto_media', 'producto_variantes', 'producto_sellos']) e.tablas[t] = e.tablas[t].filter((r) => r.producto_id !== p.id)
+        return { data: { ok: true, con_ventas: items.length > 0, fotos, fotos_en_pedidos: items.map((i) => i.foto_url).filter(Boolean) }, error: null }
       }
       if (nombre === 'rpc_guardar_producto' && e.errorGuardar) return { data: null, error: e.errorGuardar }
       if (nombre === 'rpc_rechazar_producto') {
@@ -261,7 +275,7 @@ ok(r.status === 200, 'con 4 fotos: guarda')
 nuevo({ errorGuardar: { code: 'BS409', message: 'tope_productos', details: '{"tope": 10, "usados": 10}' } })
 r = await alta.POST(pedir(CUERPO()))
 ok(r.status === 409 && r.body.motivo === 'tope_productos' && r.body.tope === 10 && r.body.usados === 10, 'la base dice tope lleno (BS409): 409 tope_productos, tope 10, usados 10')
-ok(r.body.error === 'Llegaste al tope de 10 productos de tu plan. Para sumar otro, pausá o eliminá alguno de los que tenés publicados o en revisión.',
+ok(r.body.error === 'Llegaste a los 10 productos de tu plan. Cuentan todos, también los pausados: para cargar otro, eliminá uno.',
   `con un texto que se entiende solo: «${r.body.error}»`)
 nuevo({ errorGuardar: { code: 'BS409', message: 'tope_productos', details: null } })
 r = await alta.POST(pedir(CUERPO()))
@@ -311,9 +325,11 @@ r = await uno.PUT(pedir(CUERPO({ fotos: [FOTO('a'), VIEJA, FOTO('n1'), FOTO('n2'
 ok(r.status === 200, 'con el plan de 4: hasta 4')
 r = await uno.PUT(pedir(CUERPO({ fotos: [FOTO('a'), VIEJA, FOTO('n1'), FOTO('n2'), FOTO('n3')] })), ruta(10))
 ok(r.status === 409 && r.body.tope === 4, 'una quinta: 409 con tope 4')
-nuevo({ errorGuardar: { code: 'BS409', message: 'tope_productos', details: '{"tope": 10, "usados": 10}' } })
+nuevo({ errorGuardar: { code: 'BS409', message: 'tope_superado', details: '{"tope": 10, "usados": 11, "cuenta": "guardados"}' } })
 r = await uno.PUT(pedir(CUERPO()), ruta(12))
-ok(r.status === 409 && r.body.motivo === 'tope_productos' && r.body.usados === 10, 'reenviar un rechazado con el tope lleno (la base lo frena): 409 tope_productos')
+ok(r.status === 409 && r.body.motivo === 'tope_superado' && r.body.tope === 10 && r.body.usados === 11,
+  'reenviar un rechazado por encima del tope (la base lo frena): 409 tope_superado')
+ok(r.body.error === 'Tenés 11 productos y tu plan guarda 10. Para reenviar este, eliminá productos hasta tener 10.', `con el texto de reenviar: «${r.body.error}»`)
 nuevo({ sinPlan: true })
 r = await uno.PUT(pedir(CUERPO()), ruta(10))
 ok(r.status === 500 && f.rpc.length === 0, 'si no se puede leer el plan: 500, y no guarda')
@@ -341,31 +357,43 @@ r = await cambiar(20, 'pausado')
 ok(r.status === 404 && prod(20).estado === 'activo', 'un producto de otra tienda: 404')
 ok(f.rpc.every((x) => x.nombre === 'rpc_cambiar_estado_producto' && x.args.p_vendedor_id === 1) && f.updates.length === 0,
   'todo va por rpc_cambiar_estado_producto, con la tienda de la sesión (ya no hay UPDATE suelto)')
-nuevo({ topeLleno: true })
+nuevo({ topeSuperado: true })
 r = await cambiar(13, 'activo')
-ok(r.status === 409 && r.body.motivo === 'tope_productos' && r.body.tope === 10 && r.body.usados === 10 && prod(13).estado === 'pausado',
-  'reactivar un pausado con el tope lleno: 409 tope_productos, y sigue pausado')
-ok(/^Llegaste al tope de 10 productos de tu plan\./.test(r.body.error), 'con el texto del tope (lo muestra el alert de hoy)')
+ok(r.status === 409 && r.body.motivo === 'tope_superado' && r.body.tope === 10 && r.body.usados === 11 && prod(13).estado === 'pausado',
+  'reactivar un pausado por encima del tope: 409 tope_superado, y sigue pausado')
+ok(r.body.error === 'Tenés 11 productos y tu plan guarda 10. Para activar este, eliminá productos hasta tener 10.',
+  `con el texto de activar (lo muestra el alert de hoy): «${r.body.error}»`)
+ok(JSON.stringify(Object.keys(r.body)) === '["error","motivo","tope","usados"]', 'el cuerpo, sin cuenta')
 r = await cambiar(14, 'activo')
-ok(r.status === 200 && prod(14).estado === 'activo', 'agotado -> activo con el tope lleno: pasa (ya contaba)')
+ok(r.status === 200 && prod(14).estado === 'activo', 'agotado -> activo por encima del tope: pasa (ya estaba a la vista)')
 r = await cambiar(10, 'pausado')
-ok(r.status === 200 && prod(10).estado === 'pausado', 'pausar con el tope lleno: pasa')
+ok(r.status === 200 && prod(10).estado === 'pausado', 'pausar por encima del tope: pasa')
 nuevo({ falla: { rpc: 'XX000' } })
 r = await cambiar(10, 'pausado')
 ok(r.status === 500 && prod(10).estado === 'activo', 'si la base falla: 500, no cambia')
 
-console.log('\n7. Borrar')
+console.log('\n7. Eliminar (migración 047)')
 nuevo()
 r = await uno.DELETE(pedir(null), ruta(10))
-ok(r.status === 200 && !prod(10) && f.tablas.producto_media.every((m) => m.producto_id !== 10), 'borra el producto (y en cascada sus fotos)')
+ok(r.status === 200 && !prod(10) && f.tablas.producto_media.every((m) => m.producto_id !== 10), 'elimina el producto (y sus fotos en la base)')
+ok(f.rpc.at(-1)?.nombre === 'rpc_eliminar_producto' && f.rpc.at(-1).args.p_vendedor_id === 1 && f.rpc.at(-1).args.p_producto_id === 10,
+  'va por rpc_eliminar_producto, con la tienda de la sesión')
 ok(f.removidos.sort().join() === ['productos/1/a.webp', 'productos/1/v.webp'].join(), 'y de Storage, solo los archivos de la carpeta de la tienda')
 r = await uno.DELETE(pedir(null), ruta(20))
-ok(r.status === 404 && !!prod(20), 'un producto de otra tienda: 404, no se borra')
+ok(r.status === 404 && !!prod(20), 'un producto de otra tienda: 404, no se elimina')
+r = await uno.DELETE(pedir(null), ruta('abc'))
+ok(r.status === 404, 'un id que no es número: 404')
 nuevo()
-prod(13).conPedidos = true
+f.tablas.producto_media.push({ producto_id: 13, url: FOTO('m1') }, { producto_id: 13, url: FOTO('m2') })
+f.tablas.pedido_items.push({ pedido_id: 7, producto_id: 13, nombre: 'Mate', foto_url: FOTO('m1') })
 r = await uno.DELETE(pedir(null), ruta(13))
-ok(r.status === 409 && /pedidos asociados/.test(r.body.error) && /pausarlo/.test(r.body.error) && !!prod(13), 'con pedidos: 409 con el cartel de pausarlo')
-ok(f.removidos.length === 0, 'y no borra sus fotos')
+ok(r.status === 200 && !prod(13), 'con ventas: se elimina igual')
+ok(f.tablas.pedido_items[0].producto_id === null && f.tablas.pedido_items[0].nombre === 'Mate' && f.tablas.pedido_items[0].foto_url === FOTO('m1'),
+  'el pedido conserva su nombre y su foto, sin el producto')
+ok(f.removidos.join() === 'productos/1/m2.webp', 'de Storage se borra solo la foto que no usa ningún pedido')
+nuevo({ falla: { rpc: 'XX000' } })
+r = await uno.DELETE(pedir(null), ruta(10))
+ok(r.status === 500 && !!prod(10) && f.removidos.length === 0, 'si la base falla: 500, no se elimina ni se borran fotos')
 
 console.log('\n8. Moderación del admin')
 const moderar = (id, cuerpo) => moderacion.POST(pedir(cuerpo), ruta(id))

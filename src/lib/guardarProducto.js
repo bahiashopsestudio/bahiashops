@@ -8,7 +8,7 @@
 //
 // Devuelve { ok: true, id, estado, revisionPosterior } o
 //          { ok: false, status, error } (un texto para mostrar), y si es el
-//          tope del plan, además { motivo, tope, usados } (status 409).
+//          tope del plan, además { motivo, tope, usados, accion } (status 409).
 
 import { errorDeTope, textoDeTope } from '@/lib/planes'
 
