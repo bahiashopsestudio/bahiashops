@@ -10,6 +10,8 @@ import MenuTakeover from '@/components/MenuTakeover';
 import VolverAtras from '@/components/VolverAtras';
 import EstadoValidacion from '@/components/EstadoValidacion';
 import BloqueLinkPropio from '@/components/LinkPropio';
+import TuPlan from '@/components/TuPlan';
+import { cargarPlan } from '@/lib/planDelPanel';
 import { usePausaTienda, SeccionPausar, TarjetaPausada } from '@/components/PausaTienda';
 import { entregaConfigurada, correoSinPrecios } from '@/lib/metodosEntrega';
 
@@ -118,6 +120,8 @@ export default function PerfilVendedorPage() {
   const [linkMinimizado, setLinkMinimizado] = useState(false);
   // Lo de /api/vendedor/link-propio, o { error }. Null si la tienda está bloqueada.
   const [linkPropio, setLinkPropio] = useState(null);
+  // El bloque «Tu plan»: lo de /api/vendedor/plan, o { error }.
+  const [tuPlan, setTuPlan] = useState(null);
   // Sin punto, la tienda no aparece en el mapa (por ejemplo, si en el alta
   // no se pudo guardar la ubicación).
   const [sinUbicacion, setSinUbicacion] = useState(false);
@@ -216,13 +220,16 @@ export default function PerfilVendedorPage() {
           }
         }
         setEstadoValidacion(data.estado_validacion || 'aprobado');
-        // Si falla la pausa, el panel sale igual, sin su sección. Se espera
-        // también el link, para que el bloque no aparezca de golpe.
-        const [, datosLink] = await Promise.all([
+        // Si falla la pausa, el panel sale igual, sin su sección. Se esperan
+        // también el link y el plan, para que los bloques no aparezcan de
+        // golpe. Si falla el plan, su bloque muestra el error.
+        const [, datosLink, datosPlan] = await Promise.all([
           pausaTienda.cargar(),
           data.bloqueado === true ? null : cargarLinkPropio(),
+          data.bloqueado === true ? null : cargarPlan(),
         ]);
         setLinkPropio(datosLink);
+        setTuPlan(datosPlan ? (datosPlan.plan || { error: datosPlan.error }) : null);
         setCartelCerrado(data.cartel_publicada_cerrado === true);
         setLinkMinimizado(data.link_propio_minimizado === true);
         setSlugTienda(data.slug || null);
@@ -501,6 +508,13 @@ export default function PerfilVendedorPage() {
                   minimizado={linkMinimizado}
                   onCambiarMinimizado={cambiarLinkMinimizado}
                 />
+              </div>
+            )}
+
+            {/* ═══ TU PLAN ═══ */}
+            {!bloqueado && tuPlan && (
+              <div className="mt-4">
+                <TuPlan datos={tuPlan} />
               </div>
             )}
 

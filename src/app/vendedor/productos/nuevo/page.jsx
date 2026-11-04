@@ -16,6 +16,8 @@ import { revisarPublicacion, ETIQUETAS_MODERACION } from '@/lib/moderacion';
 import Navbar from '@/components/Navbar';
 import MenuTakeover from '@/components/MenuTakeover';
 import VolverAtras from '@/components/VolverAtras';
+import CartelPlan from '@/components/CartelPlan';
+import { cargarPlan } from '@/lib/planDelPanel';
 
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','hogar-y-deco','artes-y-oficios','joyeria-y-accesorios','deporte','libros','vintage'];
 
@@ -97,6 +99,19 @@ export default function NuevoProductoPage() {
   const [valores, setValores] = useState([]);
   const [valorNuevo, setValorNuevo] = useState('');
 
+  // ── La tienda y el plan (tanda F1) ──
+  // 'cargando' | 'listo' | 'error'. Sin la tienda o sin el plan no se muestra
+  // el formulario: el mensaje con «Reintentar».
+  const [estadoCarga, setEstadoCarga] = useState('cargando');
+  const [errorCarga, setErrorCarga] = useState('');
+  const [plan, setPlan] = useState(null);
+
+  // Las fotos por producto del plan. El formulario solo se muestra con el plan
+  // leído, así que el 0 no se llega a usar.
+  const limiteFotos = plan?.fotosPorProducto ?? 0;
+  // En el tope (o por encima): el cartel en lugar del formulario.
+  const enElTope = plan?.contador === 'en_el_tope' || plan?.contador === 'por_encima';
+
   // ── UI ──
   const [guardandoProducto, setGuardandoProducto] = useState(false);
   const [mostrarPrevia, setMostrarPrevia] = useState(false);
@@ -110,18 +125,35 @@ export default function NuevoProductoPage() {
   );
 
   // ── Cargar datos iniciales ──
-  useEffect(() => {
-    async function cargarDatosIniciales() {
+  // La tienda y el plan van en paralelo. Si falla cualquiera de los dos, el
+  // mensaje con «Reintentar» (antes, sin la tienda, la página cortaba sin
+  // decir nada y quedaba un formulario que no se podía guardar).
+  async function cargarDatosIniciales() {
+    try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.replace('/entrar?next=%2Fvendedor%2Fproductos%2Fnuevo'); return; }
 
-      // Vendedor
-      const { data: vendedor, error } = await supabase
-        .from('vendedores')
-        .select('id, categoria_id, nombre_negocio')
-        .eq('usuario_id', user.id)
-        .single();
-      if (error) { console.error('Error cargando el vendedor:', error); return; }
+      // Vendedor y plan
+      const [{ data: vendedor, error }, delPlan] = await Promise.all([
+        supabase
+          .from('vendedores')
+          .select('id, categoria_id, nombre_negocio')
+          .eq('usuario_id', user.id)
+          .single(),
+        cargarPlan(),
+      ]);
+      if (error || !vendedor) {
+        console.error('Error cargando el vendedor:', error);
+        setErrorCarga('No pudimos cargar tu tienda. Revisá tu conexión y probá de nuevo.');
+        setEstadoCarga('error');
+        return;
+      }
+      if (delPlan.error) {
+        setErrorCarga(delPlan.error);
+        setEstadoCarga('error');
+        return;
+      }
+      setPlan(delPlan.plan);
 
       setVendedorId(vendedor.id);
       setNombreNegocio(vendedor.nombre_negocio || '');
@@ -156,9 +188,26 @@ export default function NuevoProductoPage() {
         .select('sello_id')
         .eq('vendedor_id', vendedor.id);
       if (sellosVendedor) setSellosSeleccionados(sellosVendedor.map((s) => s.sello_id));
+      setEstadoCarga('listo');
+    } catch (err) {
+      console.error('Error cargando la página:', err);
+      setErrorCarga('No pudimos cargar tu tienda. Revisá tu conexión y probá de nuevo.');
+      setEstadoCarga('error');
     }
+  }
+
+  useEffect(() => {
+    // El primer cambio de estado va después de esperar la sesión: no es
+    // sincrónico. La función queda afuera para «Reintentar».
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     cargarDatosIniciales();
   }, []);
+
+  function reintentarCarga() {
+    setEstadoCarga('cargando');
+    setErrorCarga('');
+    cargarDatosIniciales();
+  }
 
   // ── Cargar subcategorías cuando cambia la categoría principal ──
   useEffect(() => {
@@ -257,7 +306,7 @@ export default function NuevoProductoPage() {
   async function agregarFotos(e) {
     const archivos = Array.from(e.target.files);
     if (archivos.length === 0) return;
-    const espacioDisponible = 5 - fotos.length;
+    const espacioDisponible = limiteFotos - fotos.length;
     if (espacioDisponible <= 0) return;
     const aProcesar = archivos.slice(0, espacioDisponible);
     setComprimiendo(true);
@@ -383,6 +432,15 @@ export default function NuevoProductoPage() {
         setBloqueoModeracion(respuesta.moderacion);
         return;
       }
+      // Otra pestaña llenó el tope mientras cargaba este: el cartel en lugar
+      // del formulario (lo que escribió queda, por si hace lugar y vuelve).
+      if (res.status === 409 && respuesta.motivo === 'tope_productos') {
+        await borrarFotosSubidas(supabase, subidas);
+        const usados = respuesta.usados ?? plan.tope;
+        setPlan((p) => ({ ...p, usados, contador: usados > p.tope ? 'por_encima' : 'en_el_tope' }));
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
       if (!res.ok) {
         borrarSiFalla = true;
         throw new Error(respuesta.error || 'Hubo un error al guardar. Probá de nuevo.');
@@ -398,9 +456,9 @@ export default function NuevoProductoPage() {
 
       // El producto ya quedó guardado: esto se avisa, no se deshace.
       if (falloCategoria) {
-        alert(`¡Producto guardado! Queda en revisión hasta que lo apruebes.\n\n${AVISO_CATEGORIA}`);
+        alert(`¡Producto guardado! Queda en revisión hasta que lo aprobemos.\n\n${AVISO_CATEGORIA}`);
       } else {
-        alert('¡Producto guardado! Queda en revisión hasta que lo apruebes.');
+        alert('¡Producto guardado! Queda en revisión hasta que lo aprobemos.');
       }
       router.push('/vendedor/productos');
     } catch (err) {
@@ -440,6 +498,27 @@ export default function NuevoProductoPage() {
             <h1 className="text-2xl md:text-3xl font-black text-[#0a0a0a] tracking-tight mb-1">Nuevo producto</h1>
             <p className="text-sm text-[#0a0a0a]/30 font-light mb-6">{nombreNegocio}</p>
 
+            {estadoCarga === 'cargando' && (
+              <p className="text-sm text-[#0a0a0a]/30 font-light m-0 py-6">Cargando...</p>
+            )}
+
+            {estadoCarga === 'error' && (
+              <div role="alert" className="rounded-2xl border border-[#0a0a0a]/5 p-5 flex flex-col items-start gap-3">
+                <p className="m-0 text-sm text-red-700">{errorCarga}</p>
+                <button type="button" onClick={reintentarCarga}
+                  className="px-5 py-2.5 bg-white border border-[#0a0a0a]/10 rounded-full text-sm text-[#0a0a0a]/60 font-light cursor-pointer hover:border-[#0a0a0a]/30 hover:text-[#0a0a0a] transition-all">
+                  Reintentar
+                </button>
+              </div>
+            )}
+
+            {/* En el tope: el cartel en lugar de un formulario que después no
+                se podría guardar. */}
+            {estadoCarga === 'listo' && enElTope && (
+              <CartelPlan motivo="productos" datos={plan} volverHref="/vendedor/productos" />
+            )}
+
+            {estadoCarga === 'listo' && !enElTope && (<>
             {/* ───── DATOS BÁSICOS ───── */}
             <section className="rounded-2xl border border-[#0a0a0a]/5 p-5">
               <h2 className="text-lg font-black text-[#0a0a0a] tracking-tight mb-4">Datos básicos</h2>
@@ -661,7 +740,7 @@ export default function NuevoProductoPage() {
 
               <div className="mb-4">
                 <label className="block text-sm text-[#0a0a0a]/60 font-light mb-1">
-                  Fotos * (hasta 5, arrastrá para ordenar — la primera es la principal)
+                  Fotos *
                 </label>
                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={alSoltarFoto}>
                   <SortableContext items={fotos.map((f) => f.preview)} strategy={horizontalListSortingStrategy}>
@@ -672,13 +751,20 @@ export default function NuevoProductoPage() {
                     </div>
                   </SortableContext>
                 </DndContext>
-                {fotos.length < 5 && (
+                {fotos.length < limiteFotos && (
                   <input type="file" accept="image/jpeg,image/png,image/webp" multiple
                     onChange={agregarFotos} disabled={comprimiendo} />
                 )}
-                <p className="text-[11px] text-[#0a0a0a]/20 font-light mt-1">
-                  {comprimiendo ? 'Procesando imágenes...' : `${fotos.length} de 5 fotos`}
+                <p className="text-xs text-[#0a0a0a]/45 font-light mt-1.5 mb-0">
+                  {comprimiendo ? 'Procesando imágenes...' : (
+                    <><b className="font-semibold text-[#0a0a0a]">{fotos.length} de {limiteFotos} fotos</b> · Arrastrá para ordenarlas: la primera es la principal.</>
+                  )}
                 </p>
+                {fotos.length >= limiteFotos && limiteFotos > 0 && (
+                  <div className="mt-3">
+                    <CartelPlan motivo="fotos" datos={plan} />
+                  </div>
+                )}
               </div>
 
               <div className="pt-4 border-t border-[#0a0a0a]/5">
@@ -733,6 +819,7 @@ export default function NuevoProductoPage() {
                 {guardandoProducto ? 'Guardando...' : 'Guardar producto'}
               </button>
             </div>
+            </>)}
           </div>
         </div>
       </div>

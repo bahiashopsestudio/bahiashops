@@ -10,6 +10,9 @@ import VolverAtras from '@/components/VolverAtras';
 import CopiarLink from '@/components/CopiarLink';
 import { textoMotivoRechazo } from '@/lib/productos';
 import { linkPropio } from '@/lib/marcaLink';
+import CartelPlan from '@/components/CartelPlan';
+import { cargarPlan } from '@/lib/planDelPanel';
+import { estadoDelContador, notaDelContador, etiquetaDelPlan } from '@/lib/planes';
 
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage'];
 
@@ -68,6 +71,55 @@ function FranjaCompartir({ productoId }) {
   );
 }
 
+// El contador del plan debajo del título (tanda F1): «6 de 10 productos», la
+// etiqueta del plan y una barrita (ámbar faltando 2 o menos, negra en el tope
+// o por encima). Sin tope, solo «N productos». Cuentan todos los productos
+// guardados, también los pausados (migración 047).
+function ContadorPlan({ plan }) {
+  const contador = estadoDelContador(plan);
+  const etiqueta = etiquetaDelPlan(plan);
+  const nota = notaDelContador({ ...plan, contador });
+  if (contador === 'sin_tope') {
+    return (
+      <p className="text-sm font-semibold text-[#0a0a0a] mt-1.5 mb-0" style={{ fontVariantNumeric: 'tabular-nums' }}>
+        {plan.usados} {plan.usados === 1 ? 'producto' : 'productos'}
+      </p>
+    );
+  }
+  const cerca = contador === 'cerca';
+  const lleno = contador === 'en_el_tope' || contador === 'por_encima';
+  const pct = Math.min(100, Math.round((plan.usados / plan.tope) * 100));
+  return (
+    <div className="mt-1.5 flex flex-col gap-1.5 min-w-0">
+      <div className="flex items-baseline gap-2 flex-wrap text-[13px] text-[#0a0a0a]/55">
+        <b className={`font-semibold ${cerca ? 'text-[#8a6410]' : 'text-[#0a0a0a]'}`} style={{ fontVariantNumeric: 'tabular-nums' }}>
+          {plan.usados} de {plan.tope} productos
+        </b>
+        {etiqueta && (
+          <span className={`text-[10.5px] font-semibold rounded-full px-2 py-0.5 ${plan.especial ? 'bg-[#dcebf7] text-[#015444]' : 'bg-[#f1efe9] text-[#0a0a0a]/60'}`}>
+            {etiqueta}
+          </span>
+        )}
+      </div>
+      <div className="w-[180px] max-w-full h-1 rounded bg-[#0a0a0a]/[0.08] overflow-hidden" aria-hidden="true">
+        <span className={`block h-full rounded ${cerca ? 'bg-[#d9a520]' : lleno ? 'bg-[#0a0a0a]' : 'bg-[#015444]'}`} style={{ width: `${pct}%` }} />
+      </div>
+      {nota && (
+        <p className="m-0 text-xs text-[#0a0a0a]/50" style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 300 }}>
+          {nota.texto}
+          {nota.link && (
+            <>
+              {' '}
+              <Link href={nota.link.href} className="text-[#015444] font-medium underline underline-offset-2">{nota.link.texto}</Link>.
+            </>
+          )}
+          {nota.despues && <> {nota.despues}</>}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function MisProductosPage() {
   const supabase = createClient();
   const router = useRouter();
@@ -81,6 +133,12 @@ export default function MisProductosPage() {
   const [categorias, setCategorias] = useState([]);
   // El link solo sirve con la tienda publicada y sin pausa.
   const [puedeCompartir, setPuedeCompartir] = useState(false);
+  // El plan (contador y cartel). Si no se pudo leer, queda null: sin
+  // contador, y la lista sale igual.
+  const [plan, setPlan] = useState(null);
+  // El cartel de reactivar por encima del tope: { tope, usados } del 409.
+  const [cartel, setCartel] = useState(null);
+  const refCartel = useRef(null);
 
   useEffect(() => {
     if (menuOpen) { document.body.style.overflow = 'hidden' } else { document.body.style.overflow = '' }
@@ -100,6 +158,9 @@ export default function MisProductosPage() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) { router.replace('/entrar?next=%2Fvendedor%2Fproductos'); return; }
+
+        // El plan va en paralelo; si falla, sin contador (la lista sale igual).
+        const lecturaPlan = cargarPlan();
 
         const { data: vendedor, error: errVendedor } = await supabase
           .from('vendedores')
@@ -129,6 +190,8 @@ export default function MisProductosPage() {
           .order('id', { ascending: false });
 
         if (errProductos) { setError('No se pudieron cargar tus productos.'); setCargando(false); return; }
+        const { plan: delPlan } = await lecturaPlan;
+        if (delPlan) setPlan(delPlan);
         if (!lista || lista.length === 0) { setProductos([]); setCargando(false); return; }
 
         const ids = lista.map((p) => p.id);
@@ -177,6 +240,12 @@ export default function MisProductosPage() {
       });
       const datos = await res.json().catch(() => ({}));
       if (datos.estado) setProductos(prev => prev.map(p => p.id === producto.id ? { ...p, estado: datos.estado } : p));
+      // Por encima del tope: el cartel arriba de la lista, en vez del alert.
+      if (res.status === 409 && datos.motivo === 'tope_superado') {
+        setCartel({ tope: datos.tope, usados: datos.usados });
+        requestAnimationFrame(() => refCartel.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+        return;
+      }
       if (!res.ok) alert(datos.error || 'No se pudo cambiar el estado del producto.');
     } catch {
       alert('No se pudo cambiar el estado del producto.');
@@ -196,6 +265,12 @@ export default function MisProductosPage() {
         return;
       }
       setProductos(prev => prev.filter(p => p.id !== producto.id));
+      // Eliminar hace lugar: el contador baja uno, y si ya no está por encima
+      // del tope, el cartel de reactivar se va.
+      const usados = plan ? Math.max(0, plan.usados - 1) : null;
+      if (plan) setPlan({ ...plan, usados, contador: estadoDelContador({ ...plan, usados }) });
+      if (cartel && (usados === null || plan.tope === null || usados <= plan.tope)) setCartel(null);
+      else if (cartel) setCartel({ ...cartel, usados });
     } catch (err) {
       console.error(err);
       alert('Hubo un error al eliminar. Intentá de nuevo.');
@@ -232,19 +307,19 @@ export default function MisProductosPage() {
           <div className="max-w-xl mx-auto">
             <VolverAtras href="/vendedor/perfil" texto="Volver a Mi negocio" />
 
-            <div className="flex justify-between items-center mb-6">
-              <div>
+            <div className="flex justify-between items-start gap-3 mb-6">
+              <div className="min-w-0">
                 <h1 className="text-2xl md:text-3xl font-black text-[#0a0a0a] tracking-tight m-0">Mis productos</h1>
-                {!error && (
+                {!error && (plan ? <ContadorPlan plan={plan} /> : (
                   <p className="text-sm text-[#0a0a0a]/30 font-light mt-1 mb-0">
                     {productos.length} {productos.length === 1 ? 'producto' : 'productos'}
                   </p>
-                )}
+                ))}
               </div>
               {productos.length > 0 && (
                 <Link
                   href="/vendedor/productos/nuevo"
-                  className="bg-[#0a0a0a] text-white rounded-full px-5 py-2.5 text-sm font-medium no-underline hover:bg-[#1a1a1a] transition-colors"
+                  className="shrink-0 whitespace-nowrap bg-[#0a0a0a] text-white rounded-full px-5 py-2.5 text-sm font-medium no-underline hover:bg-[#1a1a1a] transition-colors"
                 >
                   + Cargar producto
                 </Link>
@@ -252,6 +327,13 @@ export default function MisProductosPage() {
             </div>
 
             {error && <p className="text-red-700 text-sm">{error}</p>}
+
+            {cartel && (
+              <div ref={refCartel}>
+                <CartelPlan motivo="superado" accion="activar" datos={plan} tope={cartel.tope} usados={cartel.usados}
+                  onCerrar={() => setCartel(null)} />
+              </div>
+            )}
 
             {/* Lista de productos */}
             {!error && productos.map((p) => {

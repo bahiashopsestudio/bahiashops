@@ -17,6 +17,8 @@ import { revisarPublicacion, ETIQUETAS_MODERACION } from '@/lib/moderacion';
 import Navbar from '@/components/Navbar';
 import MenuTakeover from '@/components/MenuTakeover';
 import VolverAtras from '@/components/VolverAtras';
+import CartelPlan from '@/components/CartelPlan';
+import { cargarPlan } from '@/lib/planDelPanel';
 import { textoMotivoRechazo } from '@/lib/productos';
 
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage'];
@@ -112,6 +114,25 @@ export default function EditarProductoPage() {
   // Si el producto está rechazado: el motivo, para el cartel de arriba.
   const [rechazo, setRechazo] = useState(null);
 
+  // El plan (tanda F1): el límite de fotos y el cartel. Si no se pudo leer,
+  // errorPlan: se puede editar igual, sin sumar fotos, y «Reintentar».
+  const [plan, setPlan] = useState(null);
+  const [errorPlan, setErrorPlan] = useState('');
+  const [fotosAlAbrir, setFotosAlAbrir] = useState(0);
+  // El 409 al reenviar por encima del tope: { tope, usados }.
+  const [topeAlGuardar, setTopeAlGuardar] = useState(null);
+  // Las fotos que acepta: las del plan o las que ya tenía, lo que sea mayor
+  // (como la base). Sin el plan, las que tenía: no suma hasta leerlo.
+  const limiteFotos = plan ? Math.max(plan.fotosPorProducto, fotosAlAbrir) : fotosAlAbrir;
+  const teniaDeMas = !!plan && fotosAlAbrir > plan.fotosPorProducto;
+
+  async function reintentarPlan() {
+    setErrorPlan('');
+    const delPlan = await cargarPlan();
+    if (delPlan.plan) setPlan(delPlan.plan);
+    else setErrorPlan(delPlan.error);
+  }
+
   const [menuOpen, setMenuOpen] = useState(false);
   const [categorias, setCategorias] = useState([]);
 
@@ -144,6 +165,8 @@ export default function EditarProductoPage() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) { router.replace(`/entrar?next=${encodeURIComponent(window.location.pathname)}`); return; }
+
+        const lecturaPlan = cargarPlan();
 
         const { data: vendedor } = await supabase
           .from('vendedores')
@@ -214,6 +237,11 @@ export default function EditarProductoPage() {
             id: m.id, url: m.url, preview: m.url, existente: true,
           })));
         }
+        setFotosAlAbrir(medias?.length || 0);
+
+        const delPlan = await lecturaPlan;
+        if (delPlan.plan) setPlan(delPlan.plan);
+        else setErrorPlan(delPlan.error);
 
         if (prod.tiene_variantes && prod.propiedad_1_nombre) {
           setNombrePropiedad(prod.propiedad_1_nombre);
@@ -339,7 +367,7 @@ export default function EditarProductoPage() {
   async function agregarFotos(e) {
     const archivos = Array.from(e.target.files);
     if (archivos.length === 0) return;
-    const espacioDisponible = 5 - fotos.length;
+    const espacioDisponible = limiteFotos - fotos.length;
     if (espacioDisponible <= 0) return;
     const aProcesar = archivos.slice(0, espacioDisponible);
     setComprimiendo(true);
@@ -487,6 +515,13 @@ export default function EditarProductoPage() {
         setBloqueoModeracion(respuesta.moderacion);
         return;
       }
+      // Reenviar por encima del tope: el cartel arriba, el formulario queda.
+      if (res.status === 409 && respuesta.motivo === 'tope_superado') {
+        await borrarFotosSubidas(supabase, subidas);
+        setTopeAlGuardar({ tope: respuesta.tope, usados: respuesta.usados });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
       if (!res.ok) {
         borrarSiFalla = true;
         throw new Error(respuesta.error || 'Hubo un error al guardar. Probá de nuevo.');
@@ -502,7 +537,7 @@ export default function EditarProductoPage() {
 
       // El producto ya quedó guardado: esto se avisa, no se deshace.
       const texto = respuesta.estado === 'en_revision'
-        ? '¡Producto actualizado! Queda en revisión hasta que lo apruebes.'
+        ? '¡Producto actualizado! Queda en revisión hasta que lo aprobemos.'
         : '¡Producto actualizado!';
       alert(falloCategoria ? `${texto}\n\n${AVISO_CATEGORIA}` : texto);
       router.push('/vendedor/productos');
@@ -579,6 +614,14 @@ export default function EditarProductoPage() {
                 </p>
                 <p className="m-0 mt-2 text-sm text-[#6e2a0c]">Corregilo y guardá: lo volvemos a revisar.</p>
               </div>
+            )}
+
+            {/* Un rechazado con la tienda por encima del tope: el cartel arriba,
+                sin esconder el formulario (lo corrige y lo reenvía cuando
+                elimine productos). */}
+            {rechazo && plan && (topeAlGuardar || plan.contador === 'por_encima') && (
+              <CartelPlan motivo="superado" accion="reenviar" datos={plan}
+                tope={topeAlGuardar?.tope} usados={topeAlGuardar?.usados} />
             )}
 
             <section className="rounded-2xl border border-[#0a0a0a]/5 p-5">
@@ -798,7 +841,7 @@ export default function EditarProductoPage() {
 
               <div className="mb-4">
                 <label className="block text-sm text-[#0a0a0a]/60 font-light mb-1">
-                  Fotos * (hasta 5, arrastrá para ordenar — la primera es la principal)
+                  Fotos *
                 </label>
                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={alSoltarFoto}>
                   <SortableContext items={fotos.map(f => f.preview)} strategy={horizontalListSortingStrategy}>
@@ -809,13 +852,31 @@ export default function EditarProductoPage() {
                     </div>
                   </SortableContext>
                 </DndContext>
-                {fotos.length < 5 && (
+                {fotos.length < limiteFotos && (
                   <input type="file" accept="image/jpeg,image/png,image/webp" multiple
                     onChange={agregarFotos} disabled={comprimiendo} />
                 )}
-                <p className="text-[11px] text-[#0a0a0a]/20 font-light mt-1">
-                  {comprimiendo ? 'Procesando imágenes...' : `${fotos.length} de 5 fotos`}
+                <p className="text-xs text-[#0a0a0a]/45 font-light mt-1.5 mb-0">
+                  {comprimiendo ? 'Procesando imágenes...' : (
+                    <>
+                      <b className="font-semibold text-[#0a0a0a]">{fotos.length} de {limiteFotos} fotos</b>
+                      {teniaDeMas
+                        ? ` · Este producto tiene ${fotosAlAbrir} fotos de antes. Podés guardarlo así, pero ${plan.especial ? 'tu plan' : `tu plan ${plan.plan?.nombre || ''}`.trim()} permite ${plan.fotosPorProducto} por producto.`
+                        : ' · Arrastrá para ordenarlas: la primera es la principal.'}
+                    </>
+                  )}
                 </p>
+                {errorPlan && (
+                  <p className="text-xs text-red-700 mt-1.5 mb-0">
+                    {errorPlan} Mientras tanto, no se pueden sumar fotos.{' '}
+                    <button type="button" onClick={reintentarPlan} className="p-0 border-0 bg-transparent underline text-xs text-red-700 cursor-pointer">Reintentar</button>
+                  </p>
+                )}
+                {plan && fotos.length >= limiteFotos && (
+                  <div className="mt-3">
+                    <CartelPlan motivo="fotos" datos={plan} />
+                  </div>
+                )}
               </div>
 
               <div className="pt-4 border-t border-[#0a0a0a]/5">

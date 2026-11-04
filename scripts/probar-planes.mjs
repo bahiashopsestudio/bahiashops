@@ -10,6 +10,8 @@
 
 import {
   planDesdeLaBase, estadoDelContador, planSiguiente, planConCarritos, errorDeTope, textoDeTope, cuerpoDeTope, FALTAN_PARA_CERCA,
+  textoPrecio, notaDelContador, etiquetaDelPlan, textosDelCartel, validarPlanAdmin, avisosDePlan, planesAsignables,
+  validarEspecial, atajosEspecial, enteroDelCampo, LINK_PLANES,
 } from '../src/lib/planes.js'
 
 let fallas = 0
@@ -94,6 +96,118 @@ ok(JSON.stringify(Object.keys(cuerpo)) === '["error","motivo","tope","usados"]' 
 const cuerpoReenvio = cuerpoDeTope({ motivo: 'tope_superado', tope: 10, usados: 12, accion: 'reenviar', cuenta: 'guardados' })
 ok(cuerpoReenvio.error.includes('Para reenviar este') && !('accion' in cuerpoReenvio) && !('cuenta' in cuerpoReenvio),
   'el de reenviar: el texto con «reenviar», sin accion ni cuenta en el cuerpo')
+
+console.log('\n7. El precio')
+ok(textoPrecio(0) === '$0' && textoPrecio(10000) === '$10.000' && textoPrecio(1250000) === '$1.250.000', `textoPrecio: ${textoPrecio(0)}, ${textoPrecio(10000)}, ${textoPrecio(1250000)}`)
+
+// El plan como lo manda /api/vendedor/plan.
+const SIG = planSiguiente(PLANES, 'gratis')
+const GRATIS = (usados, extra = {}) => ({ plan: { clave: 'gratis', nombre: 'Gratis' }, tope: 10, usados, fotosPorProducto: 4, carritos: false,
+  especial: false, sinTope: false, contador: estadoDelContador({ tope: 10, usados }), siguiente: SIG, ...extra })
+const MEDIDA = (usados) => ({ plan: { clave: 'basico', nombre: 'Básico' }, tope: 50, usados, fotosPorProducto: 8, carritos: true,
+  especial: true, sinTope: false, contador: estadoDelContador({ tope: 50, usados }), siguiente: null })
+const PROPIA = { plan: { clave: 'basico', nombre: 'Básico' }, tope: null, usados: 18, fotosPorProducto: 8, carritos: true,
+  especial: true, sinTope: true, contador: 'sin_tope', siguiente: null }
+
+console.log('\n8. La nota del contador')
+ok(notaDelContador(GRATIS(6)) === null, '6 de 10: sin nota')
+ok(notaDelContador(GRATIS(9))?.texto === 'Te queda 1 lugar.', 'faltando 1: «Te queda 1 lugar.»')
+ok(notaDelContador(GRATIS(8))?.texto === 'Te quedan 2 lugares.', 'faltando 2: «Te quedan 2 lugares.»')
+ok(notaDelContador(GRATIS(10))?.texto === 'Llegaste al tope de tu plan.', 'en el tope')
+let n = notaDelContador(GRATIS(11))
+ok(n?.texto === 'Tenés 11 productos y tu plan Gratis guarda 10.' && n.link?.texto === 'Conocer el plan Básico' && n.link.href === '/vender#planes'
+  && n.despues === 'Si no, eliminá productos hasta bajar a 10.', `por encima en el Gratis: «${n?.texto} [${n?.link?.texto}] ${n?.despues}»`)
+ok(!notaDelContador(GRATIS(11, { siguiente: null })).link, 'por encima sin plan siguiente (no se leyeron los planes): sin el link')
+n = notaDelContador(MEDIDA(52))
+ok(n?.texto === 'Tenés 52 productos y tu plan guarda 50.' && !n.link && n.despues === 'Si no, eliminá productos hasta bajar a 50.',
+  `por encima en el plan a medida: «${n?.texto} ${n?.despues}», sin link`)
+ok(notaDelContador(PROPIA) === null, 'sin tope: sin nota')
+ok(LINK_PLANES === '/vender#planes', 'el link a los planes')
+
+console.log('\n9. La etiqueta del plan')
+ok(etiquetaDelPlan(GRATIS(3)) === 'Plan Gratis' && etiquetaDelPlan(MEDIDA(3)) === 'Plan a medida' && etiquetaDelPlan(PROPIA) === null && etiquetaDelPlan(null) === null,
+  'Plan Gratis, Plan a medida, y nada sin tope')
+
+console.log('\n10. Los textos del cartel')
+let c = textosDelCartel({ motivo: 'productos', datos: GRATIS(10) })
+ok(c.eyebrow === 'Tu plan Gratis' && c.titulo === 'Llegaste a los 10 productos de tu plan' && c.intro === 'Con el plan Básico mostrás más, por $10.000 por mes:',
+  `en el tope del Gratis: «${c.eyebrow} / ${c.titulo} / ${c.intro}»`)
+ok(JSON.stringify(c.chips) === JSON.stringify(['Hasta 25 productos', 'Hasta 8 fotos por producto', 'Carritos abandonados']), `los chips: ${c.chips.join(' · ')}`)
+ok(c.cierre === 'Cuentan todos tus productos, también los pausados. Para cargar otro ahora, eliminá uno.' && c.boton?.texto === 'Conocer el plan Básico'
+  && c.boton.href === '/vender#planes' && !c.contacto, 'el cierre y el botón al Básico')
+c = textosDelCartel({ motivo: 'productos', datos: GRATIS(10, { siguiente: null }) })
+ok(c.intro === null && c.chips.length === 0 && c.boton === null && c.titulo === 'Llegaste a los 10 productos de tu plan', 'sin plan siguiente: sin comparación ni botón')
+c = textosDelCartel({ motivo: 'productos', datos: MEDIDA(50) })
+ok(c.eyebrow === 'Tu plan a medida' && c.titulo === 'Llegaste a los 50 productos de tu plan' && c.boton === null && c.contacto === true && c.intro === null
+  && c.cierre === 'Cuentan todos tus productos, también los pausados. Para cargar otro, eliminá uno.', 'plan a medida en el tope: sin el Básico, con «Escribinos»')
+c = textosDelCartel({ motivo: 'superado', accion: 'activar', datos: GRATIS(11) })
+ok(c.titulo === 'Para activar este producto, hacé lugar' && c.cierre === 'Tenés 11 productos y tu plan guarda 10. Para activar este, eliminá productos hasta tener 10.',
+  `activar por encima: «${c.titulo} / ${c.cierre}»`)
+ok(!/paus/i.test(c.cierre) && !/paus/i.test(c.titulo), 'no dice «pausá»')
+c = textosDelCartel({ motivo: 'superado', accion: 'reenviar', datos: GRATIS(12), tope: 10, usados: 12 })
+ok(c.titulo === 'Para reenviar este producto, hacé lugar' && c.cierre === 'Tenés 12 productos y tu plan guarda 10. Para reenviar este, eliminá productos hasta tener 10.',
+  `reenviar por encima: «${c.titulo} / ${c.cierre}»`)
+c = textosDelCartel({ motivo: 'superado', accion: 'activar', datos: MEDIDA(52) })
+ok(c.contacto && c.boton === null && c.cierre.startsWith('Tenés 52 productos y tu plan guarda 50.'), 'activar por encima en el plan a medida: sin el Básico, con «Escribinos»')
+c = textosDelCartel({ motivo: 'fotos', datos: GRATIS(3) })
+ok(c.titulo === 'Llegaste a las 4 fotos de tu plan' && c.intro === 'Con el plan Básico podés subir hasta 8 fotos por producto.' && c.boton?.texto === 'Conocer el plan Básico',
+  `fotos en el Gratis: «${c.titulo} / ${c.intro}»`)
+c = textosDelCartel({ motivo: 'fotos', datos: MEDIDA(3) })
+ok(c.titulo === 'Llegaste a las 8 fotos de tu plan' && c.intro === null && c.boton === null && !c.contacto, 'fotos en el plan a medida: solo el título')
+
+console.log('\n11. Los campos del admin')
+ok(enteroDelCampo('10.000') === 10000 && enteroDelCampo(' 25 ') === 25 && enteroDelCampo(8) === 8 && enteroDelCampo('') === null && enteroDelCampo(null) === null,
+  "'10.000', ' 25 ', 8, '' y null")
+ok(Number.isNaN(enteroDelCampo('1,5')) && Number.isNaN(enteroDelCampo('-3')) && Number.isNaN(enteroDelCampo('abc')) && Number.isNaN(enteroDelCampo(2.5)), "'1,5', '-3', 'abc' y 2.5: no")
+
+console.log('\n12. Validar un plan (/admin/planes)')
+const FILA = (clave) => PLANES.find((x) => x.clave === clave)
+let v = validarPlanAdmin({ precio_mensual: '12.000', tope_productos: '30', fotos_por_producto: 8, carritos_abandonados: true, disponible: true }, FILA('basico'))
+ok(v.ok && JSON.stringify(v.cambios) === JSON.stringify({ precio_mensual: 12000, tope_productos: 30, fotos_por_producto: 8, carritos_abandonados: true, disponible: true }),
+  'el Básico con precio y tope nuevos')
+v = validarPlanAdmin({ precio_mensual: 5000, tope_productos: 12, fotos_por_producto: 4, carritos_abandonados: false, disponible: false }, FILA('gratis'))
+ok(v.ok && v.cambios.precio_mensual === 0 && v.cambios.disponible === true, 'el Gratis: siempre $0 y elegible, aunque manden otra cosa')
+ok(!validarPlanAdmin({ precio_mensual: 1 }, FILA('pro')).ok, 'el Pro no se edita')
+ok(!validarPlanAdmin({}, null).ok, 'un plan que no existe: no')
+const BASE_OK = { precio_mensual: 10000, tope_productos: 25, fotos_por_producto: 8, carritos_abandonados: true, disponible: true }
+for (const [campo, valor, que] of [['precio_mensual', '', 'precio vacío'], ['precio_mensual', '10,5', 'precio con centavos'], ['tope_productos', 0, 'tope 0'],
+  ['tope_productos', 10001, 'tope 10.001'], ['fotos_por_producto', 21, '21 fotos'], ['fotos_por_producto', '', 'fotos vacías'],
+  ['carritos_abandonados', 'si', 'carritos que no es sí/no'], ['disponible', undefined, 'sin «se puede elegir»']]) {
+  v = validarPlanAdmin({ ...BASE_OK, [campo]: valor }, FILA('basico'))
+  ok(!v.ok && typeof v.error === 'string', `${que}: no («${v.error}»)`)
+}
+
+console.log('\n13. Los avisos al cambiar un plan')
+let a = avisosDePlan(FILA('basico'), { tope_productos: '20', fotos_por_producto: 8, carritos_abandonados: true })
+ok(a.length === 1 && a[0] === 'Bajaste el tope de 25 a 20. Afecta solo lo que se cargue después: nada se pausa.', `bajar el tope: «${a[0]}»`)
+a = avisosDePlan(FILA('basico'), { tope_productos: 25, fotos_por_producto: 6, carritos_abandonados: false })
+ok(a.length === 2 && a[0].startsWith('Bajaste las fotos de 8 a 6.') && a[1].startsWith('Sacaste los carritos abandonados'), 'bajar las fotos y sacar los carritos: dos avisos')
+ok(avisosDePlan(FILA('basico'), { tope_productos: 30, fotos_por_producto: 10, carritos_abandonados: true }).length === 0, 'subir: sin avisos')
+
+console.log('\n14. Las condiciones especiales (la ficha)')
+ok(JSON.stringify(planesAsignables(PLANES).map((x) => x.clave)) === '["gratis","basico"]', 'se pueden asignar el Gratis y el Básico (el Pro no tiene topes)')
+let e = validarEspecial({ plan_clave: 'basico', tope_productos: '50', sin_tope: false, precio_especial: '20.000', motivo: '  Pidió más lugar.  ' }, PLANES)
+ok(e.ok && JSON.stringify(e.datos) === JSON.stringify({ plan_clave: 'basico', tope_productos: 50, sin_tope: false, precio_especial: 20000, motivo: 'Pidió más lugar.' }),
+  'un plan a medida: Básico, 50, $20.000')
+e = validarEspecial({ plan_clave: 'basico', tope_productos: '50', sin_tope: true, precio_especial: 0, motivo: 'Tienda propia.' }, PLANES)
+ok(e.ok && e.datos.tope_productos === null && e.datos.sin_tope && e.datos.precio_especial === 0, 'sin tope: el tope que vino se ignora')
+e = validarEspecial({ plan_clave: 'basico', tope_productos: '', precio_especial: '', motivo: 'x' }, PLANES)
+ok(e.ok && e.datos.tope_productos === null && e.datos.precio_especial === null, 'tope y precio vacíos: los del plan')
+for (const [cuerpo, que] of [[{ plan_clave: 'pro', motivo: 'x' }, 'el Pro'], [{ plan_clave: 'basico', motivo: '   ' }, 'sin motivo'],
+  [{ plan_clave: 'basico', motivo: 'x'.repeat(301) }, 'motivo de 301'], [{ plan_clave: 'basico', tope_productos: 0, motivo: 'x' }, 'tope 0'],
+  [{ plan_clave: 'basico', precio_especial: '-1', motivo: 'x' }, 'precio negativo'], [{ plan_clave: 'otro', motivo: 'x' }, 'un plan que no existe']]) {
+  e = validarEspecial(cuerpo, PLANES)
+  ok(!e.ok && typeof e.error === 'string', `${que}: no («${e.error}»)`)
+}
+
+console.log('\n15. Los atajos (salen del Básico)')
+let at = atajosEspecial(PLANES)
+ok(JSON.stringify(at.map((x) => x.etiqueta)) === JSON.stringify(['Bloque de 50 · $20.000', 'Bloque de 75 · $30.000', 'Tienda propia']), `con el Básico de hoy: ${at.map((x) => x.etiqueta).join(' | ')}`)
+ok(at[0].tope_productos === 50 && at[0].precio_especial === 20000 && !at[0].sin_tope && at[2].sin_tope && at[2].precio_especial === 0 && at[2].tope_productos === null,
+  'los valores que llenan')
+at = atajosEspecial(PLANES.map((x) => (x.clave === 'basico' ? { ...x, tope_productos: 30, precio_mensual: 12000 } : x)))
+ok(at[0].etiqueta === 'Bloque de 60 · $24.000' && at[1].etiqueta === 'Bloque de 90 · $36.000', 'si cambia el Básico, cambian solos')
+ok(atajosEspecial(PLANES.filter((x) => x.clave !== 'basico')).length === 0 && atajosEspecial(null).length === 0, 'sin el Básico: ninguno')
 
 console.log(fallas === 0 ? '\nTODO OK' : `\n${fallas} FALLAS`)
 process.exit(fallas ? 1 : 0)

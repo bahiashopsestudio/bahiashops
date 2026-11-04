@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import Navbar from '@/components/Navbar'
 import ComisionEspecial from './ComisionEspecial'
+import PlanEspecial from './PlanEspecial'
 import { etiquetaMetodo } from '@/lib/metodosEntrega'
 
 const ESTADOS = {
@@ -381,6 +382,10 @@ export default function AdminVendedorDetallePage() {
 
             <Seccion titulo="Comisión">
               <ComisionEspecial vendedorId={id} />
+            </Seccion>
+
+            <Seccion titulo="Plan">
+              <PlanEspecial vendedorId={id} />
             </Seccion>
 
             {/* ── Verificación: lo primero que se mira ── */}

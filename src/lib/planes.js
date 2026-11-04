@@ -129,8 +129,9 @@ export function cuerpoDeTope({ motivo, tope = null, usados = null, accion }) {
 
 // ── La página pública /vender ──
 
-// Un precio en pesos como lo muestra /vender: '$0', '$10.000'.
-function textoPrecio(pesos) {
+// Un precio en pesos como lo muestra /vender: '$0', '$10.000'. Lo usan
+// también el panel de la tienda y el admin.
+export function textoPrecio(pesos) {
   return `$${Number(pesos).toLocaleString('es-AR', { maximumFractionDigits: 0 })}`
 }
 
@@ -174,4 +175,248 @@ export function planesParaLaVenta(filas) {
           carritos: pro.carritos_abandonados === true }
       : { nombre: pro?.nombre || 'Pro', proximamente: true },
   }
+}
+
+// ── El panel de la tienda (Mis productos, Nuevo, Editar, Mi negocio) ──
+//
+// Reciben el plan como lo devuelve /api/vendedor/plan:
+//   { plan: { clave, nombre }, tope, usados, fotosPorProducto, carritos,
+//     especial, sinTope, contador, siguiente }
+// usados son todos los productos guardados (migración 047).
+
+export const LINK_PLANES = '/vender#planes'
+
+// La nota debajo del contador de Mis productos, o null si no lleva:
+//   { texto, link?: { texto, href }, despues? }
+// Por encima del tope, en el Gratis, invita al plan siguiente.
+// F4: cuando la base sepa que la tienda venía del Básico, el texto pasa a
+// «Tu plan volvió al Gratis. [Reactivar mi plan Básico]. Si no, eliminá
+// productos hasta bajar a 10.»; hasta entonces, este (no sabemos de dónde
+// venía).
+export function notaDelContador(datos) {
+  const d = datos || {}
+  const contador = d.contador ?? estadoDelContador(d)
+  const tope = d.tope
+  const usados = Number(d.usados) || 0
+  if (contador === 'cerca') {
+    const quedan = tope - usados
+    return { texto: quedan === 1 ? 'Te queda 1 lugar.' : `Te quedan ${quedan} lugares.` }
+  }
+  if (contador === 'en_el_tope') return { texto: 'Llegaste al tope de tu plan.' }
+  if (contador !== 'por_encima') return null
+
+  const despues = `Si no, eliminá productos hasta bajar a ${tope}.`
+  if (d.especial) return { texto: `Tenés ${usados} productos y tu plan guarda ${tope}.`, despues }
+  const nombre = d.plan?.nombre ? ` ${d.plan.nombre}` : ''
+  const nota = { texto: `Tenés ${usados} productos y tu plan${nombre} guarda ${tope}.`, despues }
+  if (d.siguiente?.nombre) nota.link = { texto: `Conocer el plan ${d.siguiente.nombre}`, href: LINK_PLANES }
+  return nota
+}
+
+// La etiqueta del plan junto al contador: 'Plan Gratis', 'Plan a medida', o
+// null sin tope (ahí el contador dice solo «N productos»).
+export function etiquetaDelPlan(datos) {
+  if (!datos || datos.sinTope) return null
+  if (datos.especial) return 'Plan a medida'
+  return datos.plan?.nombre ? `Plan ${datos.plan.nombre}` : null
+}
+
+// Los textos del cartel del plan (CartelPlan):
+//   motivo  'productos'  llegó al tope y quiere cargar uno nuevo
+//           'superado'   quiere activar o reenviar uno con la tienda por
+//                        encima del tope (accion: 'activar' | 'reenviar')
+//           'fotos'      llegó a las fotos por producto (el cartel chico)
+//   tope y usados: los del 409 si llegaron; si no, los del plan.
+// Devuelve { eyebrow, titulo, intro, chips, cierre, boton, contacto }:
+//   intro y chips: lo que trae el plan siguiente (null / [] si no hay, o si
+//   tiene condiciones especiales); boton: { texto, href } al plan siguiente;
+//   contacto: true en el plan a medida (abre el formulario de contacto).
+export function textosDelCartel({ motivo = 'productos', accion = 'activar', datos, tope, usados } = {}) {
+  const d = datos || {}
+  const t = tope ?? d.tope ?? null
+  const u = usados ?? d.usados ?? null
+  const sig = d.especial ? null : d.siguiente || null
+  const eyebrow = d.especial ? 'Tu plan a medida' : (d.plan?.nombre ? `Tu plan ${d.plan.nombre}` : 'Tu plan')
+  const boton = sig ? { texto: `Conocer el plan ${sig.nombre}`, href: LINK_PLANES } : null
+  const contacto = d.especial === true
+
+  if (motivo === 'fotos') {
+    const fotos = d.fotosPorProducto
+    const masFotos = !!sig && sig.fotosPorProducto > (fotos || 0)
+    return {
+      eyebrow,
+      titulo: fotos ? `Llegaste a las ${fotos} fotos de tu plan` : 'Llegaste a las fotos de tu plan',
+      intro: masFotos ? `Con el plan ${sig.nombre} podés subir hasta ${sig.fotosPorProducto} fotos por producto.` : null,
+      chips: [],
+      cierre: null,
+      boton: masFotos ? boton : null,
+      contacto: false,
+    }
+  }
+
+  const intro = sig && Number.isInteger(sig.precio)
+    ? `Con el plan ${sig.nombre} mostrás más, por ${textoPrecio(sig.precio)} por mes:`
+    : null
+  const chips = sig
+    ? [
+        sig.tope ? `Hasta ${sig.tope} productos` : null,
+        sig.fotosPorProducto ? `Hasta ${sig.fotosPorProducto} fotos por producto` : null,
+        sig.carritos ? 'Carritos abandonados' : null,
+      ].filter(Boolean)
+    : []
+
+  if (motivo === 'superado') {
+    const verbo = accion === 'reenviar' ? 'reenviar' : 'activar'
+    return {
+      eyebrow,
+      titulo: `Para ${verbo} este producto, hacé lugar`,
+      intro,
+      chips,
+      cierre: textoDeTope({ motivo: 'tope_superado', tope: t, usados: u, accion: verbo }),
+      boton,
+      contacto,
+    }
+  }
+
+  return {
+    eyebrow,
+    titulo: t ? `Llegaste a los ${t} productos de tu plan` : 'Llegaste al tope de productos de tu plan',
+    intro,
+    chips,
+    cierre: contacto
+      ? 'Cuentan todos tus productos, también los pausados. Para cargar otro, eliminá uno.'
+      : 'Cuentan todos tus productos, también los pausados. Para cargar otro ahora, eliminá uno.',
+    boton,
+    contacto,
+  }
+}
+
+// ── El admin de planes (/admin/planes y la ficha de cada tienda) ──
+
+export const MAX_MOTIVO_PLAN = 300
+const TOPE_MAXIMO = 10000
+const FOTOS_MAXIMO = 20
+const PRECIO_MAXIMO = 100000000
+
+// Un entero de un campo del formulario: 10000, '10000', '10.000', ' 25 '.
+// '' / null / undefined -> null. Lo que no es un entero sin signo -> NaN.
+export function enteroDelCampo(v) {
+  if (v === null || v === undefined) return null
+  if (typeof v === 'number') return Number.isInteger(v) && v >= 0 ? v : NaN
+  const texto = String(v).trim().replace(/\./g, '')
+  if (texto === '') return null
+  return /^\d+$/.test(texto) ? Number(texto) : NaN
+}
+
+// Los cambios de un plan desde /admin/planes. Las mismas reglas que la tabla
+// (migración 046), para responder con un texto claro antes de llegar a la base:
+//   · el Pro no se edita todavía (sin topes hasta que lo construyamos);
+//   · el Gratis vale siempre $0 y se puede elegir;
+//   · precio de 0 en adelante; tope de 1 a 10.000; fotos de 1 a 20.
+//   actual  la fila de public.planes que se edita
+// Devuelve { ok: true, cambios } (las columnas a guardar) o { ok: false, error }.
+export function validarPlanAdmin(cuerpo, actual) {
+  if (!actual?.clave) return { ok: false, error: 'No encontramos ese plan.' }
+  if (actual.clave === 'pro') return { ok: false, error: 'El Pro todavía no se edita: sus valores se cargan cuando lo construyamos.' }
+  const c = cuerpo && typeof cuerpo === 'object' ? cuerpo : {}
+
+  const precio = actual.clave === 'gratis' ? 0 : enteroDelCampo(c.precio_mensual)
+  const tope = enteroDelCampo(c.tope_productos)
+  const fotos = enteroDelCampo(c.fotos_por_producto)
+  if (precio === null || Number.isNaN(precio) || precio > PRECIO_MAXIMO) {
+    return { ok: false, error: 'El precio tiene que ser un número entero de pesos, sin centavos.' }
+  }
+  if (tope === null || Number.isNaN(tope) || tope < 1 || tope > TOPE_MAXIMO) {
+    return { ok: false, error: 'El tope de productos tiene que ser un número de 1 a 10.000.' }
+  }
+  if (fotos === null || Number.isNaN(fotos) || fotos < 1 || fotos > FOTOS_MAXIMO) {
+    return { ok: false, error: `Las fotos por producto tienen que ser un número de 1 a ${FOTOS_MAXIMO}.` }
+  }
+  if (typeof c.carritos_abandonados !== 'boolean') return { ok: false, error: 'Falta decir si trae los carritos abandonados.' }
+  const disponible = actual.clave === 'gratis' ? true : c.disponible
+  if (typeof disponible !== 'boolean') return { ok: false, error: 'Falta decir si se puede elegir.' }
+
+  return {
+    ok: true,
+    cambios: {
+      precio_mensual: precio,
+      tope_productos: tope,
+      fotos_por_producto: fotos,
+      carritos_abandonados: c.carritos_abandonados,
+      disponible,
+    },
+  }
+}
+
+// Los avisos al cambiar un plan, comparando lo guardado con lo que se está
+// por guardar (los muestra /admin/planes antes de guardar).
+export function avisosDePlan(actual, propuesto) {
+  if (!actual || !propuesto) return []
+  const avisos = []
+  const tope = enteroDelCampo(propuesto.tope_productos)
+  const fotos = enteroDelCampo(propuesto.fotos_por_producto)
+  if (Number.isInteger(tope) && Number.isInteger(actual.tope_productos) && tope < actual.tope_productos) {
+    avisos.push(`Bajaste el tope de ${actual.tope_productos} a ${tope}. Afecta solo lo que se cargue después: nada se pausa.`)
+  }
+  if (Number.isInteger(fotos) && Number.isInteger(actual.fotos_por_producto) && fotos < actual.fotos_por_producto) {
+    avisos.push(`Bajaste las fotos de ${actual.fotos_por_producto} a ${fotos}. Afecta solo lo que se cargue después: los productos que ya tienen más las conservan.`)
+  }
+  if (actual.carritos_abandonados === true && propuesto.carritos_abandonados === false) {
+    avisos.push('Sacaste los carritos abandonados: las tiendas de este plan dejan de verlos en el momento. No se pierde ningún dato.')
+  }
+  return avisos
+}
+
+// Los planes que se pueden asignar a una tienda: con tope de productos y
+// fotos por producto (los mismos que acepta el disparador de la 046).
+export function planesAsignables(planes) {
+  if (!Array.isArray(planes)) return []
+  return planes
+    .filter((p) => p?.clave && Number.isInteger(p.tope_productos) && Number.isInteger(p.fotos_por_producto))
+    .sort((a, b) => Number(a.orden) - Number(b.orden))
+}
+
+// Las condiciones especiales de una tienda desde la ficha del admin.
+//   cuerpo  { plan_clave, tope_productos, sin_tope, precio_especial, motivo }
+//           tope vacío = el del plan; precio vacío = el del plan; 0 = sin abono
+//   planes  filas de public.planes
+// Devuelve { ok: true, datos } (las columnas de vendedor_planes) o { ok: false, error }.
+export function validarEspecial(cuerpo, planes) {
+  const c = cuerpo && typeof cuerpo === 'object' ? cuerpo : {}
+  const plan = planesAsignables(planes).find((p) => p.clave === c.plan_clave)
+  if (!plan) return { ok: false, error: 'Elegí un plan con tope de productos y fotos cargados.' }
+
+  const sinTope = c.sin_tope === true
+  const tope = sinTope ? null : enteroDelCampo(c.tope_productos)
+  if (!sinTope && (Number.isNaN(tope) || (tope !== null && (tope < 1 || tope > TOPE_MAXIMO)))) {
+    return { ok: false, error: 'El tope de productos tiene que ser un número de 1 a 10.000, o tildá «Sin tope».' }
+  }
+  const precio = enteroDelCampo(c.precio_especial)
+  if (Number.isNaN(precio) || (precio !== null && precio > PRECIO_MAXIMO)) {
+    return { ok: false, error: 'El precio tiene que ser un número entero de pesos (0 = sin abono), o vacío para el del plan.' }
+  }
+  const motivo = typeof c.motivo === 'string' ? c.motivo.trim() : ''
+  if (!motivo) return { ok: false, error: 'Escribí el motivo: es para vos, la tienda no lo ve.' }
+  if (motivo.length > MAX_MOTIVO_PLAN) return { ok: false, error: `El motivo puede tener hasta ${MAX_MOTIVO_PLAN} caracteres.` }
+
+  return { ok: true, datos: { plan_clave: plan.clave, tope_productos: tope, sin_tope: sinTope, precio_especial: precio, motivo } }
+}
+
+// Los atajos de la ficha: llenan el formulario con bloques del Básico (tope y
+// precio por 2 y por 3) y la tienda propia (Básico sin tope, $0). Salen de la
+// fila del Básico: si cambia, los atajos cambian solos. [] si el Básico no
+// está completo.
+export function atajosEspecial(planes) {
+  const basico = Array.isArray(planes) ? planes.find((p) => p?.clave === 'basico') : null
+  if (!basico || !enteroPositivo(basico.tope_productos) || !enteroPositivo(basico.fotos_por_producto)
+      || !Number.isInteger(basico.precio_mensual)) return []
+  const bloque = (n) => ({
+    etiqueta: `Bloque de ${basico.tope_productos * n} · ${textoPrecio(basico.precio_mensual * n)}`,
+    plan_clave: basico.clave, tope_productos: basico.tope_productos * n, sin_tope: false, precio_especial: basico.precio_mensual * n,
+  })
+  return [
+    bloque(2),
+    bloque(3),
+    { etiqueta: 'Tienda propia', plan_clave: basico.clave, tope_productos: null, sin_tope: true, precio_especial: 0 },
+  ]
 }

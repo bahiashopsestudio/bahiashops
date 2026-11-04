@@ -17,7 +17,9 @@ import {
 import { calleNumeroDepto, ciudadProvinciaCodigo } from '@/lib/direcciones';
 import {
   pestanaEnElPanel, siguientePaso, pasosDe, formaDeEntrega, NOMBRE_PASO, ESTADO_ENTREGADO, ESTADO_REEMBOLSADO, ESTADOS_PARA_RECLAMAR,
+  tieneProductoEliminado,
 } from '@/lib/pedidos';
+import { LINK_PLANES } from '@/lib/planes';
 import { ahorroAlCinco, textoPorcentaje } from '@/lib/comision';
 import { diasSinMarcarEntregado, textoPedidosSinMarcar } from '@/lib/resenas';
 
@@ -28,12 +30,13 @@ const VERDE = '#2e6b4f';
 // Las pestañas del panel (mismo estilo que Moderación). Qué pedido va en cada
 // una lo decide pestanaDePedido en el servidor (manda `pestana` en cada pedido)
 // y acá pestanaEnElPanel (src/lib/pedidos.js). En "Entregados" los
-// reembolsados van aparte, debajo, y no suman al contador. `pro`: el badge
-// decorativo, no limita nada.
+// reembolsados van aparte, debajo, y no suman al contador. `plan`: la pestaña
+// es de un plan (migración 046): lleva el cartelito con el nombre del plan que
+// la trae («Básico»), y sin el plan no muestra el número ni los carritos.
 const PESTANAS = [
   { clave: 'nuevos', label: 'Nuevos pedidos', vacio: 'No tenés pedidos para preparar ni entregar.' },
   { clave: 'entregados', label: 'Entregados', vacio: 'Todavía no marcaste ningún pedido como entregado.' },
-  { clave: 'carritos', label: 'Carritos abandonados', pro: true, vacio: 'No tenés carritos abandonados.' },
+  { clave: 'carritos', label: 'Carritos abandonados', plan: true, vacio: 'No tenés carritos abandonados.' },
 ];
 
 // Lo que se ve en lugar de los datos de contacto de un pago en efectivo en
@@ -218,6 +221,12 @@ export default function VendedorPedidosPage() {
   // "Recordarle" muestra un cartel en vez de mandar el mail. null = no se sabe:
   // se deja intentar y decide el servidor.
   const [mpConectado, setMpConectado] = useState(null);
+  // Los carritos abandonados son del plan (migración 046): true, false (su
+  // plan no los trae) o null (no se pudo leer el plan). planCarritos: el
+  // nombre del plan que los trae, para el cartelito de la pestaña.
+  const [carritosIncluidos, setCarritosIncluidos] = useState(null);
+  const [planCarritos, setPlanCarritos] = useState(null);
+  const [recargandoCarritos, setRecargandoCarritos] = useState(false);
   const [sinMpModal, setSinMpModal] = useState(false);
 
   useEffect(() => {
@@ -255,6 +264,8 @@ export default function VendedorPedidosPage() {
         setNombreNegocio(datos.vendedor?.nombre_negocio || '');
         setPedidos(datos.pedidos || []);
         setMpConectado(typeof datos.mp_conectado === 'boolean' ? datos.mp_conectado : null);
+        setCarritosIncluidos(typeof datos.carritos_incluidos === 'boolean' ? datos.carritos_incluidos : null);
+        setPlanCarritos(datos.plan_carritos || null);
         setAhora(Date.now());
 
         // El link del mail de venta trae ?pedido=N: si ese pedido está en la
@@ -419,6 +430,9 @@ export default function VendedorPedidosPage() {
         // Se desconectó con el panel abierto: el servidor lo frenó.
         setMpConectado(false);
         setSinMpModal(true);
+      } else if (res.status === 403 && datos.codigo === 'PLAN_SIN_CARRITOS') {
+        // El plan cambió con el panel abierto: la pestaña pasa a la explicación.
+        setCarritosIncluidos(false);
       } else if (!res.ok) {
         alert(datos.error || 'No se pudo enviar el recordatorio.');
       } else {
@@ -430,6 +444,25 @@ export default function VendedorPedidosPage() {
       alert('No pudimos conectarnos. Revisá tu conexión y probá de nuevo.');
     }
     setEnviandoRecordatorio((prev) => ({ ...prev, [pedidoId]: false }));
+  }
+
+  // «Reintentar» cuando no se pudo leer el plan: vuelve a pedir la lista (la
+  // ruta lee el plan con ella).
+  async function recargarCarritos() {
+    setRecargandoCarritos(true);
+    try {
+      const res = await fetch('/api/vendedor/pedidos');
+      const datos = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setPedidos(datos.pedidos || []);
+        setCarritosIncluidos(typeof datos.carritos_incluidos === 'boolean' ? datos.carritos_incluidos : null);
+        setPlanCarritos(datos.plan_carritos || null);
+        setAhora(Date.now());
+      }
+    } catch (err) {
+      console.error('Error de red recargando los carritos', err);
+    }
+    setRecargandoCarritos(false);
   }
 
   const menuCats = MENU_CATEGORIAS.map(s => categorias.find(c => c.slug === s)).filter(Boolean);
@@ -501,6 +534,7 @@ export default function VendedorPedidosPage() {
   return (
     <>
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&display=swap" />
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,100..900&family=Poppins:wght@300;400;500&display=swap" />
 
       <div className="min-h-screen bg-white" style={{ fontFamily: "'Inter', sans-serif" }}>
         {menuOpen && <MenuTakeover categorias={menuCats} onClose={() => setMenuOpen(false)} />}
@@ -538,13 +572,16 @@ export default function VendedorPedidosPage() {
                           activa ? 'border-[#0a0a0a] text-[#0a0a0a] font-semibold' : 'border-transparent text-gray-500 hover:text-[#0a0a0a]'
                         }`}>
                         {t.label}
-                        <span className={`text-[11px] font-medium rounded-full px-2 py-0.5 ${
-                          t.clave === 'nuevos' && cantidad > 0 ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'
-                        }`}>
-                          {cantidad}
-                        </span>
-                        {t.pro && (
-                          <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">Pro</span>
+                        {/* Sin el plan, la pestaña no dice cuántos carritos hay. */}
+                        {(!t.plan || carritosIncluidos === true) && (
+                          <span className={`text-[11px] font-medium rounded-full px-2 py-0.5 ${
+                            t.clave === 'nuevos' && cantidad > 0 ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'
+                          }`}>
+                            {cantidad}
+                          </span>
+                        )}
+                        {t.plan && planCarritos && (
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">{planCarritos}</span>
                         )}
                       </button>
                     );
@@ -552,7 +589,27 @@ export default function VendedorPedidosPage() {
                 </div>
 
                 {actual.clave === 'carritos' ? (
-                  lista.length === 0 ? (
+                  carritosIncluidos === false ? (
+                    // Su plan no los trae: qué hace la función, sin ningún
+                    // carrito ni cuántos tiene.
+                    <div className="border border-[#0a0a0a]/[0.06] rounded-2xl p-[22px] flex flex-col gap-2.5">
+                      <h3 className="m-0 text-xl text-[#0a0a0a]" style={{ fontFamily: 'Fraunces, serif', fontWeight: 500 }}>
+                        Recuperá las ventas que quedaron a mitad de camino
+                      </h3>
+                      <p className="m-0 text-[13.5px] leading-relaxed text-[#0a0a0a]/60" style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 300 }}>
+                        Con el plan {planCarritos || 'Básico'} ves quién dejó productos en el carrito sin pagar y le mandás un recordatorio por mail, una vez por carrito.
+                      </p>
+                      <Link href={LINK_PLANES} className="self-start text-[13px] font-medium text-[#015444] underline underline-offset-2">Ver planes</Link>
+                    </div>
+                  ) : carritosIncluidos === null ? (
+                    <div role="alert" className="py-6 flex flex-col items-start gap-3">
+                      <p className="m-0 text-sm text-[#0a0a0a]/50 font-light">No pudimos cargar los carritos.</p>
+                      <button type="button" onClick={recargarCarritos} disabled={recargandoCarritos}
+                        className="px-5 py-2 bg-white border border-[#0a0a0a]/10 rounded-full text-sm text-[#0a0a0a]/60 font-light cursor-pointer hover:border-[#0a0a0a]/30 hover:text-[#0a0a0a] transition-all">
+                        {recargandoCarritos ? 'Cargando...' : 'Reintentar'}
+                      </button>
+                    </div>
+                  ) : lista.length === 0 ? (
                     <p className="text-sm text-[#0a0a0a]/30 font-light m-0 py-6">{actual.vacio}</p>
                   ) : lista.map(p => (
                     <CarritoCard key={p.id} pedido={p} enviando={!!enviandoRecordatorio[p.id]}
@@ -697,7 +754,7 @@ export default function VendedorPedidosPage() {
 // Un carrito abandonado: quién (solo el apodo: no se pagó, así que no hay datos
 // de contacto), qué había elegido y cuándo. Sin estados ni pasos: lo único que
 // se puede hacer es mandarle el recordatorio, una vez. Con la cuenta eliminada
-// no hay a quién mandárselo.
+// no hay a quién mandárselo, y con un producto eliminado no se manda.
 function CarritoCard({ pedido, enviando, onRecordar }) {
   const p = pedido;
   const items = p.items || [];
@@ -729,7 +786,10 @@ function CarritoCard({ pedido, enviando, onRecordar }) {
 
       {!p.comprador_eliminado && (
         <div className="mt-3 pt-3 border-t border-[#0a0a0a]/5">
-          {p.recordatorio_enviado_en ? (
+          {/* Un producto que la tienda eliminó (migración 047): no se recuerda. */}
+          {tieneProductoEliminado(items) && !p.recordatorio_enviado_en ? (
+            <p className="m-0 text-sm text-[#0a0a0a]/40 font-light">Uno de estos productos ya no está en tu tienda.</p>
+          ) : p.recordatorio_enviado_en ? (
             <p className="m-0 text-sm text-emerald-700 font-light">
               Recordatorio enviado ✓ <span className="text-[#0a0a0a]/30">· {tiempoRelativo(p.recordatorio_enviado_en)}</span>
             </p>
