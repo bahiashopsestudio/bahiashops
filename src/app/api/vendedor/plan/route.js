@@ -15,6 +15,9 @@
 //   siguiente   { clave, nombre, tope, fotosPorProducto, carritos, precio }
 //               del plan que sigue, para el cartel del tope; null si tiene
 //               condiciones especiales o no hay otro.
+//   origen      'gratis' | 'especial' | 'suscripcion' (048)
+//   suscripciones  si la tienda ya puede suscribirse (SUSCRIPCIONES_TIENDAS):
+//               el panel pide entonces /api/vendedor/suscripcion.
 //
 // Si no se puede leer la lista de planes, sale igual con siguiente: null (el
 // cartel se muestra sin la comparación).
@@ -23,6 +26,7 @@ import { NextResponse } from 'next/server'
 import { tiendaDeLaSesion } from '@/lib/tiendaDeLaSesion'
 import { planDeLaTienda } from '@/lib/planDeLaTienda'
 import { estadoDelContador, planSiguiente } from '@/lib/planes'
+import { suscripcionesHabilitadas } from '@/lib/suscripciones'
 
 const ERROR = 'No pudimos cargar tu plan. Probá de nuevo en un rato.'
 
@@ -50,5 +54,7 @@ export async function GET() {
     sinTope: plan.sinTope,
     contador: estadoDelContador(plan),
     siguiente: planes.error ? null : planSiguiente(planes.data, plan.clave, { especial: plan.especial }),
+    origen: plan.origen,
+    suscripciones: suscripcionesHabilitadas(vendedor.id),
   })
 }

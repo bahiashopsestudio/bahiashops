@@ -1,5 +1,5 @@
 // La tarea diaria (Vercel Cron → /api/cron/diaria, una vez por día entre las
-// 10 y las 11 de Argentina; migración 040). Hace cuatro cosas, cada una por su
+// 10 y las 11 de Argentina; migración 040). Hace cinco cosas, cada una por su
 // lado: si una falla, las otras siguen.
 //
 //   1. vencidos       cancela los pedidos cuyo link o cupón venció
@@ -13,6 +13,12 @@
 //                     días que la tienda no marcó entregado.
 //   4. recordatorio   uno solo, a los 7 días de la invitación (la que haya
 //                     sido), si quedan 3 días o más de ventana.
+//   5. suscripciones  las suscripciones del plan (048): lee en Mercado Pago
+//                     cada una viva y sus cobros (por si un aviso no llegó),
+//                     cancela las que esperan el pago hace más de 7 días y
+//                     reintenta el monto nuevo de las diferencias pagadas.
+//                     No manda mails. Sin MP_ACCESS_TOKEN_PLATAFORMA, no
+//                     corre.
 //
 // Cada mail se marca en la base ANTES de mandarlo, con un UPDATE que solo se
 // lleva la fila si la marca estaba en null: dos corridas el mismo día (o a la
@@ -32,6 +38,9 @@ import { ESTADOS_PARA_RESENAR, estadoDeResena, ventanaDeResena } from '@/lib/res
 import { avisarResena14Dias, recordarResena, armarMailAviso14Dias, armarMailRecordatorioResena } from '@/lib/mailsPedidos'
 import { renovarToken, marcarRenovacionFallida } from '@/lib/mercadopago/tokens'
 import { enviarMailRenovacionFallida, enviarMailRenovacionFallidaInterno } from '@/lib/mailsCuentaMp'
+import { ESTADOS_VIVOS, pendienteAbandonada } from '@/lib/suscripciones'
+import { tokenDePlataforma } from '@/lib/mercadopago/suscripciones'
+import { aplicarMontoNuevo, cancelarSuscripcion, sincronizarSuscripcion } from '@/lib/suscripcionesServidor'
 
 const DIA_MS = 24 * 60 * 60 * 1000
 
@@ -383,6 +392,41 @@ async function tareaResenas({ admin, prueba, ahoraMs, cupo, tipo, pagadosDesdeMs
   return r
 }
 
+// ── Las suscripciones del plan (048) ─────────────────────────────────────────
+//
+// La red de los avisos de Mercado Pago: si uno no llegó, acá se lee igual.
+// Una suscripción que se está creando hace más de un día (se cortó en el
+// medio) también se cancela.
+async function tareaSuscripciones({ admin, prueba, ahoraMs }) {
+  if (!tokenDePlataforma()) return { omitida: 'sin MP_ACCESS_TOKEN_PLATAFORMA' }
+  const r = { revisadas: 0, sincronizadas: 0, canceladas_sin_pagar: 0, montos_aplicados: 0, fallidas: 0 }
+  if (prueba) r.lista = []
+
+  const { data: vivas, error } = await admin.from('vendedor_suscripciones').select('*').in('estado', ESTADOS_VIVOS)
+  if (error) fallar('vendedor_suscripciones', error)
+  for (const fila of vivas || []) {
+    r.revisadas++
+    const trabada = fila.estado === 'creando' && ahoraMs - ms(fila.creada_en) > DIA_MS
+    const accion = pendienteAbandonada(fila, ahoraMs) || trabada ? 'cancelar_sin_pagar' : 'sincronizar'
+    if (prueba) { r.lista.push({ suscripcion: fila.id, tienda: fila.vendedor_id, estado: fila.estado, accion }); continue }
+    if (accion === 'cancelar_sin_pagar') {
+      if ((await cancelarSuscripcion(admin, fila)).ok) r.canceladas_sin_pagar++
+      else r.fallidas++
+    } else if ((await sincronizarSuscripcion(admin, fila)).ok) r.sincronizadas++
+    else r.fallidas++
+  }
+
+  const { data: difs, error: errorDifs } = await admin.from('suscripcion_diferencias').select('*')
+    .in('estado', ['pagada', 'sin_cobro']).is('monto_mp_actualizado_en', null)
+  if (errorDifs) fallar('suscripcion_diferencias', errorDifs)
+  for (const d of difs || []) {
+    if (prueba) { r.lista.push({ diferencia: d.id, tienda: d.vendedor_id, accion: 'aplicar_monto', monto: d.precio_nuevo }); continue }
+    if ((await aplicarMontoNuevo(admin, d)).ok) r.montos_aplicados++
+    else r.fallidas++
+  }
+  return r
+}
+
 // ── La corrida ────────────────────────────────────────────────────────────────
 
 // Devuelve el resumen (en modo prueba, con las listas). Nunca lanza.
@@ -412,6 +456,7 @@ export async function correrTareaDiaria({
     ['mercadopago', () => tareaMercadoPago({ admin, prueba, ahoraMs, cupo })],
     ['aviso_14_dias', () => tareaResenas({ admin, prueba, ahoraMs, cupo, tipo: 'aviso_14_dias', pagadosDesdeMs })],
     ['recordatorio', () => tareaResenas({ admin, prueba, ahoraMs, cupo, tipo: 'recordatorio' })],
+    ['suscripciones', () => tareaSuscripciones({ admin, prueba, ahoraMs })],
   ]
   for (const [nombre, correr] of tareas) {
     try {

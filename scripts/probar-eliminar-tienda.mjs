@@ -9,7 +9,10 @@
 //     las de los productos que se vendieron;
 //   · el mail final menciona la tienda;
 //   · el admin elimina una cuenta con tienda pausada, y borra una tienda de
-//     prueba con pedidos (DELETE /api/admin/vendedores/[id]).
+//     prueba con pedidos (DELETE /api/admin/vendedores/[id]);
+//   · una tienda con la suscripción al plan viva (048): si Mercado Pago no la
+//     cancela, no se elimina nada (la tabla es una imitación mínima de la
+//     048; el disparador lo prueba probar-048).
 //
 //   npm run probar:eliminar-tienda
 //
@@ -47,6 +50,8 @@ console.warn = () => {}
 console.error = () => {}
 
 const { db, q, n } = await baseDeTiendas()
+await db.exec(`create table public.vendedor_suscripciones (id serial primary key, vendedor_id integer, estado text,
+  mp_preapproval_id text, cancelada_en timestamptz, actualizada_en timestamptz)`)
 
 // ── El cliente de Supabase, sobre PGlite ──
 function cliente() {
@@ -208,6 +213,22 @@ console.log('\n2. Tienda pausada sin pedidos -> se borra entera')
   ok(enStorage('logos', t).length + enStorage('portadas', t).length + enStorage('productos', t).length === 0, 'Storage: no queda nada de la tienda')
   ok(await n(`select count(*) n from auth.users where id = $1`, [duena]) === 0, 'la cuenta se borró entera')
   ok(mails.some((m) => m.texto.includes('Tu tienda Cerámica fue cerrada permanentemente.')), 'el mail menciona la tienda')
+}
+
+console.log('\n2b. Tienda pausada con la suscripción al plan viva y Mercado Pago sin responder')
+{
+  process.env.MP_ACCESS_TOKEN_PLATAFORMA = 'TOKEN-PLAT'
+  const duena = await cuenta('suscripta@mail.com', 'Sus')
+  const { t } = await tiendaConTodo(duena, 'Suscripta')
+  await db.query(`insert into public.vendedor_suscripciones (vendedor_id, estado, mp_preapproval_id) values ($1, 'authorized', 'pre-x')`, [t])
+  sesionDe(duena, 'suscripta@mail.com')
+  await pausaRuta.POST(pedir({}))
+  const r = await cerrarRuta.POST(pedir({ confirmacion: 'eliminar' }))
+  ok(r.status === 500 && /suscripción al plan/.test(r.body.error), 'no se elimina, y dice que no se pudo cancelar la suscripción')
+  ok(await n(`select count(*) n from public.vendedores where id = $1 and cerrada_en is null`, [t]) === 1
+    && await n(`select count(*) n from auth.users where id = $1`, [duena]) === 1, 'la tienda y la cuenta siguen')
+  await db.query(`update public.vendedor_suscripciones set estado = 'cancelled' where vendedor_id = $1`, [t])
+  delete process.env.MP_ACCESS_TOKEN_PLATAFORMA
 }
 
 console.log('\n3. Sin tienda: el mail no habla de tiendas')

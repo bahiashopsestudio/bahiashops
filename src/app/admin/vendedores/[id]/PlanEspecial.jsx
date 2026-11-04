@@ -6,8 +6,9 @@
 // /api/admin/vendedores/[id]/plan.
 //
 // Los atajos salen del Básico (atajosEspecial): bloques de tope y precio por
-// 2 y por 3, y la tienda propia (sin tope, $0). Hasta F3 un plan a medida con
-// precio no se cobra; en F3 va a exigir la suscripción al día.
+// 2 y por 3, y la tienda propia (sin tope, $0). Un plan a medida con precio
+// exige la suscripción al día por ese precio (048): la sección «Suscripción»
+// de la ficha la muestra.
 
 import { useEffect, useState } from 'react'
 import { MAX_MOTIVO_PLAN, atajosEspecial, planesAsignables, textoPrecio } from '@/lib/planes'

@@ -10,10 +10,12 @@
 //   · Plan a medida: el tope especial, sin el precio (es una condición del
 //     admin; en F3 se ve en la suscripción).
 //   · Sin tope: solo cuántos productos tiene.
-// Sin botón de pago: llega en F3, en este mismo lugar.
+// La suscripción al plan (F3, migración 048) va abajo, en SuscripcionPlan,
+// solo para las tiendas habilitadas (datos.suscripciones).
 
 import Link from 'next/link'
 import { LINK_PLANES, textoPrecio } from '@/lib/planes'
+import SuscripcionPlan from '@/components/SuscripcionPlan'
 
 const FUENTE_TEXTO = { fontFamily: 'Poppins, sans-serif', fontWeight: 300 }
 
@@ -27,7 +29,8 @@ function Uso({ valor, texto, primero }) {
 }
 
 // datos: lo de la ruta, { error }, o null mientras carga.
-export default function TuPlan({ datos }) {
+// onCambio: vuelve a leer el plan (cuando la suscripción lo cambia).
+export default function TuPlan({ datos, onCambio }) {
   const marco = { border: '1px solid rgba(10,10,10,0.08)', borderRadius: '16px', padding: '20px 22px', backgroundColor: '#ffffff' }
 
   if (!datos) {
@@ -71,6 +74,8 @@ export default function TuPlan({ datos }) {
           </Link>
         </div>
       )}
+
+      {datos.suscripciones && <SuscripcionPlan onCambio={onCambio} />}
     </div>
   )
 }

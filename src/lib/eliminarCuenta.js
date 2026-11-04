@@ -17,6 +17,11 @@
 // adentro). La base cancela los pendientes directamente.
 
 import { limpiarStorageTienda } from '@/lib/storageTienda'
+import { cancelarSuscripcionesVivas } from '@/lib/suscripcionesServidor'
+
+// Si la suscripción al plan no se puede cancelar en Mercado Pago, no se
+// elimina nada (la base también lo frena: BS423, migración 048).
+export const MENSAJE_SUSCRIPCION = 'No pudimos cancelar tu suscripción al plan. Probá de nuevo en un rato.'
 
 export const PALABRA_CONFIRMACION = 'ELIMINAR'
 
@@ -115,6 +120,24 @@ export async function evaluarCuenta(admin, userId) {
 // tienda: { id, nombre, accion: 'cerrada' | 'borrada' } si tenía una (el
 // nombre es el de antes de cerrarla, para el mail), o null.
 export async function eliminarCuenta(admin, userId) {
+  // La suscripción al plan de su tienda (048) se cancela primero en Mercado
+  // Pago, y solo si la base va a dejar eliminar la cuenta: si algo lo impide,
+  // la suscripción sigue. Con { mensaje } la pantalla dice qué pasó.
+  const previa = (await admin.rpc('rpc_evaluar_eliminar_cuenta', { p_id: userId })) || {}
+  if (!previa.error && previa.data?.existe && !previa.data?.cerrada && (previa.data.motivos || []).length === 0) {
+    const { data: tiendas, error: errorTiendas } = await admin.from('vendedores').select('id').eq('usuario_id', userId)
+    if (errorTiendas) {
+      console.error('Eliminar cuenta: no se pudieron leer sus tiendas —', errorTiendas.message)
+      return { ok: false, status: 500, error: 'error' }
+    }
+    for (const tienda of tiendas || []) {
+      if (!(await cancelarSuscripcionesVivas(admin, tienda.id)).ok) {
+        console.error(`Eliminar cuenta ${userId}: no se pudo cancelar la suscripción de la tienda ${tienda.id}; no se elimina.`)
+        return { ok: false, status: 500, error: 'suscripcion', mensaje: MENSAJE_SUSCRIPCION }
+      }
+    }
+  }
+
   const { data, error } = await admin.rpc('rpc_cerrar_cuenta', { p_id: userId })
   if (error || !data || typeof data !== 'object') {
     console.error('Eliminar cuenta: la transacción falló —', error?.message || 'respuesta vacía')

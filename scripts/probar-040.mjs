@@ -378,6 +378,7 @@ ok(mails.filter((m) => m.para === 'duena9@x.com' && m.asunto === 'Volvé a conec
   && mails.filter((m) => m.para === EMAIL_NOTIFICACIONES && m.asunto === '⚠️ No se pudo renovar MP — Pausada').length === 1,
   'un mail a la tienda y uno a notificaciones@')
 ok(res.mails_usados === 5 && res.errores.length === 0, 'el resumen cuenta los mails (5) y no tiene errores')
+ok(res.suscripciones?.omitida === 'sin MP_ACCESS_TOKEN_PLATAFORMA', 'sin el token de la plataforma, la tarea de las suscripciones (048) no corre')
 
 const enviadosAntes = mails.length
 antes = await foto()

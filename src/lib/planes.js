@@ -22,6 +22,8 @@ export function planDesdeLaBase(fila) {
   return {
     clave: f.plan ?? null,
     nombre: f.nombre ?? null,
+    // 'gratis' | 'especial' | 'suscripcion' (048)
+    origen: f.origen ?? null,
     especial: f.especial === true,
     sinTope: f.sin_tope === true,
     tope: f.sin_tope === true ? null : entero(f.tope_productos),

@@ -122,6 +122,11 @@ export default function PerfilVendedorPage() {
   const [linkPropio, setLinkPropio] = useState(null);
   // El bloque «Tu plan»: lo de /api/vendedor/plan, o { error }.
   const [tuPlan, setTuPlan] = useState(null);
+  // La suscripción al plan (048) avisa cuando el plan cambió: se vuelve a leer.
+  const recargarPlan = useCallback(async () => {
+    const datosPlan = await cargarPlan();
+    setTuPlan(datosPlan.plan || { error: datosPlan.error });
+  }, []);
   // Sin punto, la tienda no aparece en el mapa (por ejemplo, si en el alta
   // no se pudo guardar la ubicación).
   const [sinUbicacion, setSinUbicacion] = useState(false);
@@ -514,7 +519,7 @@ export default function PerfilVendedorPage() {
             {/* ═══ TU PLAN ═══ */}
             {!bloqueado && tuPlan && (
               <div className="mt-4">
-                <TuPlan datos={tuPlan} />
+                <TuPlan datos={tuPlan} onCambio={recargarPlan} />
               </div>
             )}
 

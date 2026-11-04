@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServiceRoleClient, verificarAdmin } from '@/lib/supabase/admin';
 import { limpiarStorageTienda } from '@/lib/storageTienda';
+import { cancelarSuscripcionesVivas } from '@/lib/suscripcionesServidor';
 import {
   mailAprobado,
   mailNecesitaCambios,
@@ -247,6 +248,13 @@ export async function DELETE(request, { params }) {
   }
   if (!existe) {
     return NextResponse.json({ error: 'No existe esa tienda.' }, { status: 404 });
+  }
+
+  // Primero se cancela en Mercado Pago la suscripción al plan, si tiene (048):
+  // si no se puede, no se borra (la base también lo frena, BS423).
+  const cancelacion = await cancelarSuscripcionesVivas(admin, vendedorId);
+  if (!cancelacion.ok) {
+    return NextResponse.json({ error: 'No se pudo cancelar la suscripción de la tienda en Mercado Pago: no se borró nada.' }, { status: 502 });
   }
 
   const { data, error } = await admin.rpc('rpc_borrar_tienda_de_prueba', { p_vendedor_id: vendedorId });

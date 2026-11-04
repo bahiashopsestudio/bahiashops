@@ -35,7 +35,7 @@ export async function POST(request, { params }) {
     if (resultado.status === 409) {
       return NextResponse.json(resumenDeEvaluacion(resultado.evaluacion), { status: 409 });
     }
-    return NextResponse.json({ error: 'No se pudo eliminar la cuenta.' }, { status: 500 });
+    return NextResponse.json({ error: resultado.mensaje || 'No se pudo eliminar la cuenta.' }, { status: 500 });
   }
 
   console.log(`Eliminar cuenta (admin ${admin_user.id}): ${id} -> ${resultado.resultado}`);

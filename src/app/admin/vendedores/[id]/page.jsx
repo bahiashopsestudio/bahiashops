@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import Navbar from '@/components/Navbar'
 import ComisionEspecial from './ComisionEspecial'
 import PlanEspecial from './PlanEspecial'
+import SuscripcionTienda from './SuscripcionTienda'
 import { etiquetaMetodo } from '@/lib/metodosEntrega'
 
 const ESTADOS = {
@@ -386,6 +387,10 @@ export default function AdminVendedorDetallePage() {
 
             <Seccion titulo="Plan">
               <PlanEspecial vendedorId={id} />
+            </Seccion>
+
+            <Seccion titulo="Suscripción">
+              <SuscripcionTienda vendedorId={id} />
             </Seccion>
 
             {/* ── Verificación: lo primero que se mira ── */}

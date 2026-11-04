@@ -114,6 +114,7 @@ export async function POST(request) {
       // Algo cambió entre el precheck y el botón: se devuelven los motivos nuevos.
       return NextResponse.json(resumenDeEvaluacion(resultado.evaluacion), { status: 409 });
     }
+    if (resultado.mensaje) return NextResponse.json({ error: resultado.mensaje }, { status: 500 });
     return ERROR_INESPERADO();
   }
 

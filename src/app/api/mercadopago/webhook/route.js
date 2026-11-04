@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
-import crypto from 'crypto';
 import { ESTADOS_DE_PAGO, ESTADO_REEMBOLSADO } from '@/lib/pedidos';
 import {
   validarPago, estadoDelPedido, MOTIVOS_DE_FRAUDE, ESTADOS_REEMPLAZABLES, DEVOLUCIONES_MP, SIN_CAMBIOS_MP,
@@ -8,58 +7,39 @@ import {
 } from '@/lib/validarPago';
 import { esCuponEnEfectivo, vencimientoDeCupon } from '@/lib/vencimientoPago';
 import { avisarPago, avisarPagoTardio, avisarPagoSinResolver, avisarPagoDoble } from '@/lib/mailsPedidos';
+import { verificarFirma, firmaEstricta } from '@/lib/mercadopago/firma';
+import { idDePlataforma, tokenDePlataforma } from '@/lib/mercadopago/suscripciones';
+import { procesarAvisoSuscripcion, procesarPagoDePlataforma } from '@/lib/suscripcionesServidor';
 
 // ── Verificar que el webhook realmente viene de MercadoPago ──
-// MercadoPago firma cada notificación con HMAC-SHA256.
-// Si la firma no coincide, alguien está mandando webhooks falsos.
-
-function verificarFirma(request, body) {
-  const secret = process.env.MP_WEBHOOK_SECRET;
-
-  // Si no tenemos la clave configurada, dejamos pasar (para no romper en dev)
-  // pero logueamos un aviso
-  if (!secret) {
-    console.warn('⚠️ MP_WEBHOOK_SECRET no configurada — webhook no verificado');
+// MercadoPago firma cada notificación con HMAC-SHA256 (src/lib/mercadopago/
+// firma.js): el id va el de la URL (data.id), en minúsculas.
+//
+// Semana de observación (F3.1): sin MP_FIRMA_ESTRICTA=1, una firma que no
+// coincide queda en el log ('[webhook/firma]') y el aviso se procesa igual. Es
+// seguro porque nada se escribe con lo que dice el aviso: todo sale de
+// consultar la API de MercadoPago. Con MP_FIRMA_ESTRICTA=1 se rechaza.
+//
+// Devuelve true si el aviso sigue.
+function firmaAceptada(request, body, dataId) {
+  const secreto = process.env.MP_WEBHOOK_SECRET;
+  if (!secreto) {
+    if (process.env.NODE_ENV === 'production') console.error('[webhook/firma] MP_WEBHOOK_SECRET no configurada — webhook no verificado');
+    else console.warn('⚠️ MP_WEBHOOK_SECRET no configurada — webhook no verificado');
     return true;
   }
 
-  const xSignature = request.headers.get('x-signature');
-  const xRequestId = request.headers.get('x-request-id');
-
-  if (!xSignature || !xRequestId) {
-    console.warn('Webhook sin headers de firma');
-    return false;
-  }
-
-  // Parsear el header x-signature: "ts=123456,v1=abcdef..."
-  const parts = {};
-  xSignature.split(',').forEach(part => {
-    const [key, ...rest] = part.split('=');
-    parts[key.trim()] = rest.join('=').trim();
+  const { valida, motivo } = verificarFirma({
+    xSignature: request.headers.get('x-signature'),
+    xRequestId: request.headers.get('x-request-id'),
+    dataId,
+    secreto,
   });
+  if (valida) return true;
 
-  const ts = parts.ts;
-  const v1 = parts.v1;
-
-  if (!ts || !v1) {
-    console.warn('Header x-signature incompleto');
-    return false;
-  }
-
-  // Armar el string que MercadoPago firmó
-  const dataId = body.data?.id;
-  const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
-
-  // Calcular el HMAC-SHA256 con nuestra clave secreta
-  const hmac = crypto.createHmac('sha256', secret).update(manifest).digest('hex');
-
-  // Comparación en tiempo constante: con === se puede ir adivinando la firma
-  // midiendo cuánto tarda en fallar. timingSafeEqual exige el mismo largo, y
-  // un largo distinto ya es una firma inválida.
-  const esperada = Buffer.from(hmac, 'utf8');
-  const recibida = Buffer.from(v1, 'utf8');
-  if (esperada.length !== recibida.length) return false;
-  return crypto.timingSafeEqual(esperada, recibida);
+  const estricta = firmaEstricta();
+  console.warn(`[webhook/firma] firma inválida (${motivo}) — tipo ${body?.type ?? '?'}, id ${dataId ?? '?'}: ${estricta ? 'rechazado' : 'se procesa igual (modo observación)'}`);
+  return !estricta;
 }
 
 // Consulta el pago con el token de cada cuenta hasta que una lo pueda ver.
@@ -149,23 +129,49 @@ export async function POST(request) {
     const body = await request.json();
     console.log('Webhook recibido:', JSON.stringify(body));
 
+    // El tipo y el id: del cuerpo y, si no vienen, de la URL (?type=…&data.id=…).
+    const params = new URL(request.url || 'http://x').searchParams;
+    const tipo = body.type || params.get('type') || params.get('topic');
+    const dataId = params.get('data.id') ?? body.data?.id ?? null;
+
     // ── Verificar firma ──
-    if (!verificarFirma(request, body)) {
-      console.warn('❌ Webhook con firma inválida — rechazado');
+    if (!firmaAceptada(request, body, dataId)) {
       return NextResponse.json({ recibido: true });
     }
-
-    // Solo nos importan los avisos de tipo "payment"
-    if (body.type !== 'payment' || !body.data?.id) {
-      return NextResponse.json({ recibido: true });
-    }
-
-    const paymentId = body.data.id;
 
     const admin = createAdminClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
       process.env.SUPABASE_SERVICE_ROLE_KEY
     );
+
+    // ── Suscripciones del plan (migración 048): cobran a la plataforma ──
+    // Un error de la base responde 500 para que MercadoPago reintente: todo lo
+    // de las suscripciones se puede procesar dos veces sin cambiar nada.
+    if (tipo === 'subscription_preapproval' || tipo === 'subscription_authorized_payment') {
+      const r = await procesarAvisoSuscripcion(admin, { tipo, id: dataId });
+      return NextResponse.json({ recibido: true }, { status: r.ok ? 200 : 500 });
+    }
+
+    // Solo nos importan los avisos de tipo "payment"
+    if (tipo !== 'payment' || !dataId) {
+      return NextResponse.json({ recibido: true });
+    }
+
+    const paymentId = String(dataId);
+
+    // Un pago a la cuenta de la plataforma (un cobro de una suscripción o la
+    // diferencia de un plan a medida). Si no es eso, sigue como venta.
+    async function pagoDePlataforma() {
+      if (!tokenDePlataforma()) return null;
+      const r = await procesarPagoDePlataforma(admin, paymentId);
+      if (!r.manejado) return null;
+      return NextResponse.json({ recibido: true }, { status: r.ok ? 200 : 500 });
+    }
+    const pista = body.user_id !== undefined && body.user_id !== null ? String(body.user_id) : '';
+    if (pista && pista === idDePlataforma()) {
+      const respuesta = await pagoDePlataforma();
+      if (respuesta) return respuesta;
+    }
 
     const { data: cuentas, error: errorCuentas } = await admin
       .from('mercadopago_cuentas')
@@ -174,6 +180,8 @@ export async function POST(request) {
 
     if (!cuentas || cuentas.length === 0) {
       console.log('No hay vendedores conectados con MercadoPago.');
+      const respuesta = await pagoDePlataforma();
+      if (respuesta) return respuesta;
       await avisarPagoSinResolver({ pagoId: paymentId, accion: body.action, cobrador: body.user_id, enVivo: body.live_mode });
       return NextResponse.json({ recibido: true });
     }
@@ -181,7 +189,6 @@ export async function POST(request) {
     // El aviso suele traer el id de la cuenta que cobró (user_id). Se usa SÓLO
     // como pista para probar primero ese token y no recorrerlos todos: quién
     // cobró de verdad lo decide validarPago con lo que devuelve la API.
-    const pista = body.user_id !== undefined && body.user_id !== null ? String(body.user_id) : '';
     const primera = pista ? cuentas.find((c) => String(c.mp_user_id) === pista) : null;
     const orden = primera ? [primera, ...cuentas.filter((c) => c !== primera)] : cuentas;
 
@@ -189,6 +196,9 @@ export async function POST(request) {
 
     if (!consulta) {
       console.log('No pudimos consultar el pago con ningún vendedor.');
+      // Puede ser un pago a la plataforma que llegó sin la pista del cobrador.
+      const respuesta = await pagoDePlataforma();
+      if (respuesta) return respuesta;
       // Un pago real en un link de una cuenta que la tienda ya no tiene
       // conectada cae acá: sin este aviso nadie se enteraría.
       await avisarPagoSinResolver({ pagoId: paymentId, accion: body.action, cobrador: body.user_id, enVivo: body.live_mode });

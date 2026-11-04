@@ -8,7 +8,10 @@
 //   · un segundo pago aprobado sobre un pedido ya pagado NO lo toca: queda en
 //     pagos_dobles y avisa una sola vez;
 //   · los pedidos cancelados por otra razón siguen sin admitir pagos;
-//   · un cupón que MercadoPago cancela por vencido vence el pedido.
+//   · un cupón que MercadoPago cancela por vencido vence el pedido;
+//   · los pagos a la cuenta de la plataforma (suscripciones del plan, 048) van
+//     por su camino y no mandan el aviso de «pago sin resolver»; un aviso de
+//     suscripción se sincroniza con la API.
 //
 //   npm run probar:webhook
 //
@@ -74,11 +77,14 @@ function crearBase(inicial) {
     pedidos: inicial.pedidos.map((p) => ({ aviso_vendedor_en: null, aviso_comprador_en: null, efectivo_vence_en: null, cancelado_motivo: null, mp_payment_id: null, creado_en: '2026-10-09T15:00:00.000Z', vendedor_id: 15, total: 1000, ...p })),
     pagos_dobles: [],
     mercadopago_cuentas: [{ vendedor_id: 15, access_token: 'TOKEN-15', mp_user_id: '111' }],
+    vendedor_suscripciones: [],
   }
   const escrituras = []
+  const rpcs = []
   const base = {
-    tablas, escrituras,
+    tablas, escrituras, rpcs,
     antesDeActualizar: null,
+    async rpc(nombre, args) { rpcs.push({ nombre, args }); return { data: { ok: true }, error: null } },
     from(nombre) {
       let op = 'select'
       let payload = null
@@ -95,7 +101,7 @@ function crearBase(inicial) {
         insert(p) { op = 'insert'; payload = p; return q },
       }
       const proyectar = (fila) => {
-        if (!fila || !columnas) return fila
+        if (!fila || !columnas || columnas.includes('*')) return fila
         const salida = {}
         for (const c of columnas) if (c in fila) salida[c] = fila[c]
         return salida
@@ -120,6 +126,7 @@ function crearBase(inicial) {
         return { data: proyectar(filas()[0] || null), error: null }
       }
       q.maybeSingle = async () => resolver()
+      q.single = async () => resolver()
       q.then = (res) => res(op === 'select' ? { data: filas().map(proyectar), error: null } : resolver())
       return q
     },
@@ -143,13 +150,18 @@ function escenario(pedidos, pagos, opciones = {}) {
   return e
 }
 
-globalThis.fetch = async (url) => {
+globalThis.fetch = async (url, init = {}) => {
   const m = String(url).match(/\/v1\/payments\/(.+)$/)
   if (m) {
     const pago = f.pagos[decodeURIComponent(m[1])]
-    if (pago) return { ok: true, status: 200, json: async () => pago }
+    // Un pago a la plataforma solo lo ve su token.
+    const conToken = (init.headers?.Authorization || '') === 'Bearer TOKEN-PLAT'
+    if (pago && (!pago.dePlataforma || conToken)) return { ok: true, status: 200, json: async () => pago }
     return { ok: false, status: 404, json: async () => ({}) }
   }
+  const pre = String(url).match(/\/preapproval\/([^/?]+)$/)
+  if (pre && f.preapprovals?.[pre[1]]) return { ok: true, status: 200, json: async () => f.preapprovals[pre[1]] }
+  if (/\/authorized_payments\/search/.test(String(url))) return { ok: true, status: 200, json: async () => ({ results: [] }) }
   throw new Error('llamada inesperada: ' + url)
 }
 
@@ -299,6 +311,51 @@ const mail = armarMailPagoDoble({ pedidoId: 41, tienda: 'Ludoméstica', monto: 3
 okv(/Pago doble/.test(mail.asunto) && /#41/.test(mail.texto) && /901/.test(mail.texto) && /902/.test(mail.texto), 'lleva el pedido y los dos ids de pago')
 okv(/devolver el segundo pago a mano/.test(mail.texto), 'dice qué hacer: devolver el segundo pago a mano desde MercadoPago')
 okv(!/@/.test(mail.texto), 'no lleva ninguna dirección de mail ni dato de una persona')
+
+titulo('\n10. Pagos a la cuenta de la plataforma (suscripciones del plan)')
+process.env.MP_ACCESS_TOKEN_PLATAFORMA = 'TOKEN-PLAT'
+process.env.MP_USER_ID_PLATAFORMA = '999'
+const SUS = { id: 7, vendedor_id: 15, external_reference: 'bs-sus-abc', mp_preapproval_id: 'pre1', estado: 'pending', monto: 10000 }
+const cobroDePlataforma = (id, extra = {}) => ({
+  id, dePlataforma: true, status: 'approved', currency_id: 'ARS', collector_id: 999, transaction_amount: 10000,
+  external_reference: 'bs-sus-abc', date_approved: '2026-11-04T12:26:59.000-04:00',
+  point_of_interaction: { type: 'SUBSCRIPTIONS', transaction_data: { subscription_id: 'pre1' } }, ...extra,
+})
+const avisarComo = (id, userId) => webhook({ json: async () => ({ type: 'payment', action: 'payment.created', data: { id: String(id) }, ...(userId ? { user_id: userId } : {}) }), headers: { get: () => null } })
+const conSuscripcion = (e) => { e.admin.tablas.vendedor_suscripciones.push({ ...SUS }); return e }
+
+f = globalThis.__f = conSuscripcion(escenario([{ id: 1, estado: 'pendiente' }], { 2001: cobroDePlataforma(2001) }))
+let resp = await avisarComo(2001, '999')
+const cobroRegistrado = f.admin.rpcs.find((r) => r.nombre === 'rpc_registrar_cobro_suscripcion')
+okv(resp.status === 200 && cobroRegistrado?.args.p_suscripcion_id === 7 && cobroRegistrado.args.p_mp_pago_id === '2001' && cobroRegistrado.args.p_estado_pago === 'approved',
+  'con la pista de la plataforma: se registra como cobro de la suscripción')
+okv(f.avisos.sinResolver.length === 0 && pedido(1).estado === 'pendiente', 'sin «pago sin resolver» y sin tocar ningún pedido')
+
+f = globalThis.__f = conSuscripcion(escenario([{ id: 1, estado: 'pendiente' }], { 2002: cobroDePlataforma(2002) }))
+await avisarComo(2002, null)
+okv(f.admin.rpcs.some((r) => r.nombre === 'rpc_registrar_cobro_suscripcion') && f.avisos.sinResolver.length === 0,
+  'sin pista: ningún token de tienda lo ve, lo ve el de la plataforma, y no sale el aviso')
+
+f = globalThis.__f = escenario([{ id: 1, estado: 'pendiente' }], { 2003: cobroDePlataforma(2003, { external_reference: 'otra-cosa' }) })
+await avisarComo(2003, '999')
+okv(f.avisos.sinResolver.length === 1 && f.admin.rpcs.length === 0, 'un pago de la plataforma que no es de una suscripción: sigue como siempre (aviso de pago sin resolver)')
+
+f = globalThis.__f = escenario([{ id: 1, estado: 'pendiente' }], { 1201: aprobado(1201) })
+await avisarComo(1201, '999')
+okv(pedido(1).estado === 'pagado', 'una venta con la pista de la plataforma se aplica como venta')
+
+f = globalThis.__f = conSuscripcion(escenario([], {}, { preapprovals: { pre1: { id: 'pre1', status: 'authorized', collector_id: 999, external_reference: 'bs-sus-abc',
+  next_payment_date: '2026-12-04T12:26:58.000-04:00', auto_recurring: { transaction_amount: 10000, currency_id: 'ARS' } } } }))
+resp = await webhook({ json: async () => ({ type: 'subscription_preapproval', action: 'updated', data: { id: 'pre1' } }), headers: { get: () => null } })
+const susActual = f.admin.tablas.vendedor_suscripciones[0]
+okv(resp.status === 200 && susActual.estado === 'authorized' && susActual.proximo_cobro_en === '2026-12-04T16:26:58.000Z',
+  'aviso de suscripción: lee la suscripción en la API y guarda su estado y el próximo cobro')
+
+f = globalThis.__f = conSuscripcion(escenario([], {}, { preapprovals: { pre1: { id: 'pre1', status: 'authorized', collector_id: 555, external_reference: 'bs-sus-abc' } } }))
+await webhook({ json: async () => ({ type: 'subscription_preapproval', data: { id: 'pre1' } }), headers: { get: () => null } })
+okv(f.admin.tablas.vendedor_suscripciones[0].estado === 'pending', 'si la suscripción la cobra otra cuenta, no se toca')
+delete process.env.MP_ACCESS_TOKEN_PLATAFORMA
+delete process.env.MP_USER_ID_PLATAFORMA
 
 mostrar(fallas === 0 ? '\nTODO OK' : `\n${fallas} FALLAS`)
 process.exit(fallas ? 1 : 0)
