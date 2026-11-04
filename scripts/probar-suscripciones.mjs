@@ -9,7 +9,7 @@
 import crypto from 'node:crypto'
 import {
   accionDeLaTienda, cuerpoDeAlta, datosDeCobro, datosDePagoDeSuscripcion, datosDeSuscripcion, diferenciaProporcional,
-  emailValido, pendienteAbandonada, problemaDeSuscripcion, reusarPendiente, suscripcionesHabilitadas, tipoDePagoDePlataforma,
+  emailValido, mensajeDeAltaRechazada, MAIL_DE_LA_PLATAFORMA, pendienteAbandonada, problemaDeSuscripcion, reusarPendiente, suscripcionesHabilitadas, tipoDePagoDePlataforma,
 } from '../src/lib/suscripciones.js'
 import { manifiesto, verificarFirma, firmaEstricta } from '../src/lib/mercadopago/firma.js'
 
@@ -104,6 +104,13 @@ ok(pendienteAbandonada({ estado: 'pending', creada_en: '2026-11-02T00:00:00Z' },
 ok(!pendienteAbandonada({ estado: 'pending', creada_en: '2026-11-05T00:00:00Z' }, ahora), 'hace 5 días: todavía no')
 ok(!pendienteAbandonada({ estado: 'authorized', creada_en: '2026-01-01T00:00:00Z' }, ahora), 'una activa: nunca')
 ok(emailValido(' a@b.com ') === 'a@b.com' && emailValido('sin-arroba') === null, 'el mail: recortado, y con arroba')
+
+console.log('\n6b. El mensaje cuando Mercado Pago no acepta el alta')
+ok(mensajeDeAltaRechazada({ status: 400, email: 'Cobra@Bahia.com', mailPlataforma: 'cobra@bahia.com' }) === MAIL_DE_LA_PLATAFORMA,
+  'el mail de la cuenta que cobra: lo dice (sin importar mayúsculas)')
+ok(/mail con el que entrás a tu cuenta de Mercado Pago/.test(mensajeDeAltaRechazada({ status: 400, email: 'a@b.com', mailPlataforma: 'c@d.com' })),
+  'un 400: qué mail tiene que ser')
+ok(/no respondió/.test(mensajeDeAltaRechazada({ status: 0, email: 'a@b.com' })), 'sin respuesta: probá de nuevo')
 
 console.log('\n7. La firma del webhook')
 const secreto = 'clave-de-prueba'

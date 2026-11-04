@@ -58,6 +58,23 @@ export function emailValido(texto) {
   return email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : null
 }
 
+// El texto para la tienda cuando no se pudo crear la suscripción.
+//   status        el de Mercado Pago (0 = no respondió)
+//   mailPlataforma  el mail de la cuenta que cobra (Bahía Shops): nadie puede
+//                 pagarse a sí mismo, así que ese mail se frena antes de llamar.
+// Mercado Pago no documenta los errores del alta: un 400 casi siempre es el
+// mail (que no es de una cuenta de Mercado Pago, o es de otro país). El
+// mensaje real queda en error_mp (049) para la ficha del admin.
+export const MAIL_DE_LA_PLATAFORMA = 'Ese es el mail de la cuenta de Mercado Pago de Bahía Shops, que es la que cobra. Escribí el de tu cuenta de Mercado Pago.'
+export function mensajeDeAltaRechazada({ status, email, mailPlataforma }) {
+  if (email && mailPlataforma && email.toLowerCase() === mailPlataforma.toLowerCase()) return MAIL_DE_LA_PLATAFORMA
+  if (status === 400) {
+    return 'Mercado Pago no aceptó ese mail. Tiene que ser el mail con el que entrás a tu cuenta de Mercado Pago'
+      + ' (puede ser distinto del de Bahía Shops), de una cuenta de Argentina.'
+  }
+  return 'Mercado Pago no respondió. Probá de nuevo en un rato.'
+}
+
 // El cuerpo de POST /preapproval: sin plan, con pago pendiente.
 export function cuerpoDeAlta({ monto, email, referencia, backUrl, motivo }) {
   return {

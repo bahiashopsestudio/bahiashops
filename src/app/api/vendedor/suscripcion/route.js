@@ -2,11 +2,14 @@
 // 048). La tienda sale de la sesión, nunca del pedido. Mientras dure la
 // prueba, solo para las tiendas de SUSCRIPCIONES_TIENDAS (src/lib/suscripciones.js).
 //
-//   GET     -> { habilitada, email, suscripcion, accion }
+//   GET     -> { habilitada, email, suscripcion, accion, planCambio }
 //              suscripcion  la viva o la última: { estado, monto, plan,
 //                           proximoCobro, pagadoHasta, initPoint } o null.
-//                           Si está esperando el pago o activa, antes se
-//                           sincroniza con Mercado Pago (una vez por minuto).
+//                           Si está esperando el pago o activa (o cancelada
+//                           con días pagos), antes se sincroniza con Mercado
+//                           Pago (una vez por minuto).
+//              planCambio   la sincronización trajo (o devolvió) un cobro: el
+//                           panel vuelve a leer el plan.
 //              accion       lo que puede hacer (accionDeLaTienda):
 //                           { tipo: 'suscribirse', monto, plan, nombre }
 //                           { tipo: 'diferencia', monto, precioNuevo,
@@ -23,7 +26,8 @@ import {
   MINIMO_DIFERENCIA, accionDeLaTienda, diferenciaProporcional, emailValido, suscripcionesHabilitadas,
 } from '@/lib/suscripciones'
 import {
-  cancelarSuscripcion, crearDiferencia, crearSuscripcionDeTienda, sincronizarSuscripcion, suscripcionViva,
+  cancelarSuscripcion, crearDiferencia, crearSuscripcionDeTienda, sincronizarSuscripcion, suscripcionParaSincronizar,
+  suscripcionViva,
 } from '@/lib/suscripcionesServidor'
 
 const ERROR = 'No pudimos cargar tu suscripción. Probá de nuevo en un rato.'
@@ -41,14 +45,18 @@ async function inicio() {
 // El plan que rige (con especial_pendiente), la suscripción viva y los
 // planes, para decidir qué puede hacer la tienda.
 async function estado(admin, vendedorId, { sincronizar = false } = {}) {
-  let { fila: viva, error } = await suscripcionViva(admin, vendedorId)
-  if (error) return { error }
-
-  const vieja = !viva?.consultada_en || Date.now() - Date.parse(viva.consultada_en) > SINCRONIZAR_CADA_MS
-  if (sincronizar && viva && ['pending', 'authorized'].includes(viva.estado) && vieja) {
-    const r = await sincronizarSuscripcion(admin, viva)
-    if (r.ok && r.fila) viva = r.fila
+  let planCambio = false
+  if (sincronizar) {
+    const { fila: objetivo } = await suscripcionParaSincronizar(admin, vendedorId)
+    const vieja = !objetivo?.consultada_en || Date.now() - Date.parse(objetivo.consultada_en) > SINCRONIZAR_CADA_MS
+    if (objetivo && ['pending', 'authorized', 'cancelled'].includes(objetivo.estado) && vieja) {
+      const r = await sincronizarSuscripcion(admin, objetivo)
+      planCambio = !!r.planCambio
+    }
   }
+
+  const { fila: viva, error } = await suscripcionViva(admin, vendedorId)
+  if (error) return { error }
 
   const [plan, planes, ultima] = await Promise.all([
     admin.rpc('rpc_plan_de_tienda', { p_vendedor_id: vendedorId }),
@@ -65,7 +73,7 @@ async function estado(admin, vendedorId, { sincronizar = false } = {}) {
   // El plan lo decide la base con los cobros aprobados, aunque Mercado Pago ya
   // diga 'authorized': hasta que llega el cobro, la acción sigue siendo esa.
   const accion = accionDeLaTienda({ plan: plan.data, suscripcionViva: viva, precioBasico: basico?.precio_mensual })
-  return { plan: plan.data, planes: planes.data || [], viva, ultima: ultima.data || null, accion }
+  return { plan: plan.data, planes: planes.data || [], viva, ultima: ultima.data || null, accion, planCambio }
 }
 
 function resumen(fila) {
@@ -108,6 +116,7 @@ export async function GET() {
     email: user.email || '',
     suscripcion: resumen(e.viva || e.ultima),
     accion,
+    planCambio: e.planCambio,
   })
 }
 

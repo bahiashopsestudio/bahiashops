@@ -24,6 +24,7 @@ import { baseDeTiendas } from "./base-tiendas-prueba.mjs"
 
 const leer = (f) => readFileSync(new URL(`../sql/migrations/${f}`, import.meta.url), "utf8")
 const MIG = leer("048_suscripciones.sql")
+const M049 = leer("049_error_suscripcion.sql")
 
 let fallas = 0
 const ok = (cond, msg) => { if (!cond) { fallas++; console.log("  ✗ FALLA:", msg) } else console.log("  ✓", msg) }
@@ -57,8 +58,8 @@ await db.exec(leer("047_tope_guardados.sql"))
 
 console.log("1. La migración corre, y se puede correr dos veces")
 let error = null
-try { await db.exec(MIG); await db.exec(MIG) } catch (e) { error = e }
-ok(!error, `corre dos veces sin error${error ? ": " + error.message : ""}`)
+try { await db.exec(MIG); await db.exec(MIG); await db.exec(M049); await db.exec(M049) } catch (e) { error = e }
+ok(!error, `la 048 y la 049 corren dos veces sin error${error ? ": " + error.message : ""}`)
 
 // ── Ayudantes ──
 let s = 0

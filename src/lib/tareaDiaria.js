@@ -14,9 +14,12 @@
 //   4. recordatorio   uno solo, a los 7 días de la invitación (la que haya
 //                     sido), si quedan 3 días o más de ventana.
 //   5. suscripciones  las suscripciones del plan (048): lee en Mercado Pago
-//                     cada una viva y sus cobros (por si un aviso no llegó),
-//                     cancela las que esperan el pago hace más de 7 días y
-//                     reintenta el monto nuevo de las diferencias pagadas.
+//                     cada una viva (o cancelada con días pagos) y sus
+//                     cobros con el estado de cada pago (por si un aviso o un
+//                     reembolso no llegó), cancela las que esperan el pago
+//                     hace más de 7 días, reintenta el monto nuevo de las
+//                     diferencias pagadas, revisa si se devolvió alguna y
+//                     vuelve al monto anterior el de las devueltas.
 //                     No manda mails. Sin MP_ACCESS_TOKEN_PLATAFORMA, no
 //                     corre.
 //
@@ -40,7 +43,9 @@ import { renovarToken, marcarRenovacionFallida } from '@/lib/mercadopago/tokens'
 import { enviarMailRenovacionFallida, enviarMailRenovacionFallidaInterno } from '@/lib/mailsCuentaMp'
 import { ESTADOS_VIVOS, pendienteAbandonada } from '@/lib/suscripciones'
 import { tokenDePlataforma } from '@/lib/mercadopago/suscripciones'
-import { aplicarMontoNuevo, cancelarSuscripcion, sincronizarSuscripcion } from '@/lib/suscripcionesServidor'
+import {
+  aplicarMontoNuevo, cancelarSuscripcion, revertirMonto, revisarPagoDeDiferencia, sincronizarSuscripcion,
+} from '@/lib/suscripcionesServidor'
 
 const DIA_MS = 24 * 60 * 60 * 1000
 
@@ -399,10 +404,13 @@ async function tareaResenas({ admin, prueba, ahoraMs, cupo, tipo, pagadosDesdeMs
 // medio) también se cancela.
 async function tareaSuscripciones({ admin, prueba, ahoraMs }) {
   if (!tokenDePlataforma()) return { omitida: 'sin MP_ACCESS_TOKEN_PLATAFORMA' }
-  const r = { revisadas: 0, sincronizadas: 0, canceladas_sin_pagar: 0, montos_aplicados: 0, fallidas: 0 }
+  const r = { revisadas: 0, sincronizadas: 0, canceladas_sin_pagar: 0, montos_aplicados: 0, montos_revertidos: 0, fallidas: 0 }
   if (prueba) r.lista = []
 
-  const { data: vivas, error } = await admin.from('vendedor_suscripciones').select('*').in('estado', ESTADOS_VIVOS)
+  // Las vivas y las canceladas que todavía dan el plan: un reembolso de su
+  // último cobro se ve leyendo el pago (sincronizarSuscripcion).
+  const { data: vivas, error } = await admin.from('vendedor_suscripciones').select('*')
+    .or(`estado.in.(${ESTADOS_VIVOS.join(',')}),and(estado.eq.cancelled,pagado_hasta.gt.${iso(ahoraMs)})`)
   if (error) fallar('vendedor_suscripciones', error)
   for (const fila of vivas || []) {
     r.revisadas++
@@ -423,6 +431,27 @@ async function tareaSuscripciones({ admin, prueba, ahoraMs }) {
     if (prueba) { r.lista.push({ diferencia: d.id, tienda: d.vendedor_id, accion: 'aplicar_monto', monto: d.precio_nuevo }); continue }
     if ((await aplicarMontoNuevo(admin, d)).ok) r.montos_aplicados++
     else r.fallidas++
+  }
+
+  // Diferencias devueltas cuyo monto sigue cambiado en Mercado Pago: volver
+  // al anterior.
+  const { data: devueltas, error: errorDevueltas } = await admin.from('suscripcion_diferencias').select('*')
+    .eq('estado', 'devuelta').not('monto_mp_actualizado_en', 'is', null)
+  if (errorDevueltas) fallar('suscripcion_diferencias', errorDevueltas)
+  for (const d of devueltas || []) {
+    if (prueba) { r.lista.push({ diferencia: d.id, tienda: d.vendedor_id, accion: 'revertir_monto', monto: d.monto_anterior }); continue }
+    if ((await revertirMonto(admin, d)).ok) r.montos_revertidos++
+    else r.fallidas++
+  }
+
+  // Diferencias pagadas en los últimos 40 días: si el pago se devolvió y el
+  // aviso no llegó, se ve leyéndolo.
+  const { data: pagadas, error: errorPagadas } = await admin.from('suscripcion_diferencias').select('*')
+    .eq('estado', 'pagada').not('mp_pago_id', 'is', null).gt('pagada_en', iso(ahoraMs - 40 * DIA_MS))
+  if (errorPagadas) fallar('suscripcion_diferencias', errorPagadas)
+  for (const d of pagadas || []) {
+    if (prueba) continue
+    if (!(await revisarPagoDeDiferencia(admin, d)).ok) r.fallidas++
   }
   return r
 }

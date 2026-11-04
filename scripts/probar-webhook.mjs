@@ -78,13 +78,15 @@ function crearBase(inicial) {
     pagos_dobles: [],
     mercadopago_cuentas: [{ vendedor_id: 15, access_token: 'TOKEN-15', mp_user_id: '111' }],
     vendedor_suscripciones: [],
+    suscripcion_diferencias: [],
   }
   const escrituras = []
   const rpcs = []
   const base = {
     tablas, escrituras, rpcs,
     antesDeActualizar: null,
-    async rpc(nombre, args) { rpcs.push({ nombre, args }); return { data: { ok: true }, error: null } },
+    respuestaRpc: { ok: true },
+    async rpc(nombre, args) { rpcs.push({ nombre, args }); return { data: base.respuestaRpc, error: null } },
     from(nombre) {
       let op = 'select'
       let payload = null
@@ -160,8 +162,9 @@ globalThis.fetch = async (url, init = {}) => {
     return { ok: false, status: 404, json: async () => ({}) }
   }
   const pre = String(url).match(/\/preapproval\/([^/?]+)$/)
+  if (pre && init.method === 'PUT') { (f.puts ||= []).push({ id: pre[1], cuerpo: JSON.parse(init.body) }); return { ok: true, status: 200, json: async () => ({}) } }
   if (pre && f.preapprovals?.[pre[1]]) return { ok: true, status: 200, json: async () => f.preapprovals[pre[1]] }
-  if (/\/authorized_payments\/search/.test(String(url))) return { ok: true, status: 200, json: async () => ({ results: [] }) }
+  if (/\/authorized_payments\/search/.test(String(url))) return { ok: true, status: 200, json: async () => ({ results: f.cobros || [] }) }
   throw new Error('llamada inesperada: ' + url)
 }
 
@@ -354,6 +357,38 @@ okv(resp.status === 200 && susActual.estado === 'authorized' && susActual.proxim
 f = globalThis.__f = conSuscripcion(escenario([], {}, { preapprovals: { pre1: { id: 'pre1', status: 'authorized', collector_id: 555, external_reference: 'bs-sus-abc' } } }))
 await webhook({ json: async () => ({ type: 'subscription_preapproval', data: { id: 'pre1' } }), headers: { get: () => null } })
 okv(f.admin.tablas.vendedor_suscripciones[0].estado === 'pending', 'si la suscripción la cobra otra cuenta, no se toca')
+
+// La prueba real (04/11): el cobro devuelto no avisó (los pagos de una
+// suscripción no tienen notification_url). Al sincronizar, el estado sale del pago.
+f = globalThis.__f = conSuscripcion(escenario([], { 2004: cobroDePlataforma(2004, { status: 'refunded' }) }, {
+  preapprovals: { pre1: { id: 'pre1', status: 'cancelled', collector_id: 999, external_reference: 'bs-sus-abc', auto_recurring: { transaction_amount: 800, currency_id: 'ARS' } } },
+  cobros: [{ id: 70, preapproval_id: 'pre1', status: 'processed', external_reference: 'bs-sus-abc', transaction_amount: 500,
+    debit_date: '2026-11-04T14:12:25.000-04:00', payment: { id: 2004, status: 'approved' } }],
+}))
+await webhook({ json: async () => ({ type: 'subscription_preapproval', data: { id: 'pre1' } }), headers: { get: () => null } })
+const cobroDevuelto = f.admin.rpcs.find((r) => r.nombre === 'rpc_registrar_cobro_suscripcion')
+okv(cobroDevuelto?.args.p_mp_cobro_id === '70' && cobroDevuelto.args.p_estado_pago === 'refunded',
+  'una cancelada con su cobro devuelto: se registra refunded (lo dice el pago, aunque el cobro diga approved)')
+// Una diferencia devuelta con la suscripción activa: vuelve al monto anterior.
+f = globalThis.__f = escenario([], { 2005: cobroDePlataforma(2005, { status: 'refunded', external_reference: 'bs-dif-1', transaction_amount: 300 }) })
+f.admin.tablas.vendedor_suscripciones.push({ ...SUS, estado: 'authorized', monto: 800 })
+f.admin.tablas.suscripcion_diferencias.push({ id: 1, suscripcion_id: 7, external_reference: 'bs-dif-1', precio_nuevo: 800, monto_anterior: 500,
+  monto: 300, estado: 'pagada', mp_pago_id: '2005', monto_mp_actualizado_en: '2026-11-04T18:18:48Z', intentos_monto_mp: 0 })
+f.admin.respuestaRpc = { ok: true, estado: 'devuelta' }
+await avisarComo(2005, '999')
+okv(f.puts?.[0]?.id === 'pre1' && f.puts[0].cuerpo.auto_recurring?.transaction_amount === 500,
+  'diferencia devuelta con la suscripción activa: el monto vuelve a $500 en Mercado Pago')
+okv(f.admin.tablas.vendedor_suscripciones[0].monto === 500 && f.admin.tablas.suscripcion_diferencias[0].monto_mp_actualizado_en === null,
+  'y queda anotado (monto $500, nada pendiente en Mercado Pago)')
+
+f = globalThis.__f = escenario([], { 2006: cobroDePlataforma(2006, { status: 'refunded', external_reference: 'bs-dif-1', transaction_amount: 300 }) })
+f.admin.tablas.vendedor_suscripciones.push({ ...SUS, estado: 'cancelled', monto: 800 })
+f.admin.tablas.suscripcion_diferencias.push({ id: 1, suscripcion_id: 7, external_reference: 'bs-dif-1', precio_nuevo: 800, monto_anterior: 500,
+  monto: 300, estado: 'pagada', mp_pago_id: '2006', monto_mp_actualizado_en: '2026-11-04T18:18:48Z', intentos_monto_mp: 0 })
+f.admin.respuestaRpc = { ok: true, estado: 'devuelta' }
+await avisarComo(2006, '999')
+okv(!f.puts && f.admin.tablas.suscripcion_diferencias[0].monto_mp_actualizado_en === null,
+  'con la suscripción cancelada: no se llama a Mercado Pago, solo se anota')
 delete process.env.MP_ACCESS_TOKEN_PLATAFORMA
 delete process.env.MP_USER_ID_PLATAFORMA
 

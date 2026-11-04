@@ -13,13 +13,13 @@
 import { urlParaMercadoPago } from '@/lib/sitio'
 import { fechaAR } from '@/lib/mercadopago/preferencias'
 import {
-  CANCELADA, ESTADOS_VIVOS, MINIMO_DIFERENCIA, REUSAR_PENDIENTE_HORAS,
+  CANCELADA, ESTADOS_VIVOS, MAIL_DE_LA_PLATAFORMA, MINIMO_DIFERENCIA, REUSAR_PENDIENTE_HORAS, mensajeDeAltaRechazada,
   cuerpoDeAlta, cuerpoDeDiferencia, datosDeCobro, datosDePagoDeSuscripcion, datosDeSuscripcion,
   diferenciaProporcional, problemaDeSuscripcion, reusarPendiente, tipoDePagoDePlataforma,
 } from '@/lib/suscripciones'
 import {
   buscarCobrosMp, cambiarMontoMp, cancelarSuscripcionMp, crearPreferenciaMp, crearSuscripcionMp,
-  idDePlataforma, leerCobroMp, leerPagoDePlataformaMp, leerSuscripcionMp,
+  idDePlataforma, leerCobroMp, mailDePlataforma, leerPagoDePlataformaMp, leerSuscripcionMp,
 } from '@/lib/mercadopago/suscripciones'
 
 const ahoraIso = () => new Date().toISOString()
@@ -107,13 +107,38 @@ export async function sincronizarSuscripcion(admin, fila, { conCobros = true } =
         const dc = datosDeCobro(c)
         if (dc.preapproval_id !== fila.mp_preapproval_id) continue
         if (String(c.external_reference ?? fila.external_reference) !== fila.external_reference) continue
+        // El estado del pago lo dice el pago: un reembolso o un contracargo se
+        // ve ahí aunque su aviso no llegue (los pagos de una suscripción no
+        // tienen notification_url: prueba real del 04/11).
+        if (dc.mp_pago_id) {
+          const pago = await leerPagoDePlataformaMp(dc.mp_pago_id)
+          if (pago.ok && typeof pago.datos?.status === 'string') dc.estado_pago = pago.datos.status
+          else console.warn('[suscripciones/sincronizar/pago]', fila.id, dc.mp_pago_id, pago.status, pago.error)
+        }
         await registrarCobro(admin, fila.id, dc)
       }
     }
   }
 
   const { fila: final } = await filaPor(admin, 'id', fila.id)
-  return { ok: true, fila: final || nueva }
+  const actual = final || nueva
+  // planCambio: llegó (o se devolvió) un cobro, así que el plan pudo cambiar.
+  return { ok: true, fila: actual, planCambio: String(actual?.pagado_hasta ?? '') !== String(fila.pagado_hasta ?? '') }
+}
+
+// La suscripción que conviene sincronizar: la viva o, si no hay, la última
+// cancelada que todavía da el plan (pagado_hasta futuro), donde un reembolso
+// cambia algo. Devuelve { fila } (o null) o { error }.
+export async function suscripcionParaSincronizar(admin, vendedorId) {
+  const { fila: viva, error } = await suscripcionViva(admin, vendedorId)
+  if (error) return { error }
+  if (viva) return { fila: viva }
+  const { data, error: errorUltima } = await admin.from('vendedor_suscripciones').select('*')
+    .eq('vendedor_id', vendedorId).eq('estado', CANCELADA).gt('pagado_hasta', ahoraIso())
+    .not('mp_preapproval_id', 'is', null)
+    .order('pagado_hasta', { ascending: false }).limit(1).maybeSingle()
+  if (errorUltima) console.error('[suscripciones/para-sincronizar]', vendedorId, errorUltima.message)
+  return errorUltima ? { error: errorUltima } : { fila: data || null }
 }
 
 // ── Alta ──────────────────────────────────────────────────────────────────────
@@ -128,6 +153,12 @@ export async function crearSuscripcionDeTienda(admin, { vendedorId, plan, nombre
   if (errorViva) return { ok: false, status: 500, error: 'No pudimos revisar tu suscripción. Probá de nuevo en un rato.' }
   if (viva?.estado === 'authorized' || viva?.estado === 'paused') {
     return { ok: false, status: 409, error: 'Ya tenés una suscripción activa.' }
+  }
+  // Nadie puede pagarse a sí mismo: el mail de la cuenta que cobra se frena
+  // antes de crear nada.
+  const mailCobrador = await mailDePlataforma()
+  if (mailCobrador && email.toLowerCase() === mailCobrador.toLowerCase()) {
+    return { ok: false, status: 400, error: MAIL_DE_LA_PLATAFORMA }
   }
   // Con otro mail va una nueva: el de una suscripción no se cambia.
   if (viva && reusarPendiente(viva, monto) && (!email || viva.payer_email === email)) {
@@ -158,12 +189,10 @@ export async function crearSuscripcionDeTienda(admin, { vendedorId, plan, nombre
   }))
   if (!mp.ok || !mp.datos?.id || !mp.datos?.init_point) {
     console.error('[suscripciones/alta/mp]', vendedorId, mp.status, mp.error)
-    await admin.from('vendedor_suscripciones').update({ estado: 'error', actualizada_en: ahoraIso() }).eq('id', fila.id)
-    // Un 400 de Mercado Pago con un mail que no es de una cuenta suele ser eso.
-    const texto = mp.status === 400
-      ? 'Mercado Pago no aceptó la suscripción. Revisá que el mail sea el de tu cuenta de Mercado Pago.'
-      : 'Mercado Pago no respondió. Probá de nuevo en un rato.'
-    return { ok: false, status: 502, error: texto }
+    // El motivo queda en la fila (049): el log de Vercel dura minutos.
+    const errorMp = `${mp.status || 'sin respuesta'} · ${mp.error || 'sin init_point'}`.slice(0, 300)
+    await admin.from('vendedor_suscripciones').update({ estado: 'error', error_mp: errorMp, actualizada_en: ahoraIso() }).eq('id', fila.id)
+    return { ok: false, status: 502, error: mensajeDeAltaRechazada({ status: mp.status, email, mailPlataforma: mailCobrador }) }
   }
 
   const problema = problemaDeSuscripcion(mp.datos, fila, idDePlataforma())
@@ -266,6 +295,38 @@ export async function aplicarMontoNuevo(admin, dif) {
   return { ok: true }
 }
 
+// Una diferencia devuelta (reembolso o contracargo) deshace el cambio: la
+// suscripción vuelve al monto anterior en Mercado Pago, para que el próximo
+// cobro no sea por el plan a medida que ya no rige. La tienda vuelve a ver
+// «pagá la diferencia de este mes».
+//
+// monto_mp_actualizado_en en null = nada pendiente en Mercado Pago. Si el
+// cambio falla, queda con la fecha: lo reintenta la tarea diaria y la ficha
+// del admin lo muestra. Con la suscripción ya cancelada, o con el monto ya
+// cambiado por otra cosa, no hay nada que volver atrás.
+export async function revertirMonto(admin, dif) {
+  const { fila } = await filaPor(admin, 'id', dif.suscripcion_id)
+  const vigente = fila?.mp_preapproval_id && ESTADOS_VIVOS.includes(fila.estado) && Number(fila.monto) === Number(dif.precio_nuevo)
+  const r = vigente ? await cambiarMontoMp(fila.mp_preapproval_id, dif.monto_anterior) : { ok: true }
+  if (!r.ok) {
+    console.error('[suscripciones/revertir-monto]', dif.id, fila.mp_preapproval_id, r.status, r.error)
+    await admin.from('suscripcion_diferencias').update({
+      intentos_monto_mp: (dif.intentos_monto_mp || 0) + 1,
+      error_monto_mp: `No se pudo volver al monto anterior: ${String(r.error).slice(0, 250)}`,
+      actualizada_en: ahoraIso(),
+    }).eq('id', dif.id)
+    return { ok: false }
+  }
+  if (vigente) {
+    await admin.from('vendedor_suscripciones').update({ monto: dif.monto_anterior, actualizada_en: ahoraIso() }).eq('id', fila.id)
+    console.log(`[suscripciones] suscripción ${fila.id}: diferencia ${dif.id} devuelta, monto en Mercado Pago -> $${dif.monto_anterior}.`)
+  }
+  await admin.from('suscripcion_diferencias').update({
+    monto_mp_actualizado_en: null, error_monto_mp: null, actualizada_en: ahoraIso(),
+  }).eq('id', dif.id)
+  return { ok: true }
+}
+
 // La tienda pasa a un plan a medida más caro: paga la diferencia del mes con
 // un pago único, o se activa sin cobro si no llega al mínimo.
 // Devuelve { ok: true, initPoint } (a pagar), { ok: true, activada: true }
@@ -342,6 +403,19 @@ export async function crearDiferencia(admin, { vendedorId, suscripcion, plan, pr
   return { ok: true, initPoint: mp.datos.init_point }
 }
 
+// La red de los avisos de una diferencia pagada (la tarea diaria): lee el
+// pago y, si cambió (por ejemplo, se devolvió), lo procesa como un aviso.
+export async function revisarPagoDeDiferencia(admin, dif) {
+  if (!dif.mp_pago_id) return { ok: true }
+  const mp = await leerPagoDePlataformaMp(dif.mp_pago_id)
+  if (!mp.ok) {
+    console.warn('[suscripciones/revisar-diferencia]', dif.id, dif.mp_pago_id, mp.status, mp.error)
+    return { ok: false }
+  }
+  if (mp.datos?.status === 'approved') return { ok: true }
+  return procesarPagoDeDiferencia(admin, mp.datos)
+}
+
 async function procesarPagoDeDiferencia(admin, pago) {
   const { data: dif, error } = await admin.from('suscripcion_diferencias').select('*')
     .eq('external_reference', String(pago.external_reference)).maybeSingle()
@@ -376,6 +450,10 @@ async function procesarPagoDeDiferencia(admin, pago) {
   if (r?.estado === 'pagada' && !dif.monto_mp_actualizado_en) {
     const { data: actual } = await admin.from('suscripcion_diferencias').select('*').eq('id', dif.id).maybeSingle()
     await aplicarMontoNuevo(admin, actual || dif)
+  }
+  if (r?.estado === 'devuelta' && dif.monto_mp_actualizado_en) {
+    const { data: actual } = await admin.from('suscripcion_diferencias').select('*').eq('id', dif.id).maybeSingle()
+    await revertirMonto(admin, actual || dif)
   }
   return { ok: true }
 }

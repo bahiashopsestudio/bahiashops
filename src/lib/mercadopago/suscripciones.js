@@ -52,6 +52,18 @@ async function llamar(metodo, ruta, cuerpo) {
 
 const id = (valor) => encodeURIComponent(String(valor))
 
+// El mail de la cuenta de la plataforma (GET /users/me), una vez por proceso.
+// null si no se pudo leer.
+let mailPlataforma
+export async function mailDePlataforma() {
+  if (mailPlataforma === undefined) {
+    const r = await llamar('GET', '/users/me')
+    if (!r.ok) return null
+    mailPlataforma = typeof r.datos?.email === 'string' ? r.datos.email : null
+  }
+  return mailPlataforma
+}
+
 export const crearSuscripcionMp = (cuerpo) => llamar('POST', '/preapproval', cuerpo)
 export const leerSuscripcionMp = (preapprovalId) => llamar('GET', `/preapproval/${id(preapprovalId)}`)
 export const cambiarMontoMp = (preapprovalId, monto) =>

@@ -10,9 +10,11 @@
 //                                   Mercado Pago no aceptó todavía
 //              'paga_sin_precio'    la tienda tiene condiciones de $0 y una
 //                                   suscripción activa
-//   POST  { accion: 'sincronizar' }      lee en Mercado Pago la viva y sus cobros
+//   POST  { accion: 'sincronizar' }      lee en Mercado Pago la viva (o la última)
+//                                        y sus cobros, con el estado de cada pago
 //         { accion: 'cancelar' }         cancela la viva en Mercado Pago
-//         { accion: 'reintentar_monto' } vuelve a mandar el monto nuevo
+//         { accion: 'reintentar_monto' } vuelve a mandar el monto nuevo (o el
+//                                        anterior, si se devolvió la diferencia)
 //         -> { ok } o { error }
 //
 // El admin sale de la sesión. Nada se escribe con lo que manda el navegador:
@@ -22,7 +24,7 @@ import { NextResponse } from 'next/server'
 import { getServiceRoleClient, verificarAdmin } from '@/lib/supabase/admin'
 import { textoPrecio } from '@/lib/planes'
 import {
-  aplicarMontoNuevo, cancelarSuscripcion, sincronizarSuscripcion, suscripcionViva,
+  aplicarMontoNuevo, cancelarSuscripcion, revertirMonto, sincronizarSuscripcion, suscripcionViva,
 } from '@/lib/suscripcionesServidor'
 
 async function inicio(params) {
@@ -43,7 +45,7 @@ export async function GET(_request, { params }) {
 
   const [suscripciones, diferencias, plan] = await Promise.all([
     admin.from('vendedor_suscripciones')
-      .select('id, plan_clave, monto, estado, mp_preapproval_id, payer_email, proximo_cobro_en, ultimo_cobro_en, ultimo_cobro_monto, pagado_hasta, consultada_en, creada_en, cancelada_en')
+      .select('id, plan_clave, monto, estado, mp_preapproval_id, payer_email, proximo_cobro_en, ultimo_cobro_en, ultimo_cobro_monto, pagado_hasta, consultada_en, creada_en, cancelada_en, error_mp')
       .eq('vendedor_id', vendedorId).order('creada_en', { ascending: false }),
     admin.from('suscripcion_diferencias')
       .select('id, suscripcion_id, precio_nuevo, monto_anterior, monto, estado, mp_pago_id, pagada_en, monto_mp_actualizado_en, intentos_monto_mp, error_monto_mp, cubre_hasta, creada_en')
@@ -77,6 +79,13 @@ export async function GET(_request, { params }) {
           + ' La tarea diaria lo reintenta; si sigue, «Reintentar el monto».',
       })
     }
+    if (d.estado === 'devuelta' && d.monto_mp_actualizado_en && d.error_monto_mp) {
+      avisos.push({
+        tipo: 'monto_sin_cambiar',
+        texto: `Se devolvió la diferencia, pero Mercado Pago sigue con ${textoPrecio(d.precio_nuevo)} en vez de ${textoPrecio(d.monto_anterior)}`
+          + ` (${d.error_monto_mp}). La tarea diaria lo reintenta; si sigue, «Reintentar el monto».`,
+      })
+    }
   }
   const viva = (suscripciones.data || []).find((s) => s.estado === 'authorized')
   if (viva && plan.data?.origen === 'especial' && Number(plan.data.precio_mensual) === 0) {
@@ -100,8 +109,18 @@ export async function POST(request, { params }) {
   if (error) return NextResponse.json({ error: ERROR }, { status: 500 })
 
   if (accion === 'sincronizar') {
-    if (!fila) return NextResponse.json({ error: 'La tienda no tiene una suscripción viva.' }, { status: 409 })
-    const r = await sincronizarSuscripcion(admin, fila)
+    // La viva o, si no hay, la última creada en Mercado Pago (también una
+    // cancelada: así se ve un reembolso de su cobro).
+    let objetivo = fila
+    if (!objetivo) {
+      const { data, error: errorUltima } = await admin.from('vendedor_suscripciones').select('*')
+        .eq('vendedor_id', vendedorId).not('mp_preapproval_id', 'is', null)
+        .order('creada_en', { ascending: false }).limit(1).maybeSingle()
+      if (errorUltima) return NextResponse.json({ error: ERROR }, { status: 500 })
+      objetivo = data
+    }
+    if (!objetivo) return NextResponse.json({ error: 'La tienda no tiene ninguna suscripción en Mercado Pago.' }, { status: 409 })
+    const r = await sincronizarSuscripcion(admin, objetivo)
     return r.ok ? NextResponse.json({ ok: true }) : NextResponse.json({ error: `Mercado Pago: ${r.error}` }, { status: 502 })
   }
 
@@ -113,12 +132,17 @@ export async function POST(request, { params }) {
   }
 
   if (accion === 'reintentar_monto') {
-    const { data: pendientes, error: errorDif } = await admin.from('suscripcion_diferencias').select('*')
-      .eq('vendedor_id', vendedorId).in('estado', ['pagada', 'sin_cobro']).is('monto_mp_actualizado_en', null)
-    if (errorDif) return NextResponse.json({ error: ERROR }, { status: 500 })
-    if (!pendientes?.length) return NextResponse.json({ error: 'No hay ningún monto pendiente.' }, { status: 409 })
+    const [aplicar, revertir] = await Promise.all([
+      admin.from('suscripcion_diferencias').select('*')
+        .eq('vendedor_id', vendedorId).in('estado', ['pagada', 'sin_cobro']).is('monto_mp_actualizado_en', null),
+      admin.from('suscripcion_diferencias').select('*')
+        .eq('vendedor_id', vendedorId).eq('estado', 'devuelta').not('monto_mp_actualizado_en', 'is', null),
+    ])
+    if (aplicar.error || revertir.error) return NextResponse.json({ error: ERROR }, { status: 500 })
+    if (!aplicar.data?.length && !revertir.data?.length) return NextResponse.json({ error: 'No hay ningún monto pendiente.' }, { status: 409 })
     let ok = true
-    for (const d of pendientes) if (!(await aplicarMontoNuevo(admin, d)).ok) ok = false
+    for (const d of aplicar.data || []) if (!(await aplicarMontoNuevo(admin, d)).ok) ok = false
+    for (const d of revertir.data || []) if (!(await revertirMonto(admin, d)).ok) ok = false
     return ok ? NextResponse.json({ ok: true }) : NextResponse.json({ error: 'Mercado Pago no aceptó el monto nuevo.' }, { status: 502 })
   }
 

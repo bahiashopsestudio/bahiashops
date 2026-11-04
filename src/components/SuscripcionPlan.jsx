@@ -48,8 +48,10 @@ export default function SuscripcionPlan({ onCambio }) {
       setDatos(d)
       setEmail((actual) => actual || d.email || '')
       // Si cambió el estado o la acción, el plan también puede haber cambiado.
+      // planCambio: la ruta acaba de traer (o devolver) un cobro, aunque sea la
+      // primera lectura (la página leyó el plan antes).
       const firma = JSON.stringify([d.suscripcion?.estado, d.suscripcion?.pagadoHasta, d.accion?.tipo, d.accion?.monto])
-      if (ultimaFirma.current && firma !== ultimaFirma.current) onCambio?.()
+      if (d.planCambio || (ultimaFirma.current && firma !== ultimaFirma.current)) onCambio?.()
       ultimaFirma.current = firma
       return d
     } catch {
@@ -137,7 +139,12 @@ export default function SuscripcionPlan({ onCambio }) {
     )
   }
 
-  if (sus?.estado === 'pending' && sus.initPoint) {
+  // Una esperando el pago por otro monto (por ejemplo, la del Básico antes de
+  // que se cargara un plan a medida) no tapa la que corresponde: se ofrece la
+  // nueva, y al crearla se cancela la vieja.
+  const pendienteVieja = sus?.estado === 'pending' && accion?.tipo === 'suscribirse' && Number(accion.monto) !== Number(sus.monto)
+
+  if (sus?.estado === 'pending' && sus.initPoint && !pendienteVieja) {
     return (
       <div className="flex flex-col" style={{ ...CAJA, gap: '8px' }}>
         <span>Tu suscripción de {textoPrecio(sus.monto)} por mes está esperando el pago. Tu plan cambia cuando Mercado Pago lo confirme.</span>
@@ -189,6 +196,11 @@ export default function SuscripcionPlan({ onCambio }) {
                 : `Suscribirme por ${textoPrecio(accion.monto)} por mes`}
             </button>
           </div>
+          {pendienteVieja && (
+            <span style={{ fontSize: '12px', color: 'rgba(10,10,10,0.55)' }}>
+              La suscripción de {textoPrecio(sus.monto)} que esperaba el pago se cancela al suscribirte.
+            </span>
+          )}
           {avisoError}
         </div>
       )}
