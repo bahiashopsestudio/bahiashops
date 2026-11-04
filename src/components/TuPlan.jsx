@@ -7,11 +7,13 @@
 //
 //   · Gratis: el plan, $0, productos, fotos y carritos, y abajo lo que trae el
 //     plan siguiente con «Ver planes».
+//   · Con el plan de una suscripción: lo que paga por mes (precioMensual).
 //   · Plan a medida: el tope especial, sin el precio (es una condición del
-//     admin; en F3 se ve en la suscripción).
+//     admin; se ve en la suscripción).
 //   · Sin tope: solo cuántos productos tiene.
 // La suscripción al plan (F3, migración 048) va abajo, en SuscripcionPlan,
-// solo para las tiendas habilitadas (datos.suscripciones).
+// con todos sus estados (mockup-tanda-f3-2.html). La franja de lo que trae el
+// plan siguiente se la pasa: va solo mientras puede pasarse al Básico.
 
 import Link from 'next/link'
 import { LINK_PLANES, textoPrecio } from '@/lib/planes'
@@ -24,6 +26,25 @@ function Uso({ valor, texto, primero }) {
     <div className="flex flex-col min-w-0" style={{ gap: '2px', padding: primero ? '0 12px 0 0' : '0 12px', borderLeft: primero ? 'none' : '1px solid rgba(10,10,10,0.06)' }}>
       <b style={{ fontSize: '17px', fontWeight: 600, color: '#0a0a0a', fontVariantNumeric: 'tabular-nums' }}>{valor}</b>
       <span style={{ fontSize: '11.5px', fontWeight: 300, lineHeight: 1.35, color: 'rgba(10,10,10,0.5)' }}>{texto}</span>
+    </div>
+  )
+}
+
+// «Con el Básico: 25 productos, 8 fotos y carritos abandonados, por $10.000
+// por mes.» · Ver planes
+function Franja({ sig }) {
+  return (
+    <div className="flex justify-between items-center flex-wrap"
+      style={{ backgroundColor: '#f6f5f2', borderRadius: '10px', padding: '12px 14px', gap: '12px', fontSize: '13px', lineHeight: 1.55, color: 'rgba(10,10,10,0.7)' }}>
+      <span>
+        Con el <b style={{ fontWeight: 600, color: '#0a0a0a' }}>{sig.nombre}</b>:{' '}
+        {[sig.tope && `${sig.tope} productos`, sig.fotosPorProducto && `${sig.fotosPorProducto} fotos`, sig.carritos && 'carritos abandonados']
+          .filter(Boolean).join(', ').replace(/, ([^,]*)$/, ' y $1')}
+        {Number.isInteger(sig.precio) ? `, por ${textoPrecio(sig.precio)} por mes.` : '.'}
+      </span>
+      <Link href={LINK_PLANES} className="whitespace-nowrap" style={{ color: '#015444', fontWeight: 500, textDecoration: 'underline', textUnderlineOffset: '2px' }}>
+        Ver planes
+      </Link>
     </div>
   )
 }
@@ -42,9 +63,14 @@ export default function TuPlan({ datos, onCambio }) {
 
   const nombre = datos.plan?.nombre || 'Tu plan'
   const titulo = datos.sinTope ? 'Sin tope' : datos.especial ? 'Plan a medida' : nombre
-  const detalle = datos.sinTope ? `${nombre} sin tope` : datos.especial ? `${nombre} ampliado` : datos.plan?.clave === 'gratis' ? '$0' : null
+  let detalle = null
+  if (datos.sinTope) detalle = `${nombre} sin tope`
+  else if (datos.especial) detalle = `${nombre} ampliado`
+  else if (Number.isInteger(datos.precioMensual) && datos.precioMensual > 0) detalle = `${textoPrecio(datos.precioMensual)} por mes`
+  else if (datos.plan?.clave === 'gratis') detalle = '$0'
   const productos = datos.sinTope ? String(datos.usados) : `${datos.usados} de ${datos.tope}`
   const sig = datos.especial ? null : datos.siguiente
+  const franja = sig ? <Franja sig={sig} /> : null
 
   return (
     <div className="flex flex-col" style={{ ...marco, gap: '14px' }}>
@@ -60,22 +86,9 @@ export default function TuPlan({ datos, onCambio }) {
         <Uso valor={datos.carritos ? 'Sí' : 'No'} texto="carritos abandonados" />
       </div>
 
-      {sig && (
-        <div className="flex justify-between items-center flex-wrap"
-          style={{ backgroundColor: '#f6f5f2', borderRadius: '10px', padding: '12px 14px', gap: '12px', fontSize: '13px', lineHeight: 1.55, color: 'rgba(10,10,10,0.7)' }}>
-          <span>
-            Con el <b style={{ fontWeight: 600, color: '#0a0a0a' }}>{sig.nombre}</b>:{' '}
-            {[sig.tope && `${sig.tope} productos`, sig.fotosPorProducto && `${sig.fotosPorProducto} fotos`, sig.carritos && 'carritos abandonados']
-              .filter(Boolean).join(', ').replace(/, ([^,]*)$/, ' y $1')}
-            {Number.isInteger(sig.precio) ? `, por ${textoPrecio(sig.precio)} por mes.` : '.'}
-          </span>
-          <Link href={LINK_PLANES} className="whitespace-nowrap" style={{ color: '#015444', fontWeight: 500, textDecoration: 'underline', textUnderlineOffset: '2px' }}>
-            Ver planes
-          </Link>
-        </div>
-      )}
-
-      {datos.suscripciones && <SuscripcionPlan onCambio={onCambio} />}
+      {datos.suscripciones
+        ? <SuscripcionPlan plan={datos} franja={franja} onCambio={onCambio} />
+        : franja}
     </div>
   )
 }

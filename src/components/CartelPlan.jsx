@@ -14,19 +14,24 @@
 //   volverHref    si viene, el link «Volver a Mis productos»
 //
 // Los textos salen de textosDelCartel (src/lib/planes.js), con los valores de
-// la tabla planes. El botón lleva a /vender#planes; en F3 pasa a ser el de
-// suscribirse. En el plan a medida, «Escribinos si necesitás más lugar» abre
-// el formulario de contacto, como en /vender.
+// la tabla planes. Desde F3.2, en el Gratis el botón es «Pasarme al Básico» y
+// abre el alta ahí mismo (ModalSuscripcion), con «Ver los planes» al lado; con
+// un plan a medida sin pagar, «Suscribirme por $X por mes». Si las
+// suscripciones están cerradas (SUSCRIPCIONES_TIENDAS), vuelve el link a
+// /vender#planes. Con el plan a medida activo, «Escribinos si necesitás más
+// lugar» abre el formulario de contacto, como en /vender.
 
 import { useState } from 'react'
 import Link from 'next/link'
 import ModalContacto from '@/components/ModalContacto'
+import ModalSuscripcion from '@/components/ModalSuscripcion'
 import { textosDelCartel } from '@/lib/planes'
 
 const CELESTE = '#9cc3ea'
 
 export default function CartelPlan({ motivo = 'productos', accion, datos, tope, usados, onCerrar, volverHref }) {
   const [contactoAbierto, setContactoAbierto] = useState(false)
+  const [altaAbierta, setAltaAbierta] = useState(false)
   const t = textosDelCartel({ motivo, accion, datos, tope, usados })
   const chico = motivo === 'fotos'
 
@@ -67,9 +72,16 @@ export default function CartelPlan({ motivo = 'productos', accion, datos, tope, 
           <p className="m-0" style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 300, fontSize: '13.5px', lineHeight: 1.6, color: 'rgba(156,195,234,0.88)' }}>{t.cierre}</p>
         )}
 
-        {(t.boton || t.contacto || volverHref) && (
+        {(t.boton || t.secundario || t.contacto || volverHref) && (
           <div className="flex flex-wrap items-center" style={{ gap: '14px' }}>
-            {t.boton && (
+            {t.boton?.modal && (
+              <button type="button" onClick={() => setAltaAbierta(true)}
+                className="cursor-pointer transition-colors bg-[#9cc3ea] text-[#015444] hover:bg-transparent hover:text-[#9cc3ea]"
+                style={{ fontFamily: "'Inter', sans-serif", fontSize: '13px', fontWeight: 500, borderRadius: '4px', padding: '10px 16px', border: `1px solid ${CELESTE}` }}>
+                {t.boton.texto}
+              </button>
+            )}
+            {t.boton?.href && (
               <Link href={t.boton.href}
                 className="no-underline transition-colors bg-[#9cc3ea] text-[#015444] hover:bg-transparent hover:text-[#9cc3ea]"
                 style={{ fontFamily: "'Inter', sans-serif", fontSize: '13px', fontWeight: 500, borderRadius: '4px', padding: '10px 16px', border: `1px solid ${CELESTE}` }}>
@@ -83,7 +95,12 @@ export default function CartelPlan({ motivo = 'productos', accion, datos, tope, 
                 Escribinos si necesitás más lugar
               </button>
             )}
-            {volverHref && (
+            {t.secundario && (
+              <Link href={t.secundario.href} style={{ fontSize: '12.5px', color: CELESTE, textDecoration: 'underline', textUnderlineOffset: '2px' }}>
+                {t.secundario.texto}
+              </Link>
+            )}
+            {volverHref && !t.secundario && (
               <Link href={volverHref} style={{ fontSize: '12.5px', color: CELESTE, textDecoration: 'underline', textUnderlineOffset: '2px' }}>
                 Volver a Mis productos
               </Link>
@@ -91,6 +108,8 @@ export default function CartelPlan({ motivo = 'productos', accion, datos, tope, 
           </div>
         )}
       </div>
+
+      <ModalSuscripcion abierto={altaAbierta} onClose={() => setAltaAbierta(false)} />
 
       <ModalContacto
         abierto={contactoAbierto}

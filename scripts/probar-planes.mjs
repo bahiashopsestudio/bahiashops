@@ -175,6 +175,27 @@ for (const [motivo, accion] of [['productos'], ['superado', 'activar'], ['supera
     `plan a medida, ${motivo}${accion ? ' ' + accion : ''}: sin comparación ni «Conocer el plan Básico», con «Escribinos»`)
 }
 
+console.log('\n10b. El cartel con las suscripciones (F3.2)')
+for (const [motivo, accion] of [['productos'], ['superado', 'activar'], ['fotos']]) {
+  c = textosDelCartel({ motivo, accion, datos: GRATIS(motivo === 'fotos' ? 3 : 10, { suscripciones: true }) })
+  ok(c.boton?.texto === 'Pasarme al Básico' && c.boton.modal === true && !c.boton.href && c.secundario?.texto === 'Ver los planes' && c.secundario.href === '/vender#planes',
+    `en el Gratis, ${motivo}: «Pasarme al Básico» abre el alta, y «Ver los planes»`)
+}
+c = textosDelCartel({ motivo: 'productos', datos: GRATIS(10, { suscripciones: false }) })
+ok(c.boton?.texto === 'Conocer el plan Básico' && c.boton.href === '/vender#planes' && !c.secundario, 'con las suscripciones cerradas: como antes')
+const PENDIENTE = GRATIS(10, { suscripciones: true, origen: 'gratis', especialPendiente: { precio: 20000, tope: 50, sinTope: false } })
+for (const [motivo, accion] of [['productos'], ['superado', 'activar'], ['fotos']]) {
+  c = textosDelCartel({ motivo, accion, datos: PENDIENTE })
+  ok(c.titulo === 'Tu plan a medida te está esperando' && c.intro === 'Te armamos 50 productos por $20.000 por mes. Mientras no se active, rige el plan Gratis: 10 productos.'
+    && c.boton?.texto === 'Suscribirme por $20.000 por mes' && c.boton.modal === true && !c.contacto,
+    `plan a medida sin pagar, ${motivo}: «${c.titulo} / ${c.intro} [${c.boton?.texto}]»`)
+}
+c = textosDelCartel({ motivo: 'productos', datos: { ...PENDIENTE, origen: 'suscripcion', plan: { clave: 'basico', nombre: 'Básico' }, tope: 25 } })
+ok(c.titulo === 'Tu plan a medida te está esperando' && c.boton?.href === '/vendedor/perfil' && !c.boton.modal && /rige el plan Básico: 25 productos/.test(c.intro),
+  'plan a medida y ya paga el Básico: lo manda a Mi negocio (la diferencia)')
+c = textosDelCartel({ motivo: 'productos', datos: { ...MEDIDA(50), suscripciones: true } })
+ok(c.contacto && !c.boton, 'plan a medida activo: sigue «Escribinos»')
+
 console.log('\n11. Los campos del admin')
 ok(enteroDelCampo('10.000') === 10000 && enteroDelCampo(' 25 ') === 25 && enteroDelCampo(8) === 8 && enteroDelCampo('') === null && enteroDelCampo(null) === null,
   "'10.000', ' 25 ', 8, '' y null")

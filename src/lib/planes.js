@@ -30,6 +30,13 @@ export function planDesdeLaBase(fila) {
     usados: entero(f.usados) ?? 0,
     fotosPorProducto: entero(f.fotos_por_producto),
     carritos: f.carritos_abandonados === true,
+    // Lo que paga por mes (048): el monto de la suscripción, el precio
+    // especial o el del plan. Las rutas lo muestran solo con una suscripción.
+    precioMensual: entero(f.precio_mensual),
+    // Un plan a medida que espera el pago (048): { plan, precio } o null.
+    especialPendiente: f.especial_pendiente && Number.isInteger(Number(f.especial_pendiente.precio))
+      ? { plan: f.especial_pendiente.plan ?? null, precio: Number(f.especial_pendiente.precio) }
+      : null,
   }
 }
 
@@ -229,19 +236,51 @@ export function etiquetaDelPlan(datos) {
 //                        encima del tope (accion: 'activar' | 'reenviar')
 //           'fotos'      llegó a las fotos por producto (el cartel chico)
 //   tope y usados: los del 409 si llegaron; si no, los del plan.
-// Devuelve { eyebrow, titulo, intro, chips, cierre, boton, contacto }:
+// Devuelve { eyebrow, titulo, intro, chips, cierre, boton, secundario, contacto }:
 //   intro y chips: lo que trae el plan siguiente (null / [] si no hay);
-//   boton: { texto, href } al plan siguiente; contacto: «Escribinos si
-//   necesitás más lugar» (abre el formulario de contacto).
+//   boton: { texto, href } al plan siguiente, o { texto, modal: true } si
+//   abre el alta de la suscripción ahí mismo (F3.2: del Gratis al Básico, con
+//   datos.suscripciones); secundario: { texto, href } «Ver los planes» cuando
+//   el botón abre el alta; contacto: «Escribinos si necesitás más lugar»
+//   (abre el formulario de contacto).
 // Con condiciones especiales (el plan a medida) nunca se ofrece el plan
-// siguiente, en ningún motivo: va «Escribinos».
+// siguiente, en ningún motivo: va «Escribinos». Con un plan a medida que
+// espera el pago (datos.especialPendiente), en todos los motivos, el cartel
+// lo ofrece: «Tu plan a medida te está esperando».
 export function textosDelCartel({ motivo = 'productos', accion = 'activar', datos, tope, usados } = {}) {
   const d = datos || {}
   const t = tope ?? d.tope ?? null
   const u = usados ?? d.usados ?? null
+
+  const pendiente = d.suscripciones === true && !d.especial ? d.especialPendiente : null
+  if (pendiente && Number.isInteger(pendiente.precio)) {
+    const cuanto = pendiente.sinTope ? 'productos sin tope' : pendiente.tope ? `${pendiente.tope} productos` : 'un plan a medida'
+    const rige = d.plan?.nombre ? `rige el plan ${d.plan.nombre}${t ? `: ${t} productos` : ''}` : 'rige tu plan de hoy'
+    // Si ya paga el Básico, el plan a medida se activa pagando la diferencia,
+    // desde Mi negocio.
+    const yaPaga = d.origen === 'suscripcion'
+    return {
+      eyebrow: 'Tu plan a medida',
+      titulo: 'Tu plan a medida te está esperando',
+      intro: `Te armamos ${cuanto} por ${textoPrecio(pendiente.precio)} por mes. Mientras no se active, ${rige}.`,
+      chips: [],
+      cierre: null,
+      boton: yaPaga
+        ? { texto: 'Activarlo desde Mi negocio', href: '/vendedor/perfil' }
+        : { texto: `Suscribirme por ${textoPrecio(pendiente.precio)} por mes`, modal: true },
+      secundario: null,
+      contacto: false,
+    }
+  }
+
   const sig = d.especial ? null : d.siguiente || null
   const eyebrow = d.especial ? 'Tu plan a medida' : (d.plan?.nombre ? `Tu plan ${d.plan.nombre}` : 'Tu plan')
-  const boton = sig ? { texto: `Conocer el plan ${sig.nombre}`, href: LINK_PLANES } : null
+  // Del Gratis al Básico se pasa ahí mismo, con el modal del alta.
+  const alAlta = !!sig && d.suscripciones === true && d.plan?.clave === 'gratis' && sig.clave === 'basico'
+  const boton = !sig ? null : alAlta
+    ? { texto: `Pasarme al ${sig.nombre}`, modal: true }
+    : { texto: `Conocer el plan ${sig.nombre}`, href: LINK_PLANES }
+  const secundario = alAlta ? { texto: 'Ver los planes', href: LINK_PLANES } : null
   const contacto = d.especial === true
 
   if (motivo === 'fotos') {
@@ -254,6 +293,7 @@ export function textosDelCartel({ motivo = 'productos', accion = 'activar', dato
       chips: [],
       cierre: null,
       boton: masFotos ? boton : null,
+      secundario: masFotos ? secundario : null,
       contacto,
     }
   }
@@ -278,6 +318,7 @@ export function textosDelCartel({ motivo = 'productos', accion = 'activar', dato
       chips,
       cierre: textoDeTope({ motivo: 'tope_superado', tope: t, usados: u, accion: verbo }),
       boton,
+      secundario,
       contacto,
     }
   }
@@ -292,6 +333,7 @@ export function textosDelCartel({ motivo = 'productos', accion = 'activar', dato
       chips,
       cierre: `Cuentan todos tus productos, también los pausados. Para cargar otro, eliminá productos hasta tener ${t - 1}.`,
       boton,
+      secundario,
       contacto,
     }
   }
@@ -305,6 +347,7 @@ export function textosDelCartel({ motivo = 'productos', accion = 'activar', dato
       ? 'Cuentan todos tus productos, también los pausados. Para cargar otro, eliminá uno.'
       : 'Cuentan todos tus productos, también los pausados. Para cargar otro ahora, eliminá uno.',
     boton,
+    secundario,
     contacto,
   }
 }

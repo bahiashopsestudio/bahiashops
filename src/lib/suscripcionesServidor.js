@@ -13,7 +13,7 @@
 import { urlParaMercadoPago } from '@/lib/sitio'
 import { fechaAR } from '@/lib/mercadopago/preferencias'
 import {
-  CANCELADA, ESTADOS_VIVOS, MAIL_DE_LA_PLATAFORMA, MINIMO_DIFERENCIA, REUSAR_PENDIENTE_HORAS, mensajeDeAltaRechazada,
+  CANCELADA, ESTADOS_VIVOS, MAIL_DE_LA_PLATAFORMA, MINIMO_DIFERENCIA, REUSAR_PENDIENTE_HORAS, errorDeAltaRechazada,
   cuerpoDeAlta, cuerpoDeDiferencia, datosDeCobro, datosDePagoDeSuscripcion, datosDeSuscripcion,
   diferenciaProporcional, problemaDeSuscripcion, reusarPendiente, tipoDePagoDePlataforma,
 } from '@/lib/suscripciones'
@@ -153,8 +153,8 @@ export async function suscripcionesParaSincronizar(admin, vendedorId, { ultimaSi
 // Crea la suscripción de una tienda por un monto y devuelve dónde pagarla.
 // Si ya hay una esperando el pago por el mismo monto (de menos de
 // REUSAR_PENDIENTE_HORAS), devuelve esa; si es por otro monto, la cancela.
-// Devuelve { ok: true, initPoint } o { ok: false, status, error } (error es
-// un texto para mostrar).
+// Devuelve { ok: true, initPoint } o { ok: false, status, error, campo } (error
+// es un texto para mostrar; campo 'email' si el problema es el mail).
 export async function crearSuscripcionDeTienda(admin, { vendedorId, plan, nombrePlan, monto, email }) {
   const { fila: viva, error: errorViva } = await suscripcionViva(admin, vendedorId)
   if (errorViva) return { ok: false, status: 500, error: 'No pudimos revisar tu suscripción. Probá de nuevo en un rato.' }
@@ -165,7 +165,7 @@ export async function crearSuscripcionDeTienda(admin, { vendedorId, plan, nombre
   // antes de crear nada.
   const mailCobrador = await mailDePlataforma()
   if (mailCobrador && email.toLowerCase() === mailCobrador.toLowerCase()) {
-    return { ok: false, status: 400, error: MAIL_DE_LA_PLATAFORMA }
+    return { ok: false, status: 400, error: MAIL_DE_LA_PLATAFORMA, campo: 'email' }
   }
   // Con otro mail va una nueva: el de una suscripción no se cambia.
   if (viva && reusarPendiente(viva, monto) && (!email || viva.payer_email === email)) {
@@ -199,7 +199,8 @@ export async function crearSuscripcionDeTienda(admin, { vendedorId, plan, nombre
     // El motivo queda en la fila (049): el log de Vercel dura minutos.
     const errorMp = `${mp.status || 'sin respuesta'} · ${mp.error || 'sin init_point'}`.slice(0, 300)
     await admin.from('vendedor_suscripciones').update({ estado: 'error', error_mp: errorMp, actualizada_en: ahoraIso() }).eq('id', fila.id)
-    return { ok: false, status: 502, error: mensajeDeAltaRechazada({ status: mp.status, email, mailPlataforma: mailCobrador }) }
+    const rechazo = errorDeAltaRechazada({ status: mp.status, email, mailPlataforma: mailCobrador })
+    return { ok: false, status: 502, error: rechazo.texto, campo: rechazo.campo }
   }
 
   const problema = problemaDeSuscripcion(mp.datos, fila, idDePlataforma())
@@ -545,4 +546,21 @@ export async function procesarAvisoSuscripcion(admin, { tipo, id }) {
   }
 
   return { ok: true }
+}
+
+// ── Lo que trae un plan, para las pantallas ──────────────────────────────────
+
+// El tope del plan a medida de una tienda (sus condiciones en
+// vendedor_planes; si no tiene tope propio, el de su plan). Para los textos
+// «Te armamos 50 productos por $20.000 por mes».
+//   planes  filas de public.planes con clave y tope_productos
+// Devuelve { tope, sinTope } o null si no tiene condiciones o no se pudo leer.
+export async function topeDelPlanAMedida(admin, vendedorId, planes = []) {
+  const { data, error } = await admin.from('vendedor_planes')
+    .select('plan_clave, tope_productos, sin_tope').eq('vendedor_id', vendedorId).maybeSingle()
+  if (error) console.error('[suscripciones/tope-a-medida]', vendedorId, error.message)
+  if (error || !data) return null
+  if (data.sin_tope) return { tope: null, sinTope: true }
+  const delPlan = planes.find((p) => p.clave === data.plan_clave)?.tope_productos ?? null
+  return { tope: data.tope_productos ?? delPlan, sinTope: false }
 }

@@ -44,12 +44,15 @@ const DIA_MS = 24 * 60 * 60 * 1000
 
 export const esViva = (estado) => ESTADOS_VIVOS.includes(estado)
 
-// ¿Puede esta tienda usar las suscripciones? SUSCRIPCIONES_TIENDAS lista los
-// ids separados por coma ("15"), o "todas". Vacía: ninguna.
+// ¿Puede esta tienda usar las suscripciones? Desde F3.2, todas. La variable
+// SUSCRIPCIONES_TIENDAS queda como interruptor para volver a cerrarlo rápido:
+//   sin cargar o "todas"  todas
+//   "ninguna"             ninguna (el panel y los carteles vuelven a /vender)
+//   "15,16"               solo esas
 export function suscripcionesHabilitadas(vendedorId, entorno = process.env) {
   const valor = String(entorno.SUSCRIPCIONES_TIENDAS ?? '').trim().toLowerCase()
-  if (!valor) return false
-  if (valor === 'todas') return true
+  if (!valor || valor === 'todas') return true
+  if (valor === 'ninguna') return false
   return valor.split(',').map((x) => x.trim()).filter(Boolean).includes(String(vendedorId))
 }
 
@@ -65,14 +68,21 @@ export function emailValido(texto) {
 // Mercado Pago no documenta los errores del alta: un 400 casi siempre es el
 // mail (que no es de una cuenta de Mercado Pago, o es de otro país). El
 // mensaje real queda en error_mp (049) para la ficha del admin.
+// Nunca se muestra el texto de Mercado Pago tal cual (es técnico y en inglés).
 export const MAIL_DE_LA_PLATAFORMA = 'Ese es el mail de la cuenta de Mercado Pago de Bahía Shops, que es la que cobra. Escribí el de tu cuenta de Mercado Pago.'
-export function mensajeDeAltaRechazada({ status, email, mailPlataforma }) {
-  if (email && mailPlataforma && email.toLowerCase() === mailPlataforma.toLowerCase()) return MAIL_DE_LA_PLATAFORMA
-  if (status === 400) {
-    return 'Mercado Pago no aceptó ese mail. Tiene que ser el mail con el que entrás a tu cuenta de Mercado Pago'
-      + ' (puede ser distinto del de Bahía Shops), de una cuenta de Argentina.'
-  }
-  return 'Mercado Pago no respondió. Probá de nuevo en un rato.'
+export const MAIL_RECHAZADO = 'Mercado Pago no aceptó ese mail. Revisá que sea el de la cuenta con la que vas a pagar.'
+export const MP_NO_RESPONDIO = 'Mercado Pago no respondió. Probá de nuevo en unos minutos.'
+export const MAIL_INVALIDO = 'Escribí el mail de tu cuenta de Mercado Pago.'
+
+// { texto, campo }: campo 'email' si el problema es el mail (el modal pinta el
+// campo en rojo), null si no.
+export function errorDeAltaRechazada({ status, email, mailPlataforma }) {
+  if (email && mailPlataforma && email.toLowerCase() === mailPlataforma.toLowerCase()) return { texto: MAIL_DE_LA_PLATAFORMA, campo: 'email' }
+  if (status === 400) return { texto: MAIL_RECHAZADO, campo: 'email' }
+  return { texto: MP_NO_RESPONDIO, campo: null }
+}
+export function mensajeDeAltaRechazada(datos) {
+  return errorDeAltaRechazada(datos).texto
 }
 
 // El cuerpo de POST /preapproval: sin plan, con pago pendiente.
@@ -231,10 +241,141 @@ export function accionDeLaTienda({ plan, suscripcionViva, precioBasico }) {
       }
       return null
     }
-    return { tipo: 'suscribirse', monto: pendiente.precio, plan: pendiente.plan }
+    return { tipo: 'suscribirse', monto: pendiente.precio, plan: pendiente.plan, medida: true }
   }
   if (plan?.origen === 'gratis' && !activa && Number.isInteger(precioBasico) && precioBasico > 0) {
-    return { tipo: 'suscribirse', monto: precioBasico, plan: 'basico' }
+    return { tipo: 'suscribirse', monto: precioBasico, plan: 'basico', medida: false }
   }
   return null
+}
+
+// «¡Listo!» se muestra mientras el primer cobro tenga menos de esto (y una
+// sola vez por navegador: el panel guarda una marca en localStorage).
+export const HORAS_RECIEN_CONFIRMADA = 48
+
+// ¿La suscripción acaba de cobrar su primer mes? Activa, creada hace menos de
+// una semana y con el último cobro de hace menos de HORAS_RECIEN_CONFIRMADA
+// (el primer cobro es al autorizar, así que en esa semana es el primero).
+//   fila  la de vendedor_suscripciones
+export function recienConfirmada(fila, ahoraMs = Date.now()) {
+  if (fila?.estado !== 'authorized' || !fila.ultimo_cobro_en) return false
+  const creada = Date.parse(fila.creada_en ?? '')
+  const cobro = Date.parse(fila.ultimo_cobro_en)
+  if (!Number.isFinite(creada) || !Number.isFinite(cobro)) return false
+  return ahoraMs - creada < 7 * DIA_MS && ahoraMs - cobro < HORAS_RECIEN_CONFIRMADA * 3600 * 1000
+}
+
+// Qué muestra «Tu plan» (SuscripcionPlan), con lo que devuelve
+// GET /api/vendedor/suscripcion:
+//   suscripcion       { estado, monto, initPoint, pagadoHasta, recienConfirmada } o null
+//   accion            la de accionDeLaTienda (con medida) o null
+//   volvio            entró con ?suscripcion=volvio o ?diferencia=volvio
+//   consultaAgotada   ya pasó el rato de consultar después de volver
+//   listoVisto        el navegador ya mostró el «¡Listo!» de esta suscripción
+// Devuelve { tipo, pendienteVieja }:
+//   'confirmando'  volvió de Mercado Pago y todavía no se confirma, o Mercado
+//                  Pago ya la autorizó y falta que llegue el cobro
+//   'sin_pagar'    volvió, pasó el rato y sigue esperando el pago
+//   'esperando'    tiene una esperando el pago
+//   'gratis'       puede pasarse al Básico
+//   'medida'       tiene un plan a medida sin pagar (sin suscripción activa)
+//   'diferencia'   tiene un plan a medida y ya paga el Básico
+//   'listo'        recién confirmada (una sola vez)
+//   'al_dia'       activa y al día
+//   'cancelada'    cancelada, todavía con días pagos
+//   'nada'         nada que mostrar (por ejemplo, condiciones de $0)
+export function estadoParaPantalla({ suscripcion, accion, volvio = false, consultaAgotada = false, listoVisto = false, ahoraMs = Date.now() } = {}) {
+  const sus = suscripcion || null
+  const esperandoVolver = volvio && !consultaAgotada
+
+  if (accion?.tipo === 'diferencia') return { tipo: esperandoVolver ? 'confirmando' : 'diferencia' }
+
+  const deEsteMonto = accion?.tipo === 'suscribirse' && Number(accion.monto) === Number(sus?.monto)
+  // Una esperando el pago por otro monto (por ejemplo, la del Básico antes de
+  // que se cargara un plan a medida) no tapa la que corresponde: se ofrece la
+  // nueva, y al crearla se cancela la vieja.
+  const pendienteVieja = sus?.estado === 'pending' && accion?.tipo === 'suscribirse' && !deEsteMonto
+  // Mercado Pago ya la autorizó, pero el cobro todavía no está registrado.
+  if (sus?.estado === 'authorized' && deEsteMonto) return { tipo: 'confirmando' }
+
+  if (accion?.tipo === 'suscribirse') {
+    if (sus?.estado === 'pending' && !pendienteVieja) {
+      if (esperandoVolver) return { tipo: 'confirmando' }
+      if (volvio) return { tipo: 'sin_pagar' }
+      if (sus.initPoint) return { tipo: 'esperando' }
+    }
+    return { tipo: accion.medida ? 'medida' : 'gratis', pendienteVieja }
+  }
+
+  if (sus?.estado === 'authorized') return { tipo: sus.recienConfirmada && !listoVisto ? 'listo' : 'al_dia' }
+  if (sus?.estado === CANCELADA && Date.parse(sus.pagadoHasta ?? '') > ahoraMs) return { tipo: 'cancelada' }
+  return { tipo: 'nada' }
+}
+
+// ── La ficha del admin (SuscripcionTienda) ───────────────────────────────────
+
+// El estado de un cobro, en castellano y con su tono:
+//   'ok' Aprobado (verde) · 'espera' Devuelto o Esperando (ámbar) ·
+//   'no' Rechazado (rojo) · 'gris' lo demás
+export function estadoDeCobro({ estado_pago: pago, estado_cobro: cobro } = {}) {
+  if (pago === 'approved') return { texto: 'Aprobado', tono: 'ok' }
+  if (pago === 'refunded' || pago === 'charged_back') return { texto: 'Devuelto', tono: 'espera' }
+  if (['pending', 'in_process', 'authorized', 'in_mediation'].includes(pago)) return { texto: 'Esperando', tono: 'espera' }
+  if (pago === 'rejected' || pago === 'cancelled') return { texto: 'Rechazado', tono: 'no' }
+  if (!pago && ['scheduled', 'processed', 'recycling'].includes(cobro)) return { texto: 'Esperando', tono: 'espera' }
+  return { texto: pago || cobro || 'Sin dato', tono: 'gris' }
+}
+
+const ESTADO_DE_DIFERENCIA = {
+  pagada: { texto: 'Aprobado', tono: 'ok' },
+  devuelta: { texto: 'Devuelto', tono: 'espera' },
+  pendiente: { texto: 'Esperando', tono: 'espera' },
+  vencida: { texto: 'Vencida', tono: 'gris' },
+  sin_cobro: { texto: 'Sin cobro', tono: 'gris' },
+}
+
+// Una sola tabla con los cobros de todas las suscripciones de la tienda y los
+// pagos de la diferencia, la más nueva primero:
+//   [{ clave, fecha, monto, estado: { texto, tono }, suscripcion: '#7' | 'Diferencia' }]
+export function filasDeCobros({ cobros = [], diferencias = [] } = {}) {
+  const filas = [
+    ...cobros.map((c) => ({
+      clave: `c${c.id}`,
+      fecha: c.cobrado_en || null,
+      monto: c.monto ?? null,
+      estado: estadoDeCobro(c),
+      suscripcion: `#${c.suscripcion_id}`,
+    })),
+    ...diferencias.map((d) => ({
+      clave: `d${d.id}`,
+      fecha: d.pagada_en || d.creada_en || null,
+      monto: d.monto ?? null,
+      estado: ESTADO_DE_DIFERENCIA[d.estado] || { texto: d.estado || 'Sin dato', tono: 'gris' },
+      suscripcion: 'Diferencia',
+    })),
+  ]
+  return filas.sort((a, b) => (Date.parse(b.fecha ?? '') || 0) - (Date.parse(a.fecha ?? '') || 0))
+}
+
+// La suscripción que se muestra arriba en la ficha: la viva, o la última que
+// llegó a Mercado Pago (las altas rechazadas van aparte). null si no hay.
+export function suscripcionDeLaFicha(suscripciones = []) {
+  return suscripciones.find((s) => esViva(s.estado)) || suscripciones.find((s) => s.estado !== 'error') || null
+}
+
+// La pastilla de estado de la ficha: { texto, tono: 'ok' | 'espera' | 'gris' }.
+//   diferenciaSinPagar  tiene un plan a medida por encima de lo que paga
+export function pastillaDeLaFicha(fila, { diferenciaSinPagar = false } = {}) {
+  if (!fila) return null
+  if (fila.estado === 'authorized') return diferenciaSinPagar ? { texto: 'Diferencia sin pagar', tono: 'espera' } : { texto: 'Al día', tono: 'ok' }
+  if (fila.estado === 'pending' || fila.estado === 'creando') return { texto: 'Esperando el pago', tono: 'espera' }
+  if (fila.estado === 'paused') return { texto: 'Pausada', tono: 'espera' }
+  if (fila.estado === CANCELADA) return { texto: 'Cancelada', tono: 'gris' }
+  return { texto: fila.estado || 'Sin dato', tono: 'gris' }
+}
+
+// Cuándo la cancela sola la tarea diaria a una que espera el pago.
+export function seCancelaSola(fila) {
+  const creada = Date.parse(fila?.creada_en ?? '')
+  return Number.isFinite(creada) ? new Date(creada + DIAS_PARA_CANCELAR_PENDIENTE * DIA_MS).toISOString() : null
 }

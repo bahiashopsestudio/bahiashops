@@ -30,7 +30,9 @@ const ULTIMO_PASO = 4
 
 // Los estilos viven en @/lib/estilosVendedor para que el alta y "Mis datos" no se separen
 
-export default function FormularioVendedor({ userId }) {
+// panel: a dónde va al terminar (con ?suscribirme=basico si vino de «Sumarme
+// con el Básico» de /vender).
+export default function FormularioVendedor({ userId, panel = '/vendedor/perfil' }) {
   const router = useRouter()
   const supabase = createClient()
 
@@ -290,7 +292,7 @@ export default function FormularioVendedor({ userId }) {
     }
 
     // Al panel del vendedor: ahí está el cartel con el estado de la tienda.
-    router.push('/vendedor/perfil')
+    router.push(panel)
   }
 
   // Afuera del form de los pasos: tiene su propio formulario.
@@ -613,7 +615,7 @@ export default function FormularioVendedor({ userId }) {
           {avisosAlta.map((aviso) => <p key={aviso} className="mt-2 mb-0">{aviso}</p>)}
           <button
             type="button"
-            onClick={() => router.push('/vendedor/perfil')}
+            onClick={() => router.push(panel)}
             className="mt-3 underline cursor-pointer"
           >
             Continuar a mi panel

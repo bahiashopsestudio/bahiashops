@@ -12,7 +12,10 @@
 //
 // Si quien entra ya tiene tienda, los botones dicen «Ir a Mi negocio». Se
 // sabe después de cargar (la página es fija); si la consulta falla quedan los
-// botones de siempre, y el alta igual la manda a su tienda.
+// botones de siempre, y el alta igual la manda a su tienda. «Sumarme con el
+// Básico» (F3.2): con tienda abre el alta de la suscripción ahí mismo; sin
+// tienda va al alta de tienda con ?suscribirme=basico, y al terminar el panel
+// abre el alta de la suscripción.
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
@@ -21,6 +24,7 @@ import { createClient } from '@/lib/supabase/client'
 import Navbar from '@/components/Navbar'
 import MenuTakeover from '@/components/MenuTakeover'
 import ModalContacto from '@/components/ModalContacto'
+import ModalSuscripcion from '@/components/ModalSuscripcion'
 import { EMAIL_CONTACTO } from '@/lib/contacto'
 import { FONDO_BAHIA, CELESTE_BAHIA } from '@/lib/coloresBahia'
 import { VISTA_HOME } from '@/components/MapaDestacado'
@@ -38,6 +42,9 @@ const MapaVendedores = dynamic(() => import('@/components/MapaVendedores'), {
 })
 
 const ALTA = '/vendedor/nuevo'
+// Sin tienda, «Sumarme con el Básico» pasa por el alta de tienda y al terminar
+// el panel abre el alta de la suscripción (SuscripcionPlan).
+const ALTA_CON_BASICO = '/vendedor/nuevo?suscribirme=basico'
 const MI_NEGOCIO = '/vendedor/perfil'
 const COSTOS_MP = 'https://www.mercadopago.com.ar/ayuda/recibir-pagos-costos_220'
 
@@ -68,6 +75,20 @@ function Boton({ href, children }) {
     >
       {children}
     </Link>
+  )
+}
+
+// El mismo botón, cuando abre algo en la página en vez de llevar a otra.
+function BotonAccion({ onClick, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center justify-center px-[22px] py-[13px] rounded-[4px] border border-[#0a0a0a] bg-[#0a0a0a] text-white hover:bg-transparent hover:text-[#0a0a0a] transition-colors motion-reduce:transition-none cursor-pointer ${FOCO}`}
+      style={{ fontFamily: UI, fontSize: '14px', fontWeight: 600 }}
+    >
+      {children}
+    </button>
   )
 }
 
@@ -168,6 +189,7 @@ export default function VenderContent({ planes, comision, tiendas = [] }) {
   const [menuAbierto, setMenuAbierto] = useState(false)
   const [tieneTienda, setTieneTienda] = useState(false)
   const [contactoAbierto, setContactoAbierto] = useState(false)
+  const [altaAbierta, setAltaAbierta] = useState(false)
 
   useEffect(() => {
     if (menuAbierto) { document.body.style.overflow = 'hidden' } else { document.body.style.overflow = '' }
@@ -357,13 +379,9 @@ export default function VenderContent({ planes, comision, tiendas = [] }) {
                     ? <Precio>{basico.precio} <small className="text-[14px] font-medium tracking-normal" style={{ color: SUAVE }}>por mes</small></Precio>
                     : null}
                   para="Para mostrar tu catálogo completo."
-                  boton={<Boton href={destino}>{textoBoton(`Sumarme con el ${basico?.nombre || 'Básico'}`)}</Boton>}
-                  nota={tieneTienda ? null : (
-                    // Hasta F3 el Básico no se puede pagar.
-                    <p className="m-0 -mt-2 text-[13px]" style={{ color: SUAVE }}>
-                      El pago del {basico?.nombre || 'Básico'} se habilita pronto: empezás con el {gratis?.nombre || 'Gratis'} y lo cambiás desde tu panel.
-                    </p>
-                  )}
+                  boton={tieneTienda
+                    ? <BotonAccion onClick={() => setAltaAbierta(true)}>{`Sumarme con el ${basico?.nombre || 'Básico'}`}</BotonAccion>
+                    : <Boton href={ALTA_CON_BASICO}>{`Sumarme con el ${basico?.nombre || 'Básico'}`}</Boton>}
                 >
                   {basico && <Item>Hasta <b className="font-medium">{basico.tope} productos</b></Item>}
                   {basico && <Item>Hasta <b className="font-medium">{basico.fotos} fotos</b> por producto</Item>}
@@ -494,6 +512,7 @@ export default function VenderContent({ planes, comision, tiendas = [] }) {
         mensajeInicial={`Quiero un plan con ${masDe}.`}
         contexto="Plan a medida — /vender"
       />
+      <ModalSuscripcion abierto={altaAbierta} onClose={() => setAltaAbierta(false)} />
     </>
   )
 }

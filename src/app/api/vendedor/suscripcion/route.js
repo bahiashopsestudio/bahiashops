@@ -1,33 +1,38 @@
 // La suscripción al plan de la tienda de quien tiene la sesión (migración
-// 048). La tienda sale de la sesión, nunca del pedido. Mientras dure la
-// prueba, solo para las tiendas de SUSCRIPCIONES_TIENDAS (src/lib/suscripciones.js).
+// 048). La tienda sale de la sesión, nunca del pedido. Desde F3.2, para todas
+// las tiendas (salvo que SUSCRIPCIONES_TIENDAS lo cierre: src/lib/suscripciones.js).
 //
 //   GET     -> { habilitada, email, suscripcion, accion, planCambio }
-//              suscripcion  la viva o la última: { estado, monto, plan,
-//                           proximoCobro, pagadoHasta, initPoint } o null.
-//                           Si está esperando el pago o activa (o cancelada
-//                           con días pagos), antes se sincroniza con Mercado
-//                           Pago (una vez por minuto).
+//              suscripcion  la viva o la última: { id, estado, monto, plan,
+//                           proximoCobro, pagadoHasta, initPoint, creadaEn,
+//                           recienConfirmada } o null. Si está esperando el
+//                           pago o activa (o cancelada con días pagos), antes
+//                           se sincroniza con Mercado Pago (una vez por minuto).
 //              planCambio   la sincronización trajo (o devolvió) un cobro: el
 //                           panel vuelve a leer el plan.
 //              accion       lo que puede hacer (accionDeLaTienda):
-//                           { tipo: 'suscribirse', monto, plan, nombre }
+//                           { tipo: 'suscribirse', monto, plan, nombre, medida, trae }
 //                           { tipo: 'diferencia', monto, precioNuevo,
-//                             proximoCobro, sinCobro }
+//                             proximoCobro, sinCobro, trae }
 //                           o null
+//                trae       { tope, sinTope, fotos, carritos }: lo del plan
+//                           (con el tope del plan a medida si es a medida),
+//                           para las pastillas del modal y los textos.
 //   POST    { accion: 'suscribirse', email } -> { initPoint }
 //           { accion: 'diferencia' }         -> { initPoint } o { activada: true }
+//           si falla: { error, campo } (campo 'email' si el problema es el mail)
 //   DELETE  -> { ok }  cancela la suscripción que espera el pago
 //              (la baja de una activa llega en F4).
 
 import { NextResponse } from 'next/server'
 import { tiendaDeLaSesion } from '@/lib/tiendaDeLaSesion'
 import {
-  MINIMO_DIFERENCIA, accionDeLaTienda, diferenciaProporcional, emailValido, suscripcionesHabilitadas,
+  MAIL_INVALIDO, MINIMO_DIFERENCIA, accionDeLaTienda, diferenciaProporcional, emailValido, recienConfirmada,
+  suscripcionesHabilitadas,
 } from '@/lib/suscripciones'
 import {
   cancelarSuscripcion, crearDiferencia, crearSuscripcionDeTienda, sincronizarSuscripcion, suscripcionesParaSincronizar,
-  suscripcionViva,
+  suscripcionViva, topeDelPlanAMedida,
 } from '@/lib/suscripcionesServidor'
 
 const ERROR = 'No pudimos cargar tu suscripción. Probá de nuevo en un rato.'
@@ -63,7 +68,7 @@ async function estado(admin, vendedorId, { sincronizar = false } = {}) {
 
   const [plan, planes, ultima] = await Promise.all([
     admin.rpc('rpc_plan_de_tienda', { p_vendedor_id: vendedorId }),
-    admin.from('planes').select('clave, nombre, precio_mensual'),
+    admin.from('planes').select('clave, nombre, precio_mensual, tope_productos, fotos_por_producto, carritos_abandonados'),
     viva ? Promise.resolve({ data: viva }) : admin.from('vendedor_suscripciones').select('*')
       .eq('vendedor_id', vendedorId).order('creada_en', { ascending: false }).limit(1).maybeSingle(),
   ])
@@ -79,9 +84,27 @@ async function estado(admin, vendedorId, { sincronizar = false } = {}) {
   return { plan: plan.data, planes: planes.data || [], viva, ultima: ultima.data || null, accion, planCambio }
 }
 
+// Lo que trae el plan de la acción: el de la tabla planes, con el tope del
+// plan a medida si es a medida.
+async function queTrae(admin, vendedorId, e, { clave, medida }) {
+  const fila = e.planes.find((p) => p.clave === clave)
+  const trae = {
+    tope: fila?.tope_productos ?? null,
+    sinTope: false,
+    fotos: fila?.fotos_por_producto ?? null,
+    carritos: fila?.carritos_abandonados === true,
+  }
+  if (medida) {
+    const aMedida = await topeDelPlanAMedida(admin, vendedorId, e.planes)
+    if (aMedida) Object.assign(trae, aMedida)
+  }
+  return trae
+}
+
 function resumen(fila) {
   if (!fila) return null
   return {
+    id: fila.id,
     estado: fila.estado,
     monto: fila.monto,
     plan: fila.plan_clave,
@@ -89,6 +112,7 @@ function resumen(fila) {
     pagadoHasta: fila.pagado_hasta,
     initPoint: fila.estado === 'pending' ? fila.init_point : null,
     creadaEn: fila.creada_en,
+    recienConfirmada: recienConfirmada(fila),
   }
 }
 
@@ -102,15 +126,18 @@ export async function GET() {
   let accion = null
   if (e.accion?.tipo === 'suscribirse') {
     const nombre = e.planes.find((p) => p.clave === e.accion.plan)?.nombre || e.accion.plan
-    accion = { ...e.accion, nombre }
+    const trae = await queTrae(admin, vendedor.id, e, { clave: e.accion.plan, medida: e.accion.medida })
+    accion = { ...e.accion, nombre, trae }
   } else if (e.accion?.tipo === 'diferencia') {
     const calculo = diferenciaProporcional({ precioNuevo: e.accion.precioNuevo, montoActual: e.accion.montoActual, proximoCobro: e.viva.proximo_cobro_en })
+    const trae = await queTrae(admin, vendedor.id, e, { clave: e.plan.especial_pendiente?.plan, medida: true })
     accion = {
       tipo: 'diferencia',
       precioNuevo: e.accion.precioNuevo,
       monto: calculo?.monto ?? null,
       proximoCobro: e.viva.proximo_cobro_en,
       sinCobro: !!calculo && calculo.monto < MINIMO_DIFERENCIA,
+      trae,
     }
   }
 
@@ -134,10 +161,12 @@ export async function POST(request) {
   if (cuerpo?.accion === 'suscribirse') {
     if (e.accion?.tipo !== 'suscribirse') return NextResponse.json({ error: 'Tu plan ya está al día.' }, { status: 409 })
     const email = emailValido(cuerpo.email)
-    if (!email) return NextResponse.json({ error: 'Escribí el mail de tu cuenta de Mercado Pago.' }, { status: 400 })
+    if (!email) return NextResponse.json({ error: MAIL_INVALIDO, campo: 'email' }, { status: 400 })
     const nombrePlan = e.planes.find((p) => p.clave === e.accion.plan)?.nombre
     const r = await crearSuscripcionDeTienda(admin, { vendedorId: vendedor.id, plan: e.accion.plan, nombrePlan, monto: e.accion.monto, email })
-    return r.ok ? NextResponse.json({ initPoint: r.initPoint }) : NextResponse.json({ error: r.error }, { status: r.status })
+    return r.ok
+      ? NextResponse.json({ initPoint: r.initPoint })
+      : NextResponse.json({ error: r.error, campo: r.campo || null }, { status: r.status })
   }
 
   if (cuerpo?.accion === 'diferencia') {

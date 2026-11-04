@@ -1,7 +1,7 @@
 // La suscripción al plan de una tienda (migración 048), para la ficha del
 // admin.
 //
-//   GET   -> { suscripciones, cobros, diferencias, avisos }
+//   GET   -> { suscripciones, cobros, diferencias, avisos, plan }
 //            suscripciones  todas las de la tienda, la más nueva primero
 //            cobros         los de esas suscripciones, el más nuevo primero
 //            diferencias    los pagos de la diferencia de un plan a medida
@@ -10,6 +10,7 @@
 //                                   Mercado Pago no aceptó todavía
 //              'paga_sin_precio'    la tienda tiene condiciones de $0 y una
 //                                   suscripción activa
+//            plan           el que rige: { nombre, origen, precio, especialPendiente }
 //   POST  { accion: 'sincronizar' }      lee en Mercado Pago la viva y las que dan el plan (o la última)
 //                                        y sus cobros, con el estado de cada pago
 //         { accion: 'cancelar' }         cancela la viva en Mercado Pago
@@ -87,16 +88,24 @@ export async function GET(_request, { params }) {
       })
     }
   }
-  const viva = (suscripciones.data || []).find((s) => s.estado === 'authorized')
+  const viva = (suscripciones.data || []).find((s) => ['authorized', 'paused'].includes(s.estado))
   if (viva && plan.data?.origen === 'especial' && Number(plan.data.precio_mensual) === 0) {
-    avisos.push({ tipo: 'paga_sin_precio', texto: `Esta tienda tiene condiciones de $0 y sigue pagando ${textoPrecio(viva.monto)}: cancelala si ya no corresponde.` })
+    avisos.push({ tipo: 'paga_sin_precio', texto: `Esta tienda sigue pagando ${textoPrecio(viva.monto)} por mes y tiene condiciones sin abono. Cancelala si ya no corresponde.` })
   }
 
+  const p = plan.data || {}
   return NextResponse.json({
     suscripciones: suscripciones.data || [],
     cobros: cobros.data || [],
     diferencias: diferencias.data || [],
     avisos,
+    // El plan que rige, para «Plan» y la pastilla «Diferencia sin pagar».
+    plan: {
+      nombre: p.nombre ?? null,
+      origen: p.origen ?? null,
+      precio: Number.isInteger(Number(p.precio_mensual)) ? Number(p.precio_mensual) : null,
+      especialPendiente: p.especial_pendiente ?? null,
+    },
   })
 }
 

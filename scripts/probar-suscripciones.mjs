@@ -10,6 +10,8 @@ import crypto from 'node:crypto'
 import {
   accionDeLaTienda, cuerpoDeAlta, datosDeCobro, datosDePagoDeSuscripcion, datosDeSuscripcion, diferenciaProporcional,
   emailValido, mensajeDeAltaRechazada, MAIL_DE_LA_PLATAFORMA, pendienteAbandonada, problemaDeSuscripcion, reusarPendiente, suscripcionesHabilitadas, tipoDePagoDePlataforma,
+  errorDeAltaRechazada, MAIL_RECHAZADO, MP_NO_RESPONDIO, estadoParaPantalla, recienConfirmada, estadoDeCobro, filasDeCobros,
+  suscripcionDeLaFicha, pastillaDeLaFicha, seCancelaSola,
 } from '../src/lib/suscripciones.js'
 import { manifiesto, verificarFirma, firmaEstricta } from '../src/lib/mercadopago/firma.js'
 
@@ -35,7 +37,8 @@ const PAGO = {
 }
 
 console.log('1. Habilitadas por tienda')
-ok(!suscripcionesHabilitadas(15, {}), 'sin SUSCRIPCIONES_TIENDAS: ninguna')
+ok(suscripcionesHabilitadas(15, {}) && suscripcionesHabilitadas(99, { SUSCRIPCIONES_TIENDAS: '' }), 'sin SUSCRIPCIONES_TIENDAS: todas (F3.2)')
+ok(!suscripcionesHabilitadas(15, { SUSCRIPCIONES_TIENDAS: 'ninguna' }) && !suscripcionesHabilitadas(15, { SUSCRIPCIONES_TIENDAS: ' Ninguna ' }), '"ninguna": se cierra para todas')
 ok(suscripcionesHabilitadas(15, { SUSCRIPCIONES_TIENDAS: '15' }) && !suscripcionesHabilitadas(16, { SUSCRIPCIONES_TIENDAS: '15' }), '"15": solo la 15')
 ok(suscripcionesHabilitadas(16, { SUSCRIPCIONES_TIENDAS: ' 15, 16 ' }), 'una lista con espacios')
 ok(suscripcionesHabilitadas(99, { SUSCRIPCIONES_TIENDAS: 'todas' }), '"todas": todas')
@@ -79,13 +82,13 @@ ok(diferenciaProporcional({ precioNuevo: 20000, montoActual: 10000, proximoCobro
 console.log('\n5. Qué puede hacer la tienda')
 const viva = (extra = {}) => ({ estado: 'authorized', monto: 10000, ...extra })
 let a = accionDeLaTienda({ plan: { origen: 'gratis', especial_pendiente: null }, suscripcionViva: null, precioBasico: 10000 })
-ok(a?.tipo === 'suscribirse' && a.monto === 10000 && a.plan === 'basico', 'en el Gratis: suscribirse al Básico')
+ok(a?.tipo === 'suscribirse' && a.monto === 10000 && a.plan === 'basico' && a.medida === false, 'en el Gratis: suscribirse al Básico')
 a = accionDeLaTienda({ plan: { origen: 'gratis', especial_pendiente: null }, suscripcionViva: viva(), precioBasico: 10000 })
 ok(a === null, 'autorizada pero el cobro todavía no llegó: nada (no se suscribe dos veces)')
 a = accionDeLaTienda({ plan: { origen: 'gratis', especial_pendiente: null }, suscripcionViva: viva({ estado: 'pending' }), precioBasico: 10000 })
 ok(a?.tipo === 'suscribirse', 'esperando el pago: puede volver a intentar')
 a = accionDeLaTienda({ plan: { origen: 'gratis', especial_pendiente: { plan: 'basico', precio: 20000 } }, suscripcionViva: null, precioBasico: 10000 })
-ok(a?.tipo === 'suscribirse' && a.monto === 20000, 'plan a medida sin suscripción: se suscribe directo por su precio')
+ok(a?.tipo === 'suscribirse' && a.monto === 20000 && a.medida === true, 'plan a medida sin suscripción: se suscribe directo por su precio')
 a = accionDeLaTienda({ plan: { origen: 'suscripcion', especial_pendiente: { plan: 'basico', precio: 20000 } }, suscripcionViva: viva(), precioBasico: 10000 })
 ok(a?.tipo === 'diferencia' && a.precioNuevo === 20000 && a.montoActual === 10000, 'plan a medida con el Básico pagado: la diferencia')
 a = accionDeLaTienda({ plan: { origen: 'suscripcion', especial_pendiente: { plan: 'basico', precio: 20000 } }, suscripcionViva: viva({ monto: 20000 }), precioBasico: 10000 })
@@ -108,9 +111,67 @@ ok(emailValido(' a@b.com ') === 'a@b.com' && emailValido('sin-arroba') === null,
 console.log('\n6b. El mensaje cuando Mercado Pago no acepta el alta')
 ok(mensajeDeAltaRechazada({ status: 400, email: 'Cobra@Bahia.com', mailPlataforma: 'cobra@bahia.com' }) === MAIL_DE_LA_PLATAFORMA,
   'el mail de la cuenta que cobra: lo dice (sin importar mayúsculas)')
-ok(/mail con el que entrás a tu cuenta de Mercado Pago/.test(mensajeDeAltaRechazada({ status: 400, email: 'a@b.com', mailPlataforma: 'c@d.com' })),
-  'un 400: qué mail tiene que ser')
-ok(/no respondió/.test(mensajeDeAltaRechazada({ status: 0, email: 'a@b.com' })), 'sin respuesta: probá de nuevo')
+ok(mensajeDeAltaRechazada({ status: 400, email: 'a@b.com', mailPlataforma: 'c@d.com' }) === 'Mercado Pago no aceptó ese mail. Revisá que sea el de la cuenta con la que vas a pagar.',
+  'un 400: «Mercado Pago no aceptó ese mail…»')
+ok(mensajeDeAltaRechazada({ status: 0, email: 'a@b.com' }) === 'Mercado Pago no respondió. Probá de nuevo en unos minutos.', 'sin respuesta: «Mercado Pago no respondió…»')
+ok(mensajeDeAltaRechazada({ status: 500, email: 'a@b.com' }) === MP_NO_RESPONDIO && mensajeDeAltaRechazada({ status: 401 }) === MP_NO_RESPONDIO, 'cualquier otro: «no respondió»')
+let er = errorDeAltaRechazada({ status: 400, email: 'a@b.com', mailPlataforma: 'c@d.com' })
+ok(er.texto === MAIL_RECHAZADO && er.campo === 'email', 'el mail rechazado pinta el campo en rojo')
+er = errorDeAltaRechazada({ status: 503, email: 'a@b.com' })
+ok(er.texto === MP_NO_RESPONDIO && er.campo === null, 'sin respuesta: el campo no va en rojo')
+ok(errorDeAltaRechazada({ status: 400, email: 'X@y.com', mailPlataforma: 'x@Y.com' }).campo === 'email', 'el de la plataforma: también el campo')
+
+console.log('\n6c. Qué muestra «Tu plan» (estadoParaPantalla)')
+const basico = { tipo: 'suscribirse', monto: 10000, plan: 'basico', medida: false }
+const medida = { tipo: 'suscribirse', monto: 20000, plan: 'basico', medida: true }
+const pantalla = (o) => estadoParaPantalla({ ahoraMs: Date.parse('2026-11-10T12:00:00Z'), ...o })
+ok(pantalla({ suscripcion: null, accion: basico }).tipo === 'gratis', 'sin suscripción, en el Gratis: «Pasarme al Básico»')
+ok(pantalla({ suscripcion: { estado: 'pending', monto: 10000, initPoint: 'x' }, accion: basico }).tipo === 'esperando', 'esperando el pago')
+ok(pantalla({ suscripcion: { estado: 'pending', monto: 10000, initPoint: null }, accion: basico }).tipo === 'gratis', 'esperando sin dónde pagar: vuelve a ofrecer el alta')
+ok(pantalla({ suscripcion: { estado: 'pending', monto: 10000, initPoint: 'x' }, accion: basico, volvio: true }).tipo === 'confirmando', 'volvió de Mercado Pago: confirmando')
+ok(pantalla({ suscripcion: { estado: 'pending', monto: 10000, initPoint: 'x' }, accion: basico, volvio: true, consultaAgotada: true }).tipo === 'sin_pagar', 'volvió y pasó el rato sin pago: «No se completó el pago»')
+ok(pantalla({ suscripcion: { estado: 'authorized', monto: 10000 }, accion: basico }).tipo === 'confirmando', 'autorizada sin el cobro todavía: confirmando (también sin volver)')
+ok(pantalla({ suscripcion: { id: 7, estado: 'authorized', monto: 10000, recienConfirmada: true }, accion: null }).tipo === 'listo', 'recién confirmada: «¡Listo!»')
+ok(pantalla({ suscripcion: { id: 7, estado: 'authorized', monto: 10000, recienConfirmada: true }, accion: null, listoVisto: true }).tipo === 'al_dia', 'el «¡Listo!» ya visto: al día')
+ok(pantalla({ suscripcion: { estado: 'authorized', monto: 10000, recienConfirmada: false }, accion: null }).tipo === 'al_dia', 'al día')
+ok(pantalla({ suscripcion: null, accion: medida }).tipo === 'medida', 'plan a medida sin pagar')
+const pv = pantalla({ suscripcion: { estado: 'pending', monto: 10000, initPoint: 'x' }, accion: medida })
+ok(pv.tipo === 'medida' && pv.pendienteVieja === true, 'una del Básico esperando el pago no tapa el plan a medida')
+ok(pantalla({ suscripcion: { estado: 'authorized', monto: 10000 }, accion: { tipo: 'diferencia', precioNuevo: 20000 } }).tipo === 'diferencia', 'plan a medida y ya paga el Básico: la diferencia')
+ok(pantalla({ suscripcion: { estado: 'authorized', monto: 10000 }, accion: { tipo: 'diferencia' }, volvio: true }).tipo === 'confirmando', 'volvió de pagar la diferencia: confirmando')
+ok(pantalla({ suscripcion: { estado: 'authorized', monto: 10000 }, accion: { tipo: 'diferencia' }, volvio: true, consultaAgotada: true }).tipo === 'diferencia', 'y si no se confirmó: otra vez la diferencia')
+ok(pantalla({ suscripcion: { estado: 'cancelled', monto: 10000, pagadoHasta: '2026-12-04T00:00:00Z' }, accion: null }).tipo === 'cancelada', 'cancelada con días pagos')
+ok(pantalla({ suscripcion: { estado: 'cancelled', monto: 10000, pagadoHasta: '2026-11-01T00:00:00Z' }, accion: basico }).tipo === 'gratis', 'cancelada y vencida: vuelve a ofrecer el Básico')
+ok(pantalla({ suscripcion: null, accion: null }).tipo === 'nada', 'condiciones de $0: nada')
+
+const ahoraRC = Date.parse('2026-11-10T12:00:00Z')
+ok(recienConfirmada({ estado: 'authorized', creada_en: '2026-11-09T12:00:00Z', ultimo_cobro_en: '2026-11-09T12:05:00Z' }, ahoraRC), 'primer cobro de ayer: recién confirmada')
+ok(!recienConfirmada({ estado: 'authorized', creada_en: '2026-11-07T12:00:00Z', ultimo_cobro_en: '2026-11-07T12:05:00Z' }, ahoraRC), 'de hace tres días: ya no')
+ok(!recienConfirmada({ estado: 'authorized', creada_en: '2026-10-01T12:00:00Z', ultimo_cobro_en: '2026-11-09T12:05:00Z' }, ahoraRC), 'un cobro de renovación: no es «¡Listo!»')
+ok(!recienConfirmada({ estado: 'pending', creada_en: '2026-11-09T12:00:00Z', ultimo_cobro_en: null }, ahoraRC), 'sin cobro: no')
+
+console.log('\n6d. La ficha del admin')
+ok(estadoDeCobro({ estado_pago: 'approved' }).texto === 'Aprobado' && estadoDeCobro({ estado_pago: 'approved' }).tono === 'ok', 'approved: Aprobado, verde')
+ok(estadoDeCobro({ estado_pago: 'refunded' }).texto === 'Devuelto' && estadoDeCobro({ estado_pago: 'refunded' }).tono === 'espera', 'refunded: Devuelto, ámbar')
+ok(estadoDeCobro({ estado_pago: 'rejected' }).tono === 'no', 'rejected: Rechazado, rojo')
+ok(estadoDeCobro({ estado_pago: null, estado_cobro: 'scheduled' }).texto === 'Esperando', 'sin pago todavía: Esperando')
+const filas = filasDeCobros({
+  cobros: [
+    { id: 1, suscripcion_id: 4, monto: 500, estado_pago: 'refunded', cobrado_en: '2026-10-04T12:00:00Z' },
+    { id: 2, suscripcion_id: 7, monto: 10000, estado_pago: 'approved', cobrado_en: '2026-11-04T12:00:00Z' },
+  ],
+  diferencias: [{ id: 3, monto: 6700, estado: 'pendiente', creada_en: '2026-11-05T12:00:00Z', pagada_en: null }],
+})
+ok(filas.length === 3 && filas[0].suscripcion === 'Diferencia' && filas[1].suscripcion === '#7' && filas[2].suscripcion === '#4',
+  'una sola tabla con los cobros de todas las suscripciones y la diferencia, la más nueva primero')
+ok(filas[2].estado.texto === 'Devuelto' && filas[0].estado.texto === 'Esperando', 'con los estados en castellano')
+const subs = [{ id: 9, estado: 'error' }, { id: 8, estado: 'cancelled' }, { id: 7, estado: 'cancelled' }]
+ok(suscripcionDeLaFicha(subs).id === 8, 'arriba: la última que llegó a Mercado Pago (no un alta rechazada)')
+ok(suscripcionDeLaFicha([{ id: 9, estado: 'cancelled' }, { id: 10, estado: 'authorized' }]).id === 10, 'la viva primero')
+ok(suscripcionDeLaFicha([{ id: 9, estado: 'error' }]) === null, 'solo altas rechazadas: sin suscripción')
+ok(pastillaDeLaFicha({ estado: 'authorized' }).texto === 'Al día' && pastillaDeLaFicha({ estado: 'authorized' }, { diferenciaSinPagar: true }).texto === 'Diferencia sin pagar', 'pastilla: Al día o Diferencia sin pagar')
+ok(pastillaDeLaFicha({ estado: 'pending' }).texto === 'Esperando el pago' && pastillaDeLaFicha({ estado: 'cancelled' }).tono === 'gris', 'pastilla: Esperando el pago, Cancelada en gris')
+ok(seCancelaSola({ creada_en: '2026-11-04T12:00:00Z' }) === '2026-11-11T12:00:00.000Z', 'se cancela sola a los 7 días')
 
 console.log('\n7. La firma del webhook')
 const secreto = 'clave-de-prueba'

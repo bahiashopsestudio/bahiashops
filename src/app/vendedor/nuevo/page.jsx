@@ -17,6 +17,7 @@ export default function NuevoVendedorPage() {
   const [categorias, setCategorias] = useState([])
   const [userId, setUserId] = useState(null)
   const [verificando, setVerificando] = useState(true)
+  const [suscribirme, setSuscribirme] = useState(false)
 
   useEffect(() => {
     if (menuOpen) { document.body.style.overflow = 'hidden' } else { document.body.style.overflow = '' }
@@ -24,14 +25,20 @@ export default function NuevoVendedorPage() {
   }, [menuOpen])
 
   useEffect(() => {
+    // Desde «Sumarme con el Básico» de /vender: al terminar, el panel abre el
+    // alta de la suscripción. Se lleva por /entrar y hasta el panel. Se lee
+    // antes de esperar nada: después, la dirección ya puede ser otra.
+    const conBasico = new URLSearchParams(window.location.search).get('suscribirme') === 'basico'
+
     async function cargar() {
+      setSuscribirme(conBasico)
       const { data } = await supabase.from('categorias').select('id, nombre, slug').eq('activa', true).order('orden')
       if (data) setCategorias(data)
 
       // Sin sesión no hay alta posible: a /entrar, con vuelta acá mismo.
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
-        router.replace('/entrar?next=%2Fvendedor%2Fnuevo')
+        router.replace(`/entrar?next=${encodeURIComponent(conBasico ? '/vendedor/nuevo?suscribirme=basico' : '/vendedor/nuevo')}`)
         return
       }
 
@@ -42,7 +49,7 @@ export default function NuevoVendedorPage() {
         .maybeSingle()
 
       if (vendedorExistente) {
-        router.replace('/vendedor/perfil')
+        router.replace(conBasico ? '/vendedor/perfil?suscribirme=basico' : '/vendedor/perfil')
         return
       }
 
@@ -74,7 +81,7 @@ export default function NuevoVendedorPage() {
                 >
                   Sumar mi emprendimiento
                 </h1>
-                {userId &&<FormularioVendedor userId={userId} />}
+                {userId &&<FormularioVendedor userId={userId} panel={suscribirme ? '/vendedor/perfil?suscribirme=basico' : '/vendedor/perfil'} />}
               </>
             )}
           </div>
