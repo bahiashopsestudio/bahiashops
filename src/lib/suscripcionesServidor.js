@@ -126,19 +126,26 @@ export async function sincronizarSuscripcion(admin, fila, { conCobros = true } =
   return { ok: true, fila: actual, planCambio: String(actual?.pagado_hasta ?? '') !== String(fila.pagado_hasta ?? '') }
 }
 
-// La suscripción que conviene sincronizar: la viva o, si no hay, la última
-// cancelada que todavía da el plan (pagado_hasta futuro), donde un reembolso
-// cambia algo. Devuelve { fila } (o null) o { error }.
-export async function suscripcionParaSincronizar(admin, vendedorId) {
-  const { fila: viva, error } = await suscripcionViva(admin, vendedorId)
-  if (error) return { error }
-  if (viva) return { fila: viva }
-  const { data, error: errorUltima } = await admin.from('vendedor_suscripciones').select('*')
-    .eq('vendedor_id', vendedorId).eq('estado', CANCELADA).gt('pagado_hasta', ahoraIso())
-    .not('mp_preapproval_id', 'is', null)
-    .order('pagado_hasta', { ascending: false }).limit(1).maybeSingle()
-  if (errorUltima) console.error('[suscripciones/para-sincronizar]', vendedorId, errorUltima.message)
-  return errorUltima ? { error: errorUltima } : { fila: data || null }
+// Las suscripciones que conviene sincronizar: la viva y todas las que todavía
+// dan el plan (pagado_hasta futuro), aunque estén canceladas o haya otra más
+// nueva: un reembolso de cualquiera de sus cobros cambia el plan. Con
+// ultimaSiNoHay, si no queda ninguna, la última creada en Mercado Pago (el
+// botón del admin). Devuelve { filas } o { error }.
+export async function suscripcionesParaSincronizar(admin, vendedorId, { ultimaSiNoHay = false } = {}) {
+  const { data, error } = await admin.from('vendedor_suscripciones').select('*')
+    .eq('vendedor_id', vendedorId).not('mp_preapproval_id', 'is', null)
+    .or(`estado.in.(${ESTADOS_VIVOS.join(',')}),pagado_hasta.gt.${ahoraIso()}`)
+    .order('creada_en', { ascending: false })
+  if (error) {
+    console.error('[suscripciones/para-sincronizar]', vendedorId, error.message)
+    return { error }
+  }
+  if (data?.length || !ultimaSiNoHay) return { filas: data || [] }
+  const { data: ultima, error: errorUltima } = await admin.from('vendedor_suscripciones').select('*')
+    .eq('vendedor_id', vendedorId).not('mp_preapproval_id', 'is', null)
+    .order('creada_en', { ascending: false }).limit(1).maybeSingle()
+  if (errorUltima) console.error('[suscripciones/para-sincronizar/ultima]', vendedorId, errorUltima.message)
+  return errorUltima ? { error: errorUltima } : { filas: ultima ? [ultima] : [] }
 }
 
 // ── Alta ──────────────────────────────────────────────────────────────────────

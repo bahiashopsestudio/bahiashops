@@ -10,7 +10,7 @@
 //                                   Mercado Pago no aceptó todavía
 //              'paga_sin_precio'    la tienda tiene condiciones de $0 y una
 //                                   suscripción activa
-//   POST  { accion: 'sincronizar' }      lee en Mercado Pago la viva (o la última)
+//   POST  { accion: 'sincronizar' }      lee en Mercado Pago la viva y las que dan el plan (o la última)
 //                                        y sus cobros, con el estado de cada pago
 //         { accion: 'cancelar' }         cancela la viva en Mercado Pago
 //         { accion: 'reintentar_monto' } vuelve a mandar el monto nuevo (o el
@@ -24,7 +24,7 @@ import { NextResponse } from 'next/server'
 import { getServiceRoleClient, verificarAdmin } from '@/lib/supabase/admin'
 import { textoPrecio } from '@/lib/planes'
 import {
-  aplicarMontoNuevo, cancelarSuscripcion, revertirMonto, sincronizarSuscripcion, suscripcionViva,
+  aplicarMontoNuevo, cancelarSuscripcion, revertirMonto, sincronizarSuscripcion, suscripcionesParaSincronizar, suscripcionViva,
 } from '@/lib/suscripcionesServidor'
 
 async function inicio(params) {
@@ -109,19 +109,18 @@ export async function POST(request, { params }) {
   if (error) return NextResponse.json({ error: ERROR }, { status: 500 })
 
   if (accion === 'sincronizar') {
-    // La viva o, si no hay, la última creada en Mercado Pago (también una
-    // cancelada: así se ve un reembolso de su cobro).
-    let objetivo = fila
-    if (!objetivo) {
-      const { data, error: errorUltima } = await admin.from('vendedor_suscripciones').select('*')
-        .eq('vendedor_id', vendedorId).not('mp_preapproval_id', 'is', null)
-        .order('creada_en', { ascending: false }).limit(1).maybeSingle()
-      if (errorUltima) return NextResponse.json({ error: ERROR }, { status: 500 })
-      objetivo = data
+    // La viva y todas las que todavía dan el plan (también canceladas, aunque
+    // haya una más nueva): así se ve un reembolso de cualquiera de sus cobros.
+    // Si no queda ninguna, la última creada en Mercado Pago.
+    const { filas, error: errorFilas } = await suscripcionesParaSincronizar(admin, vendedorId, { ultimaSiNoHay: true })
+    if (errorFilas) return NextResponse.json({ error: ERROR }, { status: 500 })
+    if (!filas.length) return NextResponse.json({ error: 'La tienda no tiene ninguna suscripción en Mercado Pago.' }, { status: 409 })
+    const errores = []
+    for (const objetivo of filas) {
+      const r = await sincronizarSuscripcion(admin, objetivo)
+      if (!r.ok) errores.push(r.error)
     }
-    if (!objetivo) return NextResponse.json({ error: 'La tienda no tiene ninguna suscripción en Mercado Pago.' }, { status: 409 })
-    const r = await sincronizarSuscripcion(admin, objetivo)
-    return r.ok ? NextResponse.json({ ok: true }) : NextResponse.json({ error: `Mercado Pago: ${r.error}` }, { status: 502 })
+    return errores.length ? NextResponse.json({ error: `Mercado Pago: ${errores.join(' · ')}` }, { status: 502 }) : NextResponse.json({ ok: true })
   }
 
   if (accion === 'cancelar') {

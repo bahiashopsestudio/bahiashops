@@ -358,6 +358,13 @@ f = globalThis.__f = conSuscripcion(escenario([], {}, { preapprovals: { pre1: { 
 await webhook({ json: async () => ({ type: 'subscription_preapproval', data: { id: 'pre1' } }), headers: { get: () => null } })
 okv(f.admin.tablas.vendedor_suscripciones[0].estado === 'pending', 'si la suscripción la cobra otra cuenta, no se toca')
 
+f = globalThis.__f = conSuscripcion(escenario([], {}, { preapprovals: { pre1: { id: 'pre1', status: 'cancelled', collector_id: 999, external_reference: 'bs-sus-abc',
+  auto_recurring: { transaction_amount: 10000, currency_id: 'ARS' } } } }))
+resp = await webhook({ url: 'https://bahiashops.com.ar/api/mercadopago/webhook?topic=preapproval&id=pre1',
+  json: async () => { throw new SyntaxError('sin cuerpo') }, headers: { get: () => null } })
+okv(resp.status === 200 && f.admin.tablas.vendedor_suscripciones[0].estado === 'cancelled',
+  'formato viejo (?topic=preapproval&id=…, sin cuerpo): se procesa igual')
+
 // La prueba real (04/11): el cobro devuelto no avisó (los pagos de una
 // suscripción no tienen notification_url). Al sincronizar, el estado sale del pago.
 f = globalThis.__f = conSuscripcion(escenario([], { 2004: cobroDePlataforma(2004, { status: 'refunded' }) }, {

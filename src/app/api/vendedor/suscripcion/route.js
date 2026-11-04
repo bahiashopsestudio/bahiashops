@@ -26,7 +26,7 @@ import {
   MINIMO_DIFERENCIA, accionDeLaTienda, diferenciaProporcional, emailValido, suscripcionesHabilitadas,
 } from '@/lib/suscripciones'
 import {
-  cancelarSuscripcion, crearDiferencia, crearSuscripcionDeTienda, sincronizarSuscripcion, suscripcionParaSincronizar,
+  cancelarSuscripcion, crearDiferencia, crearSuscripcionDeTienda, sincronizarSuscripcion, suscripcionesParaSincronizar,
   suscripcionViva,
 } from '@/lib/suscripcionesServidor'
 
@@ -47,11 +47,14 @@ async function inicio() {
 async function estado(admin, vendedorId, { sincronizar = false } = {}) {
   let planCambio = false
   if (sincronizar) {
-    const { fila: objetivo } = await suscripcionParaSincronizar(admin, vendedorId)
-    const vieja = !objetivo?.consultada_en || Date.now() - Date.parse(objetivo.consultada_en) > SINCRONIZAR_CADA_MS
-    if (objetivo && ['pending', 'authorized', 'cancelled'].includes(objetivo.estado) && vieja) {
+    // La viva y todas las que todavía dan el plan, cada una como mucho una
+    // vez por minuto.
+    const { filas } = await suscripcionesParaSincronizar(admin, vendedorId)
+    for (const objetivo of filas || []) {
+      const vieja = !objetivo.consultada_en || Date.now() - Date.parse(objetivo.consultada_en) > SINCRONIZAR_CADA_MS
+      if (!vieja) continue
       const r = await sincronizarSuscripcion(admin, objetivo)
-      planCambio = !!r.planCambio
+      if (r.planCambio) planCambio = true
     }
   }
 

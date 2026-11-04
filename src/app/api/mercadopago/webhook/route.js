@@ -126,13 +126,19 @@ async function registrarPagoDoble({ admin, pedidoId, pago }) {
 
 export async function POST(request) {
   try {
-    const body = await request.json();
-    console.log('Webhook recibido:', JSON.stringify(body));
-
-    // El tipo y el id: del cuerpo y, si no vienen, de la URL (?type=…&data.id=…).
+    // Un aviso sin cuerpo JSON (el formato viejo manda todo en la URL) no se
+    // pierde: el cuerpo queda vacío y el tipo y el id salen de la URL.
+    const body = (await request.json().catch(() => null)) || {};
     const params = new URL(request.url || 'http://x').searchParams;
-    const tipo = body.type || params.get('type') || params.get('topic');
-    const dataId = params.get('data.id') ?? body.data?.id ?? null;
+    console.log('Webhook recibido:', JSON.stringify(body), params.toString());
+
+    // El tipo y el id: del cuerpo y, si no vienen, de la URL (?type=…&data.id=…,
+    // o el formato viejo ?topic=…&id=…). Los tópicos viejos de las
+    // suscripciones se pasan a los nuevos.
+    const TOPICOS_VIEJOS = { preapproval: 'subscription_preapproval', authorized_payment: 'subscription_authorized_payment' };
+    const tipoCrudo = body.type || params.get('type') || params.get('topic');
+    const tipo = TOPICOS_VIEJOS[tipoCrudo] || tipoCrudo;
+    const dataId = params.get('data.id') ?? body.data?.id ?? params.get('id') ?? null;
 
     // ── Verificar firma ──
     if (!firmaAceptada(request, body, dataId)) {
