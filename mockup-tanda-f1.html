@@ -1,0 +1,526 @@
+<title>Mockup planes y topes</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Poppins:wght@300;400;500&family=Inter:wght@300;400;500;600;700&display=swap">
+<style>
+/* Layout: banda de controles arriba, la pantalla del sitio en un marco (compu o celular), y al costado las decisiones abiertas. Mismo sistema que el mockup de la tanda A2. */
+:root {
+  --ground: #E9E7E2;
+  --panel: #FFFFFF;
+  --ink: #16191A;
+  --ink-soft: #5B6461;
+  --ink-faint: #8A928F;
+  --line: #D6D4CE;
+  --brand: #015444;
+  --sel: #16191A;
+  --sel-ink: #FFFFFF;
+  --f-display: "Fraunces", Georgia, serif;
+  --f-body: "Poppins", system-ui, sans-serif;
+  --f-ui: "Inter", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #141716; --panel: #1C201F; --ink: #E9EEEC; --ink-soft: #A3ADA9; --ink-faint: #737C79;
+    --line: #2C3230; --brand: #7FC4B3; --sel: #E9EEEC; --sel-ink: #141716;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --ground: #141716; --panel: #1C201F; --ink: #E9EEEC; --ink-soft: #A3ADA9; --ink-faint: #737C79;
+  --line: #2C3230; --brand: #7FC4B3; --sel: #E9EEEC; --sel-ink: #141716;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--ground); color: var(--ink); font-family: var(--f-ui);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 80px; -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1360px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+header.top { padding-top: 40px; display: flex; flex-direction: column; gap: 8px; }
+.eyebrow { font-size: 10px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); }
+h1 { font-family: var(--f-display); font-weight: 500; font-size: clamp(26px, 4vw, 36px); margin: 0; line-height: 1.15; text-wrap: balance; }
+.lede { font-family: var(--f-body); font-weight: 300; font-size: 14.5px; color: var(--ink-soft); margin: 0; max-width: 72ch; line-height: 1.6; }
+.controls { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: center; }
+.seg { display: inline-flex; flex-wrap: wrap; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 4px; }
+.seg button { font: 500 13px var(--f-ui); color: var(--ink-soft); background: none; border: 0; border-radius: 7px; padding: 8px 13px; cursor: pointer; white-space: nowrap; }
+.seg button[aria-pressed="true"] { background: var(--sel); color: var(--sel-ink); }
+.seg button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.ctl-label { font-size: 11px; color: var(--ink-faint); font-weight: 500; margin-right: 6px; }
+.ctl { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 22px; align-items: start; }
+@media (max-width: 1080px) { .stage { grid-template-columns: minmax(0, 1fr); } }
+.viewport { overflow-x: auto; padding-bottom: 6px; min-width: 0; }
+.frame { margin: 0 auto; background: #2a2d2c; border-radius: 12px; padding: 10px; width: max-content; }
+.frame.phone { border-radius: 38px; padding: 12px; }
+.frame .bar { display: flex; gap: 6px; padding: 2px 4px 10px; }
+.frame .bar i { width: 10px; height: 10px; border-radius: 50%; background: #555a58; display: block; }
+.frame.phone .bar { justify-content: center; padding: 4px 0 10px; }
+.frame.phone .bar i { width: 70px; height: 6px; border-radius: 4px; }
+.frame.phone .bar i + i { display: none; }
+.notes { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+.notes h2 { font-family: var(--f-display); font-weight: 500; font-size: 19px; margin: 0; }
+.notes .intro { font-family: var(--f-body); font-weight: 300; font-size: 13px; color: var(--ink-soft); margin: 0; line-height: 1.55; }
+.q { border-top: 1px solid var(--line); padding-top: 14px; display: flex; flex-direction: column; gap: 6px; }
+.q b { font-size: 13.5px; font-weight: 600; line-height: 1.4; }
+.q p { margin: 0; font-family: var(--f-body); font-weight: 300; font-size: 13px; color: var(--ink-soft); line-height: 1.55; }
+.legend { font-family: var(--f-body); font-weight: 300; font-size: 12.5px; color: var(--ink-faint); margin: 0; }
+
+/* ================= Pantalla del sitio (colores del sitio, solo claro) ================= */
+.scr { background: #fff; color: #0a0a0a; font-family: "Inter", sans-serif; overflow: hidden; border-radius: 4px; position: relative; }
+.frame.phone .scr { border-radius: 26px; }
+.scr.admin { background: #faf9f7; }
+.scr * { box-sizing: border-box; }
+.nav { height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 28px; border-bottom: 1px solid rgba(10,10,10,.06); background: #fff; }
+.nav .logo { font-family: "Fraunces", serif; font-weight: 600; font-size: 18px; letter-spacing: -.01em; }
+.nav .items { display: flex; gap: 22px; font-size: 13px; color: rgba(10,10,10,.6); }
+.nav .burger { width: 20px; height: 12px; border-top: 2px solid #0a0a0a; border-bottom: 2px solid #0a0a0a; position: relative; }
+.nav .burger::after { content: ""; position: absolute; left: 0; right: 0; top: 3px; border-top: 2px solid #0a0a0a; }
+.body { padding: 28px 32px 48px; }
+.phone .body { padding: 20px 16px 40px; }
+.col { max-width: 576px; margin: 0 auto; }
+.col.wide { max-width: 820px; }
+.back { font-size: 12px; color: rgba(10,10,10,.4); margin-bottom: 18px; display: inline-block; }
+.s-eyebrow { font-size: 10px; text-transform: uppercase; letter-spacing: 2px; color: rgba(10,10,10,.3); margin: 0 0 8px; }
+.s-h1 { font-family: "Fraunces", serif; font-weight: 500; font-size: 28px; margin: 0 0 2px; }
+.s-sub { font-family: "Poppins", sans-serif; font-weight: 300; font-size: 13px; color: rgba(10,10,10,.45); margin: 0 0 18px; }
+.ghost { opacity: .42; }
+.ph1 { font-size: 26px; font-weight: 900; letter-spacing: -.02em; margin: 0; }
+.btn-k { background: #0a0a0a; color: #fff; border-radius: 999px; padding: 10px 18px; font-size: 13px; font-weight: 500; white-space: nowrap; }
+.prow { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; gap: 12px; }
+
+/* contador */
+.cont { margin-top: 6px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.cont .lin { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 13px; color: rgba(10,10,10,.55); }
+.cont .lin b { font-weight: 600; color: #0a0a0a; font-variant-numeric: tabular-nums; }
+.cont .plan { font-size: 10.5px; font-weight: 600; border-radius: 999px; padding: 2px 8px; background: #f1efe9; color: rgba(10,10,10,.6); }
+.cont .plan.medida { background: #dcebf7; color: #015444; }
+.barra { width: 180px; max-width: 100%; height: 4px; border-radius: 3px; background: rgba(10,10,10,.08); overflow: hidden; }
+.barra span { display: block; height: 100%; background: #015444; border-radius: 3px; }
+.cont.cerca .barra span { background: #d9a520; }
+.cont.cerca .lin b { color: #8a6410; }
+.cont.tope .barra span, .cont.encima .barra span { background: #0a0a0a; }
+.cont .nota-c { font-size: 12px; color: rgba(10,10,10,.5); font-family: "Poppins", sans-serif; font-weight: 300; }
+
+/* cartel del plan: mensaje de la marca, verde footer + celeste */
+.cartel { background: #015444; color: #9cc3ea; border-radius: 16px; padding: 22px; display: flex; flex-direction: column; gap: 12px; position: relative; margin-bottom: 18px; }
+.cartel .ey { font-size: 10px; text-transform: uppercase; letter-spacing: 2px; color: rgba(156,195,234,.65); margin: 0; }
+.cartel h3 { font-family: "Fraunces", serif; font-weight: 500; font-size: 22px; line-height: 1.2; margin: 0; color: #9cc3ea; text-wrap: balance; padding-right: 30px; }
+.cartel p { margin: 0; font-family: "Poppins", sans-serif; font-weight: 300; font-size: 13.5px; line-height: 1.6; color: rgba(156,195,234,.88); }
+.cartel .trae { display: flex; flex-wrap: wrap; gap: 8px; }
+.cartel .trae span { font-size: 12px; font-weight: 500; border: 1px solid rgba(156,195,234,.4); border-radius: 999px; padding: 4px 10px; color: #fff; }
+.cartel .acc { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+.btn-c { font: 500 13px "Inter", sans-serif; border-radius: 4px; padding: 10px 16px; border: 1px solid #9cc3ea; background: #9cc3ea; color: #015444; cursor: pointer; }
+.btn-c:hover { background: transparent; color: #9cc3ea; }
+.cartel .sec { font-size: 12.5px; color: #9cc3ea; text-decoration: underline; text-underline-offset: 2px; }
+.cartel .x { position: absolute; top: 12px; right: 12px; width: 30px; height: 30px; border-radius: 50%; border: 0; background: transparent; color: #9cc3ea; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.cartel .x:hover { background: rgba(156,195,234,.15); }
+.cartel .x svg { width: 15px; height: 15px; }
+.cartel.chico { padding: 16px 18px; gap: 8px; }
+.cartel.chico h3 { font-size: 17px; }
+
+/* tarjetas de producto */
+.card { border: 1px solid rgba(10,10,10,.05); border-radius: 16px; padding: 14px; margin-bottom: 10px; display: flex; gap: 14px; align-items: center; }
+.ph { width: 64px; height: 64px; border-radius: 12px; flex-shrink: 0; }
+.info { flex: 1; min-width: 0; }
+.info .n { font-weight: 500; font-size: 14px; margin: 0 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.info .p { font-size: 13px; font-weight: 600; margin: 0; }
+.chip { display: inline-flex; align-items: center; gap: 6px; font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 999px; margin-top: 6px; }
+.chip i { width: 6px; height: 6px; border-radius: 50%; display: block; }
+.acts { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+.acts span { border: 1px solid rgba(10,10,10,.1); border-radius: 999px; padding: 5px 14px; font-size: 12px; color: rgba(10,10,10,.6); font-weight: 300; text-align: center; white-space: nowrap; background: #fff; }
+.acts .ac { border-color: #34d399; color: #059669; cursor: pointer; }
+
+/* formulario de producto */
+.campo { margin-bottom: 14px; }
+.campo label { display: block; font-size: 12px; color: rgba(10,10,10,.5); margin-bottom: 6px; }
+.inp { border: 1px solid rgba(10,10,10,.12); border-radius: 10px; height: 40px; display: flex; align-items: center; padding: 0 12px; font-size: 13px; color: rgba(10,10,10,.75); background: #fff; }
+.fotos { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.phone .fotos { grid-template-columns: repeat(3, 1fr); }
+.foto { aspect-ratio: 1; border-radius: 10px; max-width: 100%; }
+.foto.add { border: 1.5px dashed rgba(10,10,10,.2); display: flex; align-items: center; justify-content: center; font-size: 22px; color: rgba(10,10,10,.35); cursor: pointer; background: #fff; }
+.foto.add.no { opacity: .35; cursor: not-allowed; }
+.fotos-pie { font-size: 12px; color: rgba(10,10,10,.45); margin-top: 6px; }
+.fotos-pie b { color: #0a0a0a; font-weight: 600; }
+
+/* bloque Tu plan */
+.tuplan { border: 1px solid rgba(10,10,10,.08); border-radius: 16px; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px; margin-bottom: 18px; background: #fff; }
+.tuplan .ey { font-size: 10px; text-transform: uppercase; letter-spacing: 2px; color: rgba(10,10,10,.3); margin: 0; }
+.tuplan .cab { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.tuplan h3 { font-family: "Fraunces", serif; font-weight: 500; font-size: 22px; margin: 0; }
+.tuplan .cab span { font-size: 12px; color: rgba(10,10,10,.45); }
+.usos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; border-top: 1px solid rgba(10,10,10,.06); padding-top: 12px; }
+.usos div { padding: 0 12px; border-left: 1px solid rgba(10,10,10,.06); display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.usos div:first-child { padding-left: 0; border-left: 0; }
+.usos b { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.usos span { font-size: 11.5px; color: rgba(10,10,10,.5); font-weight: 300; line-height: 1.35; }
+.tuplan .sig { background: #f6f5f2; border-radius: 10px; padding: 12px 14px; font-size: 13px; line-height: 1.55; color: rgba(10,10,10,.7); display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.tuplan .sig b { color: #0a0a0a; font-weight: 600; }
+.tuplan .sig u { color: #015444; text-underline-offset: 2px; white-space: nowrap; font-weight: 500; }
+
+/* pedidos */
+.tabs { display: flex; gap: 18px; border-bottom: 1px solid rgba(10,10,10,.08); margin-bottom: 16px; font-size: 13px; flex-wrap: wrap; }
+.tabs span { padding: 8px 0; color: rgba(10,10,10,.4); display: inline-flex; align-items: center; gap: 6px; }
+.tabs span.on { color: #0a0a0a; border-bottom: 2px solid #0a0a0a; font-weight: 500; }
+.tabs .bd { font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: rgba(10,10,10,.5); background: #f1efe9; padding: 2px 6px; border-radius: 999px; }
+.carr-vacio { border: 1px solid rgba(10,10,10,.06); border-radius: 16px; padding: 22px; display: flex; flex-direction: column; gap: 10px; }
+.carr-vacio h3 { font-family: "Fraunces", serif; font-weight: 500; font-size: 20px; margin: 0; }
+.carr-vacio p { margin: 0; font-family: "Poppins", sans-serif; font-weight: 300; font-size: 13.5px; line-height: 1.6; color: rgba(10,10,10,.6); }
+.carr-vacio u { font-size: 13px; color: #015444; font-weight: 500; text-underline-offset: 2px; }
+
+/* admin */
+.ad-h h4 { font-family: "Fraunces", serif; font-weight: 500; font-size: 26px; margin: 0; }
+.ad-sub { font-family: "Poppins", sans-serif; font-weight: 300; font-size: 13px; color: rgba(10,10,10,.45); margin: 4px 0 22px; }
+.planes-ad { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.phone .planes-ad { grid-template-columns: minmax(0, 1fr); }
+.pa { background: #fff; border: 1px solid rgba(10,10,10,.06); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.pa h5 { font-family: "Fraunces", serif; font-weight: 500; font-size: 19px; margin: 0; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.pa h5 span { font-family: "Inter", sans-serif; font-size: 10px; font-weight: 600; border-radius: 999px; padding: 2px 8px; }
+.on-c { background: #d1fae5; color: #047857; }
+.off-c { background: #f1efe9; color: rgba(10,10,10,.5); }
+.fl { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.fl label { font-size: 11.5px; color: rgba(10,10,10,.5); }
+.fi { display: flex; align-items: center; border: 1px solid rgba(10,10,10,.12); border-radius: 8px; background: #fff; padding: 0 10px; height: 36px; font-size: 13px; gap: 6px; }
+.fi input { border: 0; outline: 0; font: 400 13px "Inter", sans-serif; width: 100%; background: transparent; color: #0a0a0a; min-width: 0; }
+.fi span { color: rgba(10,10,10,.4); }
+.fi:focus-within { border-color: #0a0a0a; }
+.fi.dis { background: #f6f5f2; }
+.chk { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: rgba(10,10,10,.7); }
+.warn { background: #fef3c7; color: #92650a; border-radius: 6px; padding: 9px 12px; font-size: 12px; line-height: 1.5; }
+.help { font-size: 11px; color: rgba(10,10,10,.4); font-weight: 300; line-height: 1.45; }
+.abtn { font: 500 12px "Inter", sans-serif; border-radius: 4px; padding: 8px 16px; cursor: pointer; border: 1px solid #0a0a0a; background: #0a0a0a; color: #fff; }
+.abtn.sec2 { background: #fff; color: #0a0a0a; }
+.abtn.red { background: #cc152b; border-color: #cc152b; }
+.abtn.link2 { background: none; border: 0; color: rgba(10,10,10,.45); padding: 0; font-weight: 400; }
+.sec5 h5 { font-family: "Fraunces", serif; font-weight: 500; font-size: 17px; margin: 0 0 12px; }
+.secbox { background: #fff; border: 1px solid rgba(10,10,10,.06); border-radius: 8px; padding: 18px 20px; display: flex; flex-direction: column; gap: 16px; }
+.phone .secbox { padding: 16px; }
+.vig { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.vig .big { font-family: "Fraunces", serif; font-weight: 500; font-size: 34px; line-height: 1; color: #015444; font-variant-numeric: tabular-nums; }
+.vig .tx { flex: 1; min-width: 180px; display: flex; flex-direction: column; gap: 3px; }
+.vig .t1 { font-size: 14px; font-weight: 500; }
+.vig .t2 { font-size: 12.5px; color: rgba(10,10,10,.5); font-weight: 300; }
+.nota { background: #f6f5f2; border-radius: 6px; padding: 9px 12px; font-size: 12.5px; color: rgba(10,10,10,.7); font-weight: 300; line-height: 1.5; }
+.nota small { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: rgba(10,10,10,.4); font-weight: 500; margin-bottom: 2px; }
+.form { border-top: 1px solid rgba(10,10,10,.05); padding-top: 16px; display: flex; flex-direction: column; gap: 12px; }
+.form .ft { font-size: 13px; font-weight: 600; margin: 0; }
+.atajos { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.atajos .lb { font-size: 11.5px; color: rgba(10,10,10,.45); margin-right: 2px; }
+.atajo { font: 500 12px "Inter", sans-serif; border-radius: 999px; padding: 6px 12px; border: 1px solid #015444; color: #015444; background: #fff; cursor: pointer; }
+.atajo:hover { background: #015444; color: #9cc3ea; }
+.fg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.phone .fg { grid-template-columns: minmax(0, 1fr); }
+.ta { border: 1px solid rgba(10,10,10,.12); border-radius: 8px; padding: 9px 11px; font: 300 13px "Inter", sans-serif; resize: vertical; min-height: 60px; width: 100%; color: #0a0a0a; background: #fff; }
+.conf { background: #fce4e4; border-radius: 6px; padding: 12px; font-size: 12.5px; color: #7a0f1c; line-height: 1.5; display: flex; flex-direction: column; gap: 10px; }
+.conf .r { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.normal { font-size: 13.5px; color: rgba(10,10,10,.6); font-weight: 300; line-height: 1.55; margin: 0; }
+.normal b { font-weight: 500; color: #0a0a0a; }
+.toast { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); background: #0a0a0a; color: #fff; font-size: 12.5px; padding: 10px 14px; border-radius: 8px; max-width: calc(100% - 32px); line-height: 1.5; z-index: 5; }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="eyebrow">Bahía Shops · Tanda F1, publicación 2 · mockup</div>
+    <h1>Planes y topes en el panel de la tienda y en tu admin</h1>
+    <p class="lede">Las pantallas que cambian con los planes, sobre las pantallas reales. Elegí pantalla, compu o celular, y el caso. El cartel del plan usa el verde del footer con el celeste, como los mensajes de la marca; lleva a los planes de /vender, que se publica antes.</p>
+  </header>
+
+  <div class="controls">
+    <div class="ctl"><span class="ctl-label">Pantalla</span>
+      <div class="seg" id="seg-tab">
+        <button type="button" data-v="productos">Mis productos</button>
+        <button type="button" data-v="nuevo">Nuevo producto</button>
+        <button type="button" data-v="editar">Editar · fotos</button>
+        <button type="button" data-v="negocio">Mi negocio</button>
+        <button type="button" data-v="pedidos">Pedidos</button>
+        <button type="button" data-v="planes">Admin · Planes</button>
+        <button type="button" data-v="ficha">Admin · Plan de una tienda</button>
+      </div>
+    </div>
+    <div class="ctl"><span class="ctl-label">Ver en</span>
+      <div class="seg" id="seg-dev">
+        <button type="button" data-v="desk">Compu</button>
+        <button type="button" data-v="phone">Celular</button>
+      </div>
+    </div>
+    <div class="ctl" id="ctl-caso"><span class="ctl-label">Caso</span>
+      <div class="seg" id="seg-caso"></div>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="viewport"><div id="frame"></div></div>
+    <aside class="notes" id="notes"></aside>
+  </div>
+</div>
+
+<script>
+const X = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 5 10 10M15 5 5 15"/></svg>';
+const BASICO = { tope: 25, fotos: 8, precio: '$10.000' };
+
+const CASOS = {
+  productos: [['normal', '6 de 10'], ['cerca', '9 de 10'], ['tope', '10 de 10'], ['reactivar', 'Activar en el tope'], ['encima', 'Por encima'], ['medida', 'Plan a medida'], ['sintope', 'Sin tope']],
+  nuevo: [['tope', 'En el tope'], ['normal', 'Con lugar']],
+  editar: [['gratis', 'Gratis, 4 fotos'], ['tenia', 'Ya tenía 6']],
+  negocio: [['gratis', 'Gratis'], ['tope', 'Gratis en el tope'], ['medida', 'Plan a medida'], ['sintope', 'Tu tienda']],
+  pedidos: [['gratis', 'Plan Gratis'], ['basico', 'Plan Básico']],
+  planes: [],
+  ficha: [['sin', 'Sin condiciones'], ['medida', 'Plan a medida'], ['propia', 'Tu tienda']],
+};
+
+const NOTAS = {
+  productos: [
+    ['Dónde va el contador', 'Debajo del título, en lugar de «N productos». Una barrita fina y la etiqueta del plan. Faltando 2 o menos, la barrita se pone ámbar.'],
+    ['En el tope', 'El botón «+ Cargar producto» sigue igual: al tocarlo, Nuevo producto muestra el cartel en lugar del formulario. Así no se esconde un botón que la tienda conoce.'],
+    ['Cuentan también los pausados', 'Desde la tarde del 2/11 el tope cuenta todo lo guardado. Pausar no libera lugar; eliminar sí. Un producto con ventas también se puede eliminar: se guarda solo la foto que usa el pedido.'],
+    ['Activar un pausado en el tope', 'Solo pasa si la tienda quedó por encima (dejó de pagar o le bajaste el tope). El cartel aparece arriba de la lista y se cierra con la cruz.'],
+    ['Por encima del tope', 'Pasa si bajás un tope desde tu admin o le sacás un plan a medida. Dice «12 de 10» y aclara que no se pausó nada. Solo no puede sumar ni activar más.'],
+    ['Plan a medida y sin tope', 'A medida: la etiqueta celeste «Plan a medida» y su tope. Sin tope (tu tienda): solo «N productos», sin barrita.'],
+  ],
+  nuevo: [
+    ['El cartel en lugar del formulario', 'Si la tienda ya está en el tope, no ve un formulario que después no va a poder guardar. Ve el cartel, qué trae el Básico y qué puede hacer hoy.'],
+    ['Adónde lleva', '«Conocer el plan Básico» va a /vender#planes. Por eso conviene publicar /vender antes. En F3, este botón pasa a ser «Pasarme al Básico».'],
+    ['Lo que no puede faltar', 'Que cuentan todos los productos, también los pausados, y la salida de hoy: eliminar uno para hacer lugar.'],
+  ],
+  editar: [
+    ['El cuadrado para sumar fotos', 'Cuando llega al límite, el cuadrado con «+» queda apagado y debajo aparece el cartel chico. El contador dice «4 de 4 fotos».'],
+    ['Producto que ya tenía más', 'Si un producto quedó con 6 fotos de antes, puede guardarlo con las 6, pero no sumar una séptima. El texto lo explica.'],
+  ],
+  negocio: [
+    ['Dónde va «Tu plan»', 'Después del bloque «Tu link», en blanco con borde fino, para que no haya dos bloques verdes seguidos.'],
+    ['Lo que muestra', 'Productos usados, fotos por producto y si tiene carritos abandonados. Abajo, en gris, qué trae el Básico y el link a los planes.'],
+    ['Sin botón de pago', 'En F1 no hay botón para pagar: llega en F3, en este mismo lugar.'],
+    ['El precio especial no se muestra', 'En el plan a medida no aparece lo que paga: eso lo ve en la suscripción, en F3. Si preferís mostrarlo, se suma.'],
+  ],
+  pedidos: [
+    ['La pestaña', 'El cartelito «Pro» pasa a decir «Básico». En el Gratis la pestaña no muestra el número de carritos.'],
+    ['Lo que ve una tienda del Gratis', 'Una explicación de la función y el link a los planes. No ve ningún carrito ni cuántos tiene: si los viera, el aviso se volvería insistente.'],
+  ],
+  planes: [
+    ['Una tarjeta por plan', 'Precio por mes, tope de productos, fotos por producto, carritos y si se puede elegir. El Pro queda sin precio ni topes, y apagado.'],
+    ['Avisos al cambiar', 'Si bajás un tope o las fotos: «afecta solo lo que se cargue después; nada se pausa». Si sacás los carritos: la tienda deja de verlos en el momento, sin perder datos.'],
+    ['El precio', 'En F1 se cambia directo: no hay nadie suscripto. El «precio próximo con fecha» y el aviso a las suscriptas llegan en F5.'],
+  ],
+  ficha: [
+    ['Dónde va', 'Después de «Comisión», con el mismo armado.'],
+    ['Los atajos', '«Bloque de 50» y «Bloque de 75» llenan Básico con el tope y el precio. «Tienda propia» llena Básico sin tope y $0. Después podés cambiar cualquier campo.'],
+    ['El motivo', 'Obligatorio, y la tienda no lo ve. Como en la comisión.'],
+    ['Quitar', 'Pide confirmación en el mismo recuadro. La tienda vuelve al Gratis y, si queda por encima, no se pausa nada.'],
+    ['El cobro', 'Hasta F3, un plan a medida con precio no se cobra. En F3 se va a exigir la suscripción al día.'],
+  ],
+};
+
+let st = { tab: 'productos', dev: 'desk', caso: { productos: 'normal', nuevo: 'tope', editar: 'gratis', negocio: 'gratis', pedidos: 'gratis', ficha: 'sin' }, cartelCerrado: false, conf: false, toast: null };
+try { const g = JSON.parse(localStorage.getItem('mock-f1') || 'null'); if (g && g.tab) { st.tab = g.tab; st.dev = g.dev || 'desk'; } } catch (e) {}
+function guardar() { try { localStorage.setItem('mock-f1', JSON.stringify({ tab: st.tab, dev: st.dev })); } catch (e) {} }
+
+function nav(phone) {
+  return '<div class="nav"><span class="logo">Bahía Shops</span>' + (phone ? '<span class="burger"></span>'
+    : '<span class="items"><span>Categorías</span><span>Descubrí Tesoros</span><span>Servicios</span><span>Mapa</span><span>Mi perfil</span></span>') + '</div>';
+}
+
+function cartel(tipo, cerrable) {
+  if (tipo === 'fotos') {
+    return '<div class="cartel chico"><p class="ey">Tu plan Gratis</p><h3>Llegaste a las 4 fotos de tu plan</h3>' +
+      '<p>Con el plan Básico podés subir hasta ' + BASICO.fotos + ' fotos por producto.</p>' +
+      '<div class="acc"><span class="btn-c">Conocer el plan Básico</span></div></div>';
+  }
+  return '<div class="cartel">' + (cerrable ? '<button type="button" class="x" data-act="cerrar-cartel" aria-label="Cerrar">' + X + '</button>' : '') +
+    '<p class="ey">Tu plan Gratis</p><h3>Llegaste a los 10 productos de tu plan</h3>' +
+    '<p>Con el plan Básico mostrás más, por ' + BASICO.precio + ' por mes:</p>' +
+    '<div class="trae"><span>Hasta ' + BASICO.tope + ' productos</span><span>Hasta ' + BASICO.fotos + ' fotos por producto</span><span>Carritos abandonados</span></div>' +
+    '<p>Cuentan todos tus productos, también los pausados. Para cargar otro ahora, eliminá uno.</p>' +
+    '<div class="acc"><span class="btn-c">Conocer el plan Básico</span>' + (cerrable ? '' : '<span class="sec">Volver a Mis productos</span>') + '</div></div>';
+}
+
+function contador(caso) {
+  const D = {
+    normal: [6, 10, 'normal', 'Gratis'], cerca: [9, 10, 'cerca', 'Gratis'], tope: [10, 10, 'tope', 'Gratis'], reactivar: [10, 10, 'tope', 'Gratis'],
+    encima: [12, 10, 'encima', 'Gratis'], medida: [32, 50, 'normal', 'Plan a medida'], sintope: [18, null, 'normal', ''],
+  }[caso];
+  const [u, t, cls, plan] = D;
+  if (t === null) return '<div class="cont"><div class="lin"><b>' + u + ' productos</b></div></div>';
+  const pct = Math.min(100, Math.round(u / t * 100));
+  let nota = '';
+  if (cls === 'tope') nota = '<span class="nota-c">Llegaste al tope de tu plan.</span>';
+  if (cls === 'encima') nota = '<span class="nota-c">Tu plan volvió al Gratis. <u style="color:#015444;font-weight:500">Reactivar mi plan Básico</u>. Si no, eliminá productos hasta bajar a 10.</span>';
+  if (cls === 'cerca') nota = '<span class="nota-c">Te quedan ' + (t - u) + ' lugar' + (t - u === 1 ? '' : 'es') + '.</span>';
+  return '<div class="cont ' + cls + '"><div class="lin"><b>' + u + ' de ' + t + ' productos</b><span class="plan' + (plan === 'Plan a medida' ? ' medida' : '') + '">' + (plan === 'Gratis' ? 'Plan Gratis' : plan) + '</span></div>' +
+    '<div class="barra"><span style="width:' + pct + '%"></span></div>' + nota + '</div>';
+}
+
+const PRODS = [
+  ['Juego de memoria de madera', '$18.500', 'activo', 'linear-gradient(140deg,#e7c9a4,#c99c6c)'],
+  ['Rompecabezas Bahía Blanca', '$24.900', 'activo', 'linear-gradient(140deg,#9cc3ea,#5f8fbd)'],
+  ['Dominó de colores', '$15.200', 'pausado', 'linear-gradient(140deg,#f2b8a2,#d77b5f)'],
+];
+const EST = { activo: ['Publicado', '#ecfdf5', '#047857', '#10b981'], pausado: ['Pausado', '#fffbeb', '#b45309', '#f59e0b'] };
+
+function pantallaProductos(phone) {
+  const caso = st.caso.productos;
+  const mostrarCartel = caso === 'reactivar' && !st.cartelCerrado;
+  return nav(phone) + '<div class="body"><div class="col"><span class="back">← Volver a Mi negocio</span>' +
+    '<div class="prow"><div style="min-width:0"><p class="ph1">Mis productos</p>' + contador(caso) + '</div><span class="btn-k">+ Cargar producto</span></div>' +
+    (mostrarCartel ? cartel('productos', true) : '') +
+    PRODS.map(([n, p, e, col]) => { const [t, f, c, d] = EST[e];
+      return '<div class="card"><div class="ph" style="background:' + col + '"></div><div class="info"><p class="n">' + n + '</p><p class="p">' + p + '</p>' +
+        '<span class="chip" style="background:' + f + ';color:' + c + '"><i style="background:' + d + '"></i>' + t + '</span></div>' +
+        '<div class="acts"><span>Editar</span>' + (e === 'pausado' ? '<span class="ac" data-act="activar">Activar</span>' : '<span>Pausar</span>') + '</div></div>'; }).join('') +
+    '</div></div>';
+}
+
+function pantallaNuevo(phone) {
+  const tope = st.caso.nuevo === 'tope';
+  const cuerpo = tope ? cartel('productos', false)
+    : '<div class="campo"><label>Nombre del producto</label><div class="inp">Juego de memoria de madera</div></div>' +
+      '<div class="campo"><label>Fotos</label><div class="fotos"><div class="foto" style="background:linear-gradient(140deg,#e7c9a4,#c99c6c)"></div><div class="foto" style="background:linear-gradient(140deg,#d8b28a,#b7895c)"></div><div class="foto add">+</div></div>' +
+      '<p class="fotos-pie"><b>2 de 4 fotos</b> · Arrastrá para ordenarlas: la primera es la principal.</p></div>' +
+      '<div class="campo"><label>Precio</label><div class="inp">$ 18.500</div></div>';
+  return nav(phone) + '<div class="body"><div class="col"><span class="back">← Volver a Mis productos</span>' +
+    '<p class="ph1" style="margin-bottom:6px">Cargar producto</p>' + (tope ? '' : '<p class="s-sub">Lo revisamos antes de publicarlo.</p>') +
+    (tope ? '<div style="margin-top:14px"></div>' : '') + cuerpo + '</div></div>';
+}
+
+function pantallaEditar(phone) {
+  const tenia = st.caso.editar === 'tenia';
+  const n = tenia ? 6 : 4;
+  const cols = ['#e7c9a4,#c99c6c', '#d8b28a,#b7895c', '#c9dbe7,#8fb2cf', '#f2d0b8,#d99e77', '#dcd3c4,#b6a88e', '#e9c7a8,#c79a72'];
+  const fotos = cols.slice(0, n).map((c) => '<div class="foto" style="background:linear-gradient(140deg,' + c + ')"></div>').join('') + '<div class="foto add no" aria-disabled="true">+</div>';
+  const pie = tenia
+    ? '<p class="fotos-pie"><b>6 de 6 fotos</b> · Este producto tiene 6 fotos de antes. Podés guardarlo así, pero tu plan Gratis permite 4 por producto.</p>'
+    : '<p class="fotos-pie"><b>4 de 4 fotos</b> · Arrastrá para ordenarlas: la primera es la principal.</p>';
+  return nav(phone) + '<div class="body"><div class="col"><span class="back">← Volver a Mis productos</span>' +
+    '<p class="ph1" style="margin-bottom:16px">Editar producto</p>' +
+    '<div class="campo ghost"><label>Nombre del producto</label><div class="inp">Rompecabezas Bahía Blanca</div></div>' +
+    '<div class="campo"><label>Fotos</label><div class="fotos">' + fotos + '</div>' + pie + '</div>' + cartel('fotos') +
+    '<div class="campo ghost"><label>Precio</label><div class="inp">$ 24.900</div></div></div></div>';
+}
+
+function pantallaNegocio(phone) {
+  const caso = st.caso.negocio;
+  const D = {
+    gratis: ['Gratis', '6 de 10', '4', 'No'], tope: ['Gratis', '10 de 10', '4', 'No'],
+    medida: ['Plan a medida', '32 de 50', '8', 'Sí'], sintope: ['Sin tope', '18', '8', 'Sí'],
+  }[caso];
+  const sig = (caso === 'gratis' || caso === 'tope')
+    ? '<div class="sig"><span>Con el <b>Básico</b>: ' + BASICO.tope + ' productos, ' + BASICO.fotos + ' fotos y carritos abandonados, por ' + BASICO.precio + ' por mes.</span><u>Ver planes</u></div>' : '';
+  const det = caso === 'medida' ? '<span>Básico ampliado</span>' : caso === 'sintope' ? '<span>Tienda de la plataforma</span>' : '<span>$0</span>';
+  return nav(phone) + '<div class="body"><div class="col"><span class="back">← Volver a Mi perfil</span>' +
+    '<p class="s-eyebrow">Tu tienda</p><p class="s-h1">Mi negocio</p><p class="s-sub">Ludoméstica</p>' +
+    '<div class="ghost" style="background:#015444;border-radius:16px;height:86px;margin-bottom:18px;color:#9cc3ea;padding:18px 22px;font-family:Fraunces,serif;font-size:18px">Tu link</div>' +
+    '<div class="tuplan"><p class="ey">Tu plan</p><div class="cab"><h3>' + D[0] + '</h3>' + det + '</div>' +
+    '<div class="usos"><div><b>' + D[1] + '</b><span>productos</span></div><div><b>' + D[2] + '</b><span>fotos por producto</span></div><div><b>' + D[3] + '</b><span>carritos abandonados</span></div></div>' +
+    sig + '</div>' +
+    '<div class="ghost" style="border:1px solid rgba(10,10,10,.05);border-radius:16px;height:150px"></div></div></div>';
+}
+
+function pantallaPedidos(phone) {
+  const gratis = st.caso.pedidos === 'gratis';
+  const cuerpo = gratis
+    ? '<div class="carr-vacio"><h3>Recuperá las ventas que quedaron a mitad de camino</h3>' +
+      '<p>Con el plan Básico ves quién dejó productos en el carrito sin pagar y le mandás un recordatorio por mail, una vez por carrito.</p><u>Ver planes</u></div>'
+    : '<div style="border:1px solid rgba(10,10,10,.05);border-radius:16px;padding:16px 20px;display:flex;gap:12px;align-items:center"><span style="width:36px;height:36px;border-radius:50%;background:#f6d9c9;display:flex;align-items:center;justify-content:center;font-family:Fraunces,serif">C</span><span style="flex:1"><b style="font-weight:600">Calandria</b><br><span style="font-size:12.5px;color:rgba(10,10,10,.5)">Dejó 2 productos · hace 3 días</span></span><span style="font-size:12px;border:1px solid rgba(10,10,10,.12);border-radius:999px;padding:6px 12px">Recordar</span></div>';
+  return nav(phone) + '<div class="body"><div class="col"><span class="back">← Volver a Mi negocio</span>' +
+    '<p class="ph1" style="margin-bottom:12px">Mis pedidos</p>' +
+    '<div class="tabs"><span>Nuevos pedidos</span><span>Entregados</span><span class="on">Carritos abandonados' + (gratis ? '' : ' <span class="bd" style="background:#f1efe9">1</span>') + ' <span class="bd">Básico</span></span></div>' +
+    cuerpo + '</div></div>';
+}
+
+function tarjetaPlan(nombre, d) {
+  if (d.pro) {
+    return '<div class="pa"><h5>Pro <span class="off-c">No se puede elegir</span></h5>' +
+      '<div class="fl"><label>Precio por mes</label><div class="fi dis"><input value="Próximamente" disabled></div></div>' +
+      '<p class="help">Se muestra en /vender como «Próximamente». Los topes se cargan cuando lo construyamos.</p>' +
+      '<label class="chk"><input type="checkbox" disabled> Se puede elegir</label></div>';
+  }
+  return '<div class="pa"><h5>' + nombre + ' <span class="on-c">Se puede elegir</span></h5>' +
+    '<div class="fl"><label>Precio por mes</label><div class="fi' + (d.gratis ? ' dis' : '') + '"><span>$</span><input value="' + d.precio + '"' + (d.gratis ? ' disabled' : '') + '></div></div>' +
+    '<div class="fl"><label>Tope de productos</label><div class="fi"><input value="' + d.tope + '"></div></div>' +
+    '<div class="fl"><label>Fotos por producto</label><div class="fi"><input value="' + d.fotos + '"></div></div>' +
+    '<label class="chk"><input type="checkbox"' + (d.carr ? ' checked' : '') + '> Carritos abandonados</label>' +
+    (d.warn ? '<div class="warn">' + d.warn + '</div>' : '') +
+    '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><span class="help">Actualizado el 2/11</span><button type="button" class="abtn" data-act="guardar-plan">Guardar</button></div></div>';
+}
+
+function pantallaPlanes(phone) {
+  return nav(phone) + '<div class="body"><div class="col wide"><span class="back">← Admin</span>' +
+    '<div class="ad-h"><h4>Planes</h4></div><p class="ad-sub">Lo que cambies acá se ve en /vender y en el panel de cada tienda. La comisión no depende del plan.</p>' +
+    '<div class="planes-ad">' +
+    tarjetaPlan('Gratis', { gratis: true, precio: '0', tope: '10', fotos: '4', carr: false }) +
+    tarjetaPlan('Básico', { precio: '10.000', tope: '20', fotos: '8', carr: true, warn: 'Bajaste el tope de 25 a 20. Afecta solo lo que se cargue después: nada se pausa.' }) +
+    tarjetaPlan('Pro', { pro: true }) + '</div></div></div>';
+}
+
+function pantallaFicha(phone) {
+  const caso = st.caso.ficha;
+  let cab;
+  if (caso === 'sin') {
+    cab = '<p class="normal">Sin condiciones especiales. Rige el plan <b>Gratis</b>: <b>8 de 10</b> productos.</p>';
+  } else {
+    const medida = caso === 'medida';
+    cab = '<div class="vig"><span class="big">' + (medida ? '50' : '∞') + '</span><div class="tx"><span class="t1">' + (medida ? 'Plan a medida · Básico con 50 productos' : 'Tienda propia · Básico sin tope') + '</span>' +
+      '<span class="t2">' + (medida ? '$20.000 por mes · 32 de 50 productos' : '$0 · 18 productos') + '</span><span class="t2">Desde el 2/11, cargado por vos</span></div></div>' +
+      '<div class="nota"><small>Motivo · no lo ve la tienda</small>' + (medida ? 'Pidió más lugar: tiene 40 productos para cargar.' : 'Tienda propia de la plataforma.') + '</div>' +
+      (st.conf ? '<div class="conf"><span>¿Quitar las condiciones especiales? Vuelve al plan Gratis. Si queda por encima del tope, no se pausa nada, pero no puede sumar productos.</span>' +
+        '<div class="r"><button type="button" class="abtn red" data-act="ok-quitar">Sí, quitarlas</button><button type="button" class="abtn link2" data-act="no-quitar">Cancelar</button></div></div>'
+        : '<div><button type="button" class="abtn sec2" data-act="quitar">Quitar condiciones</button></div>');
+  }
+  const form = '<div class="form"><p class="ft">' + (caso === 'sin' ? 'Cargar condiciones especiales' : 'Cambiar condiciones') + '</p>' +
+    '<div class="atajos"><span class="lb">Atajos</span><button type="button" class="atajo">Bloque de 50 · $20.000</button><button type="button" class="atajo">Bloque de 75 · $30.000</button><button type="button" class="atajo">Tienda propia</button></div>' +
+    '<div class="fg"><div class="fl"><label for="fp">Plan</label><div class="fi"><input id="fp" value="Básico"></div><span class="help">Solo planes con topes cargados.</span></div>' +
+    '<div class="fl"><label for="ft">Tope de productos</label><div class="fi"><input id="ft" value="50"></div><label class="chk" for="fs"><input id="fs" type="checkbox"> Sin tope</label></div>' +
+    '<div class="fl"><label for="fpr">Precio por mes</label><div class="fi"><span>$</span><input id="fpr" value="20.000"></div><span class="help">0 = sin abono.</span></div></div>' +
+    '<div class="fl"><label for="fm">Motivo</label><textarea id="fm" class="ta">Pidió más lugar: tiene 40 productos para cargar.</textarea><span class="help">Para vos. La tienda no lo ve.</span></div>' +
+    '<div><button type="button" class="abtn" data-act="guardar-esp">Guardar condiciones</button></div></div>';
+  return nav(phone) + '<div class="body"><div class="col wide"><span class="back">← Vendedores</span>' +
+    '<div class="ad-h"><h4>' + (caso === 'propia' ? 'Bahía Shops' : 'Ludoméstica') + '</h4></div><p class="ad-sub">Alta 12 de octubre de 2026</p>' +
+    '<div class="sec5 ghost" style="margin-bottom:24px"><h5>Comisión</h5><div class="secbox" style="height:70px"></div></div>' +
+    '<div class="sec5"><h5>Plan</h5><div class="secbox">' + cab + form + '</div></div></div></div>';
+}
+
+const PANT = { productos: pantallaProductos, nuevo: pantallaNuevo, editar: pantallaEditar, negocio: pantallaNegocio, pedidos: pantallaPedidos, planes: pantallaPlanes, ficha: pantallaFicha };
+
+function render() {
+  document.querySelectorAll('#seg-tab button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === st.tab));
+  document.querySelectorAll('#seg-dev button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === st.dev));
+  const casos = CASOS[st.tab];
+  document.getElementById('ctl-caso').hidden = !casos.length;
+  document.getElementById('seg-caso').innerHTML = casos.map(([v, t]) => '<button type="button" data-v="' + v + '" aria-pressed="' + (st.caso[st.tab] === v) + '">' + t + '</button>').join('');
+  const phone = st.dev === 'phone';
+  const admin = st.tab === 'planes' || st.tab === 'ficha';
+  const toast = st.toast ? '<div class="toast">' + st.toast + '</div>' : '';
+  document.getElementById('frame').innerHTML = '<div class="frame ' + (phone ? 'phone' : 'desk') + '"><div class="bar"><i></i><i></i><i></i></div>' +
+    '<div class="scr ' + (phone ? 'phone' : '') + (admin ? ' admin' : '') + '" style="width:' + (phone ? 375 : 1040) + 'px">' + PANT[st.tab](phone) + toast + '</div></div>';
+  document.getElementById('notes').innerHTML = '<h2>Para decidir</h2><p class="intro">Lo que elegí al dibujar. Los textos son propuesta: cambialos como quieras.</p>' +
+    NOTAS[st.tab].map(([t, p]) => '<div class="q"><b>' + t + '</b><p>' + p + '</p></div>').join('') +
+    '<p class="legend">Lo más tenue ya existe y no cambia; está para que veas dónde cae lo nuevo.</p>';
+}
+
+let tt;
+function toast(t) { st.toast = t; render(); clearTimeout(tt); tt = setTimeout(() => { st.toast = null; render(); }, 2800); }
+
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('button, [data-act]');
+  if (!b) return;
+  const seg = b.closest('.seg');
+  if (seg) {
+    if (seg.id === 'seg-tab') st.tab = b.dataset.v;
+    if (seg.id === 'seg-dev') st.dev = b.dataset.v;
+    if (seg.id === 'seg-caso') st.caso[st.tab] = b.dataset.v;
+    st.cartelCerrado = false; st.conf = false; st.toast = null; guardar(); render(); return;
+  }
+  const a = b.dataset.act;
+  if (a === 'cerrar-cartel') st.cartelCerrado = true;
+  if (a === 'activar') { if (st.caso.productos === 'reactivar') st.cartelCerrado = false; else { st.caso.productos = 'reactivar'; st.cartelCerrado = false; } }
+  if (a === 'quitar') st.conf = true;
+  if (a === 'no-quitar') st.conf = false;
+  if (a === 'ok-quitar') { st.conf = false; st.caso.ficha = 'sin'; return toast('Listo. Vuelve al plan Gratis.'); }
+  if (a === 'guardar-plan') return toast('Guardado. Ya se ve en /vender y en los paneles.');
+  if (a === 'guardar-esp') return toast('Condiciones guardadas.');
+  if (a) render();
+});
+
+render();
+</script>

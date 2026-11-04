@@ -153,7 +153,27 @@ c = textosDelCartel({ motivo: 'fotos', datos: GRATIS(3) })
 ok(c.titulo === 'Llegaste a las 4 fotos de tu plan' && c.intro === 'Con el plan Básico podés subir hasta 8 fotos por producto.' && c.boton?.texto === 'Conocer el plan Básico',
   `fotos en el Gratis: «${c.titulo} / ${c.intro}»`)
 c = textosDelCartel({ motivo: 'fotos', datos: MEDIDA(3) })
-ok(c.titulo === 'Llegaste a las 8 fotos de tu plan' && c.intro === null && c.boton === null && !c.contacto, 'fotos en el plan a medida: solo el título')
+ok(c.titulo === 'Llegaste a las 8 fotos de tu plan' && c.intro === null && c.boton === null && c.contacto, 'fotos en el plan a medida: sin el Básico, con «Escribinos»')
+
+// Cargar uno nuevo por encima del tope (le bajaron el tope o le quitaron una especial).
+c = textosDelCartel({ motivo: 'productos', datos: GRATIS(10, { tope: 9, contador: 'por_encima' }) })
+ok(c.titulo === 'Tenés 10 productos y tu plan guarda 9' && c.cierre === 'Cuentan todos tus productos, también los pausados. Para cargar otro, eliminá productos hasta tener 8.',
+  `cargar por encima: «${c.titulo} / ${c.cierre}»`)
+ok(c.boton?.texto === 'Conocer el plan Básico' && c.chips.length === 3, 'en el Gratis, con el Básico')
+c = textosDelCartel({ motivo: 'productos', datos: GRATIS(10), tope: 9, usados: 11 })
+ok(c.titulo === 'Tenés 11 productos y tu plan guarda 9' && c.cierre.endsWith('hasta tener 8.'), 'con los números del 409')
+c = textosDelCartel({ motivo: 'productos', datos: GRATIS(9, { tope: 9, contador: 'en_el_tope' }) })
+ok(c.titulo === 'Llegaste a los 9 productos de tu plan', 'en el tope justo: como antes')
+c = textosDelCartel({ motivo: 'productos', datos: MEDIDA(52) })
+ok(c.titulo === 'Tenés 52 productos y tu plan guarda 50' && c.cierre.endsWith('hasta tener 49.') && c.contacto && !c.boton, 'plan a medida por encima: con «Escribinos», sin el Básico')
+
+// Con condiciones especiales nunca se ofrece el Básico, aunque llegue un plan siguiente.
+const MEDIDA_CON_SIG = { ...MEDIDA(10), tope: 9, siguiente: SIG }
+for (const [motivo, accion] of [['productos'], ['superado', 'activar'], ['superado', 'reenviar'], ['fotos']]) {
+  c = textosDelCartel({ motivo, accion, datos: MEDIDA_CON_SIG })
+  ok(c.intro === null && c.chips.length === 0 && c.boton === null && c.contacto === true && c.eyebrow === 'Tu plan a medida',
+    `plan a medida, ${motivo}${accion ? ' ' + accion : ''}: sin comparación ni «Conocer el plan Básico», con «Escribinos»`)
+}
 
 console.log('\n11. Los campos del admin')
 ok(enteroDelCampo('10.000') === 10000 && enteroDelCampo(' 25 ') === 25 && enteroDelCampo(8) === 8 && enteroDelCampo('') === null && enteroDelCampo(null) === null,

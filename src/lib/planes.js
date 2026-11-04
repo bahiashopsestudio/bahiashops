@@ -228,9 +228,11 @@ export function etiquetaDelPlan(datos) {
 //           'fotos'      llegó a las fotos por producto (el cartel chico)
 //   tope y usados: los del 409 si llegaron; si no, los del plan.
 // Devuelve { eyebrow, titulo, intro, chips, cierre, boton, contacto }:
-//   intro y chips: lo que trae el plan siguiente (null / [] si no hay, o si
-//   tiene condiciones especiales); boton: { texto, href } al plan siguiente;
-//   contacto: true en el plan a medida (abre el formulario de contacto).
+//   intro y chips: lo que trae el plan siguiente (null / [] si no hay);
+//   boton: { texto, href } al plan siguiente; contacto: «Escribinos si
+//   necesitás más lugar» (abre el formulario de contacto).
+// Con condiciones especiales (el plan a medida) nunca se ofrece el plan
+// siguiente, en ningún motivo: va «Escribinos».
 export function textosDelCartel({ motivo = 'productos', accion = 'activar', datos, tope, usados } = {}) {
   const d = datos || {}
   const t = tope ?? d.tope ?? null
@@ -250,7 +252,7 @@ export function textosDelCartel({ motivo = 'productos', accion = 'activar', dato
       chips: [],
       cierre: null,
       boton: masFotos ? boton : null,
-      contacto: false,
+      contacto,
     }
   }
 
@@ -273,6 +275,20 @@ export function textosDelCartel({ motivo = 'productos', accion = 'activar', dato
       intro,
       chips,
       cierre: textoDeTope({ motivo: 'tope_superado', tope: t, usados: u, accion: verbo }),
+      boton,
+      contacto,
+    }
+  }
+
+  // Por encima del tope (le bajaron el tope o le quitaron una especial): para
+  // cargar uno nuevo tiene que quedar un lugar libre, o sea tope - 1.
+  if (t && u && u > t) {
+    return {
+      eyebrow,
+      titulo: `Tenés ${u} productos y tu plan guarda ${t}`,
+      intro,
+      chips,
+      cierre: `Cuentan todos tus productos, también los pausados. Para cargar otro, eliminá productos hasta tener ${t - 1}.`,
       boton,
       contacto,
     }

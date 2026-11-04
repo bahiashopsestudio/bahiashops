@@ -436,8 +436,16 @@ export default function NuevoProductoPage() {
       // del formulario (lo que escribió queda, por si hace lugar y vuelve).
       if (res.status === 409 && respuesta.motivo === 'tope_productos') {
         await borrarFotosSubidas(supabase, subidas);
-        const usados = respuesta.usados ?? plan.tope;
-        setPlan((p) => ({ ...p, usados, contador: usados > p.tope ? 'por_encima' : 'en_el_tope' }));
+        // El plan pudo cambiar con la página abierta: se vuelve a leer. Si no
+        // se puede, alcanza con los números del 409.
+        const { plan: fresco } = await cargarPlan();
+        if (fresco) {
+          setPlan(fresco);
+        } else {
+          const usados = respuesta.usados ?? plan.tope;
+          const tope = respuesta.tope ?? plan.tope;
+          setPlan((p) => ({ ...p, tope, usados, contador: usados > tope ? 'por_encima' : 'en_el_tope' }));
+        }
         window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
       }

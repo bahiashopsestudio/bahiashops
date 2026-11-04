@@ -242,6 +242,10 @@ export default function MisProductosPage() {
       if (datos.estado) setProductos(prev => prev.map(p => p.id === producto.id ? { ...p, estado: datos.estado } : p));
       // Por encima del tope: el cartel arriba de la lista, en vez del alert.
       if (res.status === 409 && datos.motivo === 'tope_superado') {
+        // El plan pudo cambiar con la página abierta (por ejemplo, una
+        // condición especial nueva): se vuelve a leer para el cartel.
+        const { plan: fresco } = await cargarPlan();
+        if (fresco) setPlan(fresco);
         setCartel({ tope: datos.tope, usados: datos.usados });
         requestAnimationFrame(() => refCartel.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
         return;

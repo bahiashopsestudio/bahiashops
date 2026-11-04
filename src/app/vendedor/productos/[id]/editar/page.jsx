@@ -518,6 +518,9 @@ export default function EditarProductoPage() {
       // Reenviar por encima del tope: el cartel arriba, el formulario queda.
       if (res.status === 409 && respuesta.motivo === 'tope_superado') {
         await borrarFotosSubidas(supabase, subidas);
+        // El plan pudo cambiar con la página abierta: se vuelve a leer.
+        const { plan: fresco } = await cargarPlan();
+        if (fresco) setPlan(fresco);
         setTopeAlGuardar({ tope: respuesta.tope, usados: respuesta.usados });
         window.scrollTo({ top: 0, behavior: 'smooth' });
         return;

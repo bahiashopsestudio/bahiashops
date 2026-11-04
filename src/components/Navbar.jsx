@@ -65,6 +65,9 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
   // sesión) se muestra el ícono genérico, del mismo tamaño que el avatar.
   const [apodo, setApodo] = useState('')
   const mostrarAvatar = !!usuario && !!apodo
+  // «Admin» en el navbar de compu, solo para quien administra (como en el
+  // menú del celular y en Mi perfil). Sale de la misma lectura que el apodo.
+  const [esAdmin, setEsAdmin] = useState(false)
 
   // Si el apodo cambia desde /perfil, los íconos se actualizan sin recargar.
   useEffect(() => {
@@ -107,10 +110,11 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
       setUsuario(user)
       const { data: cuenta } = await supabase
         .from('usuarios')
-        .select('nombre_usuario')
+        .select('nombre_usuario, es_admin')
         .eq('id', user.id)
         .maybeSingle()
       if (cuenta?.nombre_usuario) setApodo(cuenta.nombre_usuario)
+      if (cuenta?.es_admin === true) setEsAdmin(true)
     }
     cargarUsuario()
   }, [])
@@ -212,6 +216,11 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
             <Link href="/sobre-nosotros" className="text-[13px] font-light transition-colors" style={{ color: linkColor }}>
               Quiénes somos
             </Link>
+            {esAdmin && (
+              <Link href="/admin" className="text-[13px] font-light transition-colors" style={{ color: linkColor }}>
+                Admin
+              </Link>
+            )}
           </div>
 
           {/* Zona 4: Iconos + Menú */}
