@@ -10,6 +10,7 @@ import { avisarPago, avisarPagoTardio, avisarPagoSinResolver, avisarPagoDoble } 
 import { verificarFirma, firmaEstricta } from '@/lib/mercadopago/firma';
 import { idDePlataforma, tokenDePlataforma } from '@/lib/mercadopago/suscripciones';
 import { procesarAvisoSuscripcion, procesarPagoDePlataforma } from '@/lib/suscripcionesServidor';
+import { tipoDePagoDePlataforma } from '@/lib/suscripciones';
 
 // ── Verificar que el webhook realmente viene de MercadoPago ──
 // MercadoPago firma cada notificación con HMAC-SHA256 (src/lib/mercadopago/
@@ -20,8 +21,17 @@ import { procesarAvisoSuscripcion, procesarPagoDePlataforma } from '@/lib/suscri
 // seguro porque nada se escribe con lo que dice el aviso: todo sale de
 // consultar la API de MercadoPago. Con MP_FIRMA_ESTRICTA=1 se rechaza.
 //
+// El formato viejo (IPN: ?topic=…&id=…, con "resource" en el cuerpo) no se
+// valida: según la documentación de Mercado Pago (Notificaciones IPN), aunque
+// traiga x-signature no se puede validar con la clave secreta, y el formato va
+// a ser discontinuado. Se procesa igual, también en modo estricto (todo sale de
+// consultar la API), pero no puede mandar el mail de «pago sin resolver»: un id
+// inventado no tiene que poder mandar mails. Ese mail lo manda el aviso del
+// formato nuevo, que sí está firmado.
+//
 // Devuelve true si el aviso sigue.
-function firmaAceptada(request, body, dataId) {
+function firmaAceptada(request, body, dataId, { formatoViejo = false } = {}) {
+  if (formatoViejo) return true;
   const secreto = process.env.MP_WEBHOOK_SECRET;
   if (!secreto) {
     if (process.env.NODE_ENV === 'production') console.error('[webhook/firma] MP_WEBHOOK_SECRET no configurada — webhook no verificado');
@@ -139,10 +149,22 @@ export async function POST(request) {
     const tipoCrudo = body.type || params.get('type') || params.get('topic');
     const tipo = TOPICOS_VIEJOS[tipoCrudo] || tipoCrudo;
     const dataId = params.get('data.id') ?? body.data?.id ?? params.get('id') ?? null;
+    // IPN: el tópico viene en la URL (o en el cuerpo, con "resource") y no hay
+    // "type" en ningún lado.
+    const formatoViejo = !body.type && !params.get('type') && !!(params.get('topic') || body.topic);
 
     // ── Verificar firma ──
-    if (!firmaAceptada(request, body, dataId)) {
+    if (!firmaAceptada(request, body, dataId, { formatoViejo })) {
       return NextResponse.json({ recibido: true });
+    }
+
+    // «Pago sin resolver» (mail interno): solo desde un aviso firmado.
+    async function avisarSinResolver(pagoId) {
+      if (formatoViejo) {
+        console.log(`[webhook] pago ${pagoId} sin resolver (aviso en formato viejo, sin firma: el mail sale del aviso del formato nuevo)`);
+        return;
+      }
+      await avisarPagoSinResolver({ pagoId, accion: body.action, cobrador: body.user_id, enVivo: body.live_mode });
     }
 
     const admin = createAdminClient(
@@ -188,7 +210,7 @@ export async function POST(request) {
       console.log('No hay vendedores conectados con MercadoPago.');
       const respuesta = await pagoDePlataforma();
       if (respuesta) return respuesta;
-      await avisarPagoSinResolver({ pagoId: paymentId, accion: body.action, cobrador: body.user_id, enVivo: body.live_mode });
+      await avisarSinResolver(paymentId);
       return NextResponse.json({ recibido: true });
     }
 
@@ -207,11 +229,23 @@ export async function POST(request) {
       if (respuesta) return respuesta;
       // Un pago real en un link de una cuenta que la tienda ya no tiene
       // conectada cae acá: sin este aviso nadie se enteraría.
-      await avisarPagoSinResolver({ pagoId: paymentId, accion: body.action, cobrador: body.user_id, enVivo: body.live_mode });
+      await avisarSinResolver(paymentId);
       return NextResponse.json({ recibido: true });
     }
 
     const { pago, cuenta: cuentaDelToken } = consulta;
+
+    // Un pago de la plataforma (bs-sus- o bs-dif-) que un token de tienda
+    // también puede leer (la cuenta de la plataforma conectada como tienda, o un
+    // aviso sin la pista del cobrador, como los del formato viejo): va por su
+    // camino y nunca llega al de las ventas.
+    const dePlataforma = tipoDePagoDePlataforma(pago);
+    if (dePlataforma) {
+      const respuesta = await pagoDePlataforma();
+      if (respuesta) return respuesta;
+      console.warn(`[webhook] pago ${pago.id}: es de la plataforma (${dePlataforma}) pero no se pudo procesar; no va al camino de las ventas.`);
+      return NextResponse.json({ recibido: true });
+    }
 
     // ── Ninguna escritura hasta que el pago pase todas las verificaciones ──
     // Todo sale de la API de MercadoPago y de la base, nada del cuerpo del

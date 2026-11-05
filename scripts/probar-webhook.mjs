@@ -158,7 +158,7 @@ globalThis.fetch = async (url, init = {}) => {
     const pago = f.pagos[decodeURIComponent(m[1])]
     // Un pago a la plataforma solo lo ve su token.
     const conToken = (init.headers?.Authorization || '') === 'Bearer TOKEN-PLAT'
-    if (pago && (!pago.dePlataforma || conToken)) return { ok: true, status: 200, json: async () => pago }
+    if (pago && (!pago.dePlataforma || conToken || pago.loVeLaTienda)) return { ok: true, status: 200, json: async () => pago }
     return { ok: false, status: 404, json: async () => ({}) }
   }
   const pre = String(url).match(/\/preapproval\/([^/?]+)$/)
@@ -396,6 +396,78 @@ f.admin.respuestaRpc = { ok: true, estado: 'devuelta' }
 await avisarComo(2006, '999')
 okv(!f.puts && f.admin.tablas.suscripcion_diferencias[0].monto_mp_actualizado_en === null,
   'con la suscripción cancelada: no se llama a Mercado Pago, solo se anota')
+titulo('\n10b. El formato viejo (IPN) y los pagos de la plataforma fuera del camino de las ventas')
+// La prueba real (05/11): el aviso viejo del pago de una diferencia
+// (?id=…&topic=payment, sin user_id) lo leyó un token de tienda y entró al
+// camino de las ventas («external_reference inválido»).
+const DIF = { id: 1, suscripcion_id: 7, vendedor_id: 15, external_reference: 'bs-dif-16d1792e', precio_nuevo: 20000, monto_anterior: 10000,
+  monto: 6700, estado: 'pendiente', mp_pago_id: null, monto_mp_actualizado_en: null, intentos_monto_mp: 0 }
+const avisoViejo = (id, topic = 'payment', cuerpo = undefined) => webhook({
+  url: `https://bahiashops.com.ar/api/mercadopago/webhook?id=${id}&topic=${topic}`,
+  json: async () => { if (cuerpo === undefined) throw new SyntaxError('sin cuerpo'); return cuerpo },
+  headers: { get: () => null },
+})
+const conDiferencia = (pagos) => {
+  const e = escenario([{ id: 1, estado: 'pendiente' }], pagos)
+  e.admin.tablas.vendedor_suscripciones.push({ ...SUS, estado: 'authorized', monto: 10000 })
+  e.admin.tablas.suscripcion_diferencias.push({ ...DIF })
+  e.admin.respuestaRpc = { ok: true, estado: 'pagada' }
+  return e
+}
+const pagoDif = (id, extra = {}) => cobroDePlataforma(id, { external_reference: 'bs-dif-16d1792e', transaction_amount: 6700, point_of_interaction: { type: 'CHECKOUT' }, ...extra })
+
+f = globalThis.__f = conDiferencia({ 3001: pagoDif(3001, { loVeLaTienda: true }) })
+resp = await avisoViejo(3001)
+okv(resp.status === 200 && f.admin.rpcs.some((r) => r.nombre === 'rpc_registrar_pago_diferencia'),
+  'aviso viejo de una diferencia que también ve un token de tienda: va al camino de la plataforma')
+okv(pedido(1).estado === 'pendiente' && !f.admin.escrituras.some((e) => e.tabla === 'pedidos') && f.avisos.sinResolver.length === 0 && f.avisos.pago.length === 0,
+  'y no toca pedidos ni manda mails')
+
+f = globalThis.__f = conDiferencia({ 3002: pagoDif(3002, { loVeLaTienda: true }) })
+await avisarComo(3002, '111')
+okv(f.admin.rpcs.some((r) => r.nombre === 'rpc_registrar_pago_diferencia') && !f.admin.escrituras.some((e) => e.tabla === 'pedidos'),
+  'formato nuevo con la pista de la tienda (la cuenta de la plataforma conectada como tienda): igual, por la plataforma')
+
+f = globalThis.__f = conSuscripcion(escenario([{ id: 1, estado: 'pendiente' }], { 3003: cobroDePlataforma(3003, { loVeLaTienda: true }) }))
+await avisoViejo(3003)
+okv(f.admin.rpcs.some((r) => r.nombre === 'rpc_registrar_cobro_suscripcion') && !f.admin.escrituras.some((e) => e.tabla === 'pedidos'),
+  'lo mismo con un cobro de suscripción (bs-sus-)')
+
+f = globalThis.__f = escenario([{ id: 1, estado: 'pendiente' }], { 1301: aprobado(1301) })
+await avisoViejo(1301)
+okv(pedido(1).estado === 'pagado' && f.avisos.pago.length === 1, 'una venta en formato viejo se sigue aplicando')
+
+f = globalThis.__f = escenario([{ id: 1, estado: 'pendiente' }], {})
+await avisoViejo(9999)
+okv(f.avisos.sinResolver.length === 0, 'formato viejo con un pago que nadie ve: sin mail de «pago sin resolver» (no está firmado)')
+f = globalThis.__f = escenario([{ id: 1, estado: 'pendiente' }], {})
+await avisarComo(9999, '111')
+okv(f.avisos.sinResolver.length === 1, 'el mismo pago en formato nuevo: sí sale el mail')
+
+f = globalThis.__f = escenario([{ id: 1, estado: 'pendiente' }], {})
+resp = await avisoViejo(45833871595, 'merchant_order', { resource: 'https://api.mercadolibre.com/merchant_orders/45833871595', topic: 'merchant_order' })
+okv(resp.status === 200 && f.admin.escrituras.length === 0 && f.avisos.sinResolver.length === 0 && f.admin.rpcs.length === 0,
+  'merchant_order (también de la plataforma): 200 y no se procesa (los pagos llegan en sus propios avisos)')
+
+// Modo estricto: el nuevo se valida, el viejo no se puede validar y se procesa igual.
+process.env.MP_WEBHOOK_SECRET = 'clave-de-prueba'
+process.env.MP_FIRMA_ESTRICTA = '1'
+f = globalThis.__f = escenario([{ id: 1, estado: 'pendiente' }], { 1302: aprobado(1302) })
+await avisarComo(1302, '111')
+okv(pedido(1).estado === 'pendiente', 'estricto: un aviso nuevo sin firma válida se rechaza')
+f = globalThis.__f = escenario([{ id: 1, estado: 'pendiente' }], { 1303: aprobado(1303) })
+await webhook({
+  url: 'https://bahiashops.com.ar/api/mercadopago/webhook?id=1303&topic=payment',
+  json: async () => ({ resource: '1303', topic: 'payment' }),
+  headers: { get: (h) => ({ 'x-signature': 'ts=1,v1=abc', 'x-request-id': 'r1' })[h] ?? null },
+})
+okv(pedido(1).estado === 'pagado', 'estricto: un aviso viejo (con una firma que no se puede validar) se procesa igual')
+f = globalThis.__f = escenario([{ id: 1, estado: 'pendiente' }], {})
+await avisoViejo(9998)
+okv(f.avisos.sinResolver.length === 0, 'estricto: el viejo con un pago desconocido no manda mails')
+delete process.env.MP_WEBHOOK_SECRET
+delete process.env.MP_FIRMA_ESTRICTA
+
 delete process.env.MP_ACCESS_TOKEN_PLATAFORMA
 delete process.env.MP_USER_ID_PLATAFORMA
 
