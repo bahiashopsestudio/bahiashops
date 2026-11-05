@@ -155,7 +155,7 @@ export default function SuscripcionTienda({ vendedorId }) {
       ) : (
         <>
           <div className="flex justify-between items-baseline flex-wrap" style={{ gap: '10px' }}>
-            <span style={{ fontFamily: 'Fraunces, serif', fontWeight: 500, fontSize: '26px', lineHeight: 1.1, color: VERDE, fontVariantNumeric: 'tabular-nums' }}>
+            <span style={{ fontFamily: 'Fraunces, serif', fontWeight: 500, fontSize: '26px', lineHeight: 1.1, color: actual.estado === 'cancelled' ? TEXTO.color : VERDE, fontVariantNumeric: 'tabular-nums' }}>
               {textoPrecio(actual.monto)} por mes{diferenciaSinPagar ? ` → ${textoPrecio(pendiente.precio)}` : ''}
             </span>
             {pastilla && (
