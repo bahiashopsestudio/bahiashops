@@ -122,6 +122,25 @@ const mpI = MP.armarMailRenovacionFallidaInterno({ tienda: 'Tienda', vendedorId:
 ok(mpI.asunto === '⚠️ No se pudo renovar MP — Tienda' && mpI.texto.includes('Id de la tienda: 18') && mpI.texto.includes('N° 999')
   && mpI.texto.includes('invalid_grant') && !mpI.texto.includes('x@y.com'), 'el interno: tienda, id, cuenta, vencimiento y error (sin mails)')
 
+const MPL = await import('../src/lib/mailsPlan.js')
+const m1 = MPL.armarMailCobroRechazado({ tienda: 'Ludoméstica', monto: 10000, plan: 'Básico', hasta: '2026-12-14T15:00:00Z', topeGratis: 10 })
+ok(m1.asunto === 'Mercado Pago no pudo cobrar tu plan Básico'
+  && m1.texto.includes('Mercado Pago no pudo cobrar los $10.000 de tu plan Básico y va a volver a intentarlo en los próximos días. Tenés el plan hasta el 14/12.')
+  && m1.texto.includes('Si el 14/12 sigue sin cobrarse, cancelamos la suscripción y tu tienda vuelve al plan Gratis: quedan publicados tus 10 primeros productos y el resto se pausa. No se borra nada.')
+  && m1.html.includes('Ir a Mi negocio') && m1.texto.includes('/vendedor/perfil'), 'mail 1 del plan: el cobro rechazado, con la fecha y que se cancela')
+const m2 = MPL.armarMailFinDeGracia({ tienda: 'Ludoméstica', plan: 'Básico', hasta: '2026-12-14T15:00:00Z', dias: 3, sePausarian: 15 })
+ok(m2.asunto === 'Te quedan 3 días de tu plan Básico' && m2.texto.includes('El 14/12 cancelamos la suscripción y tu tienda vuelve al Gratis: se pausan 15 productos.')
+  && MPL.armarMailFinDeGracia({ plan: 'Básico', hasta: '2026-12-14T15:00:00Z', dias: 1, sePausarian: 0 }).asunto === 'Te queda 1 día de tu plan Básico'
+  && MPL.armarMailFinDeGracia({ plan: 'Básico', hasta: '2026-12-14T15:00:00Z', dias: 1, sePausarian: 0 }).texto.includes('no se pausa ningún producto'), 'mail 2: te quedan N días (y 1 día, y sin productos para pausar)')
+const m3 = MPL.armarMailCaida({ tienda: 'Ludoméstica', plan: 'Básico', motivo: 'falta_de_pago', pausados: 15, productos: 25, topeGratis: 10 })
+ok(m3.asunto === 'Tu tienda volvió al plan Gratis' && m3.texto.includes('Como no se pudo cobrar tu plan Básico, tu tienda volvió al plan Gratis. Pausamos 15 productos: quedaron publicados tus 10 primeros. No se borró nada.')
+  && m3.html.includes('Reactivar mi plan Básico'), 'mail 3: volvió al Gratis, con los pausados y «Reactivar mi plan Básico»')
+const m30 = MPL.armarMailCaida({ tienda: 'Ludoméstica', plan: 'Básico', motivo: 'baja', pausados: 0, productos: 8 })
+ok(m30.texto.includes('Terminó tu plan Básico y tu tienda volvió al plan Gratis. Tenías 8 productos, así que no se pausó ninguno.') && m30.html.includes('Ir a Mi negocio'),
+  'mail 3 sin productos pausados (la variante)')
+ok(MPL.armarMailCaida({ plan: 'Básico', aMedida: true, motivo: 'falta_de_pago', pausados: 32, productos: 42 }).texto.includes('Como no se pudo cobrar tu plan a medida')
+  && MPL.armarMailCobroRechazado({ tienda: '<b>', monto: 20000, aMedida: true, hasta: '2026-12-14T15:00:00Z' }).html.includes('&lt;b&gt;'), 'el plan a medida, y el html escapado')
+
 // ── 4. La migración ──────────────────────────────────────────────────────────
 console.log('4. La migración 040')
 const db = new PGlite()
@@ -205,10 +224,11 @@ function adminSobre(base) {
     let op = 'select'
     let valores = null
     let devolver = false
+    let conteo = false
     let orden = ''
     const p = (v) => { params.push(v); return `$${params.length}` }
     const b = {
-      select() { if (op === 'update') devolver = true; return b },
+      select(_c, opts) { if (op === 'update') devolver = true; else if (opts?.count) conteo = true; return b },
       update(v) { op = 'update'; valores = v; return b },
       eq(c, v) { filtros.push(`"${c}" = ${p(v)}`); return b },
       is(c, v) { if (v !== null) throw new Error('is() solo con null'); filtros.push(`"${c}" is null`); return b },
@@ -228,6 +248,7 @@ function adminSobre(base) {
         } else sql = `select * from public.${tabla}${donde}${orden}`
         try {
           const filas = (await base.query(sql, params)).rows.map(convertir)
+          if (conteo) return { data: null, count: filas.length, error: null }
           return { data: op === 'update' && !devolver ? null : filas, error: null }
         } catch (err) {
           return { data: null, error: { message: err.message, code: err.code } }
@@ -501,6 +522,122 @@ r = await ruta.GET(pedidoHttp('http://x/api/cron/diaria?prueba=1', 'Bearer secre
 console.log = logViejo
 ok(r.status === 200 && r.body.prueba === true && mails.length === 0 && (await foto()) === antes, 'con el secreto y ?prueba=1: 200, sin mandar ni cambiar nada')
 ok(lineaLog && !lineaLog.includes('@'), 'el resumen queda en el log, sin direcciones de mail')
+
+// ── 8. Cuando deja de pagar (050) ────────────────────────────────────────────
+console.log('8. Cuando deja de pagar: la cancelación en Mercado Pago y los mails del plan (050)')
+{
+  const { baseDeTiendas } = await import('./base-tiendas-prueba.mjs')
+  const { db: db2, q: q2 } = await baseDeTiendas()
+  await db2.exec(`
+    alter table public.productos
+      add column descripcion text, add column marca text, add column precio numeric, add column precio_anterior numeric,
+      add column tiempo_preparacion text, add column categoria_id integer, add column subcategoria_id integer,
+      add column subcategoria_personalizada text, add column categoria_secundaria_id integer,
+      add column subcategoria_secundaria_id integer, add column subcategoria_secundaria_personalizada text,
+      add column genero text[], add column tiene_variantes boolean not null default false, add column propiedad_1_nombre text,
+      add column moderacion_avisos jsonb default '[]', add column actualizado_en timestamptz default now(),
+      add column creado_en timestamptz default now(), add column destacado boolean default false;
+    alter table public.producto_media
+      add column tipo text not null default 'foto', add column orden integer not null default 0, add column es_principal boolean not null default false;
+    alter table public.producto_variantes add column propiedad_1_valor text;
+    alter table public.producto_sellos add column sello_id integer;
+    create table public.sellos (id serial primary key);
+    alter table public.pedido_items
+      alter column producto_id type bigint, alter column producto_id set not null,
+      add column variante text, add column precio numeric, add column cantidad integer, add column foto_url text;
+    create table public.denuncias_productos (id serial primary key,
+      producto_id integer not null references public.productos on delete cascade, motivo text);
+  `)
+  for (const f of ['033_productos_por_el_servidor', '042_comisiones_especiales', '046_planes', '047_tope_guardados', '048_suscripciones', '049_error_suscripcion', '050_cuando_deja_de_pagar']) {
+    await db2.exec(leer(`sql/migrations/${f}.sql`))
+  }
+  const admin2 = adminSobre(db2)
+  const S = await import('../src/lib/suscripcionesServidor.js')
+  process.env.MP_ACCESS_TOKEN_PLATAFORMA = 'TOKEN-PLAT'
+  process.env.MP_USER_ID_PLATAFORMA = '999'
+
+  // Una tienda con 25 productos y su suscripción, con la dueña.
+  const UID = '00000000-0000-0000-0000-0000000000d1'
+  await q2(`insert into auth.users (id, email) values ($1, 'duena@lud.com')`, [UID])
+  await q2(`insert into public.usuarios (id, email, nombre, apellido) values ($1, 'duena@lud.com', 'Ro', 'F')`, [UID])
+  const V = (await q2(`insert into public.vendedores (usuario_id, nombre_negocio, slug) values ($1, 'Ludoméstica', 'ludomestica') returning id`, [UID]))[0].id
+  for (let i = 0; i < 25; i++) await q2(`insert into public.productos (vendedor_id, nombre, estado, creado_en) values ($1, $2, 'activo', now() - ($3 || ' days')::interval)`, [V, `p${i}`, String(100 - i)])
+  const SUS = (await q2(`insert into public.vendedor_suscripciones (vendedor_id, plan_clave, monto, estado, mp_preapproval_id) values ($1, 'basico', 10000, 'authorized', 'pre-lud') returning id`, [V]))[0].id
+  await q2(`select public.rpc_registrar_cobro_suscripcion($1, 'c1', 'p1', 'processed', 'approved', 10000, now() - interval '32 days')`, [SUS])
+  await q2(`select public.rpc_registrar_cobro_suscripcion($1, 'c2', 'p2', 'recycling', 'rejected', 10000, now() - interval '2 days')`, [SUS])
+
+  // Mercado Pago y Resend de mentira para esta parte.
+  let mpCancelaFalla = true
+  const cancelaciones = []
+  let mails2 = []
+  globalThis.fetch = async (url, init = {}) => {
+    const u = String(url)
+    const resp = (status, json) => ({ ok: status < 300, status, json: async () => json, text: async () => JSON.stringify(json) })
+    if (u.includes('api.resend.com')) {
+      const cuerpo = JSON.parse(init.body)
+      if (resendFalla.has(cuerpo.to)) return resp(500, { message: 'Resend caído' })
+      mails2.push({ para: cuerpo.to, asunto: cuerpo.subject })
+      return resp(200, { id: 'm' })
+    }
+    const pre = u.match(/\/preapproval\/([^/?]+)$/)
+    if (pre && init.method === 'PUT') {
+      cancelaciones.push(pre[1])
+      return mpCancelaFalla ? resp(500, { message: 'Mercado Pago caído' }) : resp(200, { id: pre[1], status: 'cancelled' })
+    }
+    if (pre) return resp(200, { id: pre[1], status: 'authorized', collector_id: 999 })
+    throw new Error(`fetch inesperado: ${u}`)
+  }
+  const cupo = () => ({ tomar: () => true, pausar: async () => {} })
+  const mailsDelPlan = () => T.tareaMailsDelPlan({ admin: admin2, prueba: false, ahoraMs: Date.now(), cupo: cupo() })
+
+  let rm = await mailsDelPlan()
+  ok(rm.rechazo === 1 && mails2.length === 1 && mails2[0].para === 'duena@lud.com' && mails2[0].asunto === 'Mercado Pago no pudo cobrar tu plan Básico',
+    'en la gracia: sale el mail 1 a la dueña')
+  rm = await mailsDelPlan()
+  ok(rm.rechazo === 0 && mails2.length === 1, 'una segunda corrida no lo repite')
+
+  // Faltando 2 días: el mail 2, con cuántos se pausarían; Resend falla una vez.
+  await q2(`update public.vendedor_suscripciones set pagado_hasta = now() - interval '8 days' where id = $1`, [SUS])
+  resendFalla.add('duena@lud.com')
+  rm = await mailsDelPlan()
+  ok(rm.fin_gracia === 0 && rm.no_enviados === 1 && (await q2(`select aviso_fin_gracia_en from public.vendedor_suscripciones where id = $1`, [SUS]))[0].aviso_fin_gracia_en === null,
+    'si Resend falla, la marca se suelta (sale mañana)')
+  resendFalla.delete('duena@lud.com')
+  mails2 = []
+  rm = await mailsDelPlan()
+  ok(rm.fin_gracia === 1 && mails2.length === 1 && mails2[0].asunto === 'Te quedan 2 días de tu plan Básico', 'mail 2: te quedan 2 días')
+  await mailsDelPlan()
+  ok(mails2.length === 1, 'y no se repite')
+
+  // Termina la gracia: cae y se cancela en Mercado Pago; la primera vez falla.
+  await q2(`update public.vendedor_suscripciones set pagado_hasta = now() - interval '10 days 1 hour' where id = $1`, [SUS])
+  await admin2.rpc('rpc_aplicar_caidas_vencidas')
+  let c = await S.cancelarCaidasPorFaltaDePago(admin2)
+  let caida = (await q2(`select * from public.plan_caidas where vendedor_id = $1`, [V]))[0]
+  ok(c.fallidas === 1 && caida.mp_cancelada_en === null && caida.intentos_cancelar_mp === 1 && caida.error_cancelar_mp
+    && (await q2(`select estado from public.vendedor_suscripciones where id = $1`, [SUS]))[0].estado === 'authorized',
+    'la caída por falta de pago intenta cancelar; si Mercado Pago falla, queda anotado (intentos y error) y la suscripción sigue viva')
+  mpCancelaFalla = false
+  c = await S.cancelarCaidasPorFaltaDePago(admin2)
+  caida = (await q2(`select * from public.plan_caidas where vendedor_id = $1`, [V]))[0]
+  ok(c.canceladas === 1 && caida.mp_cancelada_en !== null && caida.error_cancelar_mp === null
+    && (await q2(`select estado from public.vendedor_suscripciones where id = $1`, [SUS]))[0].estado === 'cancelled',
+    'la próxima corrida la reintenta: cancelada en Mercado Pago y anotada')
+  const antesCancel = cancelaciones.length
+  await S.cancelarCaidasPorFaltaDePago(admin2)
+  ok(cancelaciones.length === antesCancel, 'y no se vuelve a cancelar')
+
+  // El mail 3, una sola vez, con los pausados.
+  mails2 = []
+  rm = await mailsDelPlan()
+  ok(rm.caida === 1 && mails2.length === 1 && mails2[0].asunto === 'Tu tienda volvió al plan Gratis', 'mail 3: volvió al Gratis')
+  await mailsDelPlan()
+  ok(mails2.length === 1, 'una sola vez')
+  ok((await q2(`select count(*)::int as n from public.productos where vendedor_id = $1 and pausado_por_plan_en is not null`, [V]))[0].n === 15, 'con 15 pausados')
+
+  delete process.env.MP_ACCESS_TOKEN_PLATAFORMA
+  delete process.env.MP_USER_ID_PLATAFORMA
+}
 
 console.log(fallas ? `\n${fallas} FALLA(S)` : '\nTODO OK')
 process.exit(fallas ? 1 : 0)

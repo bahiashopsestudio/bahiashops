@@ -135,7 +135,13 @@ function Alta({ onClose, datosIniciales }) {
 
   const accion = leido?.datos?.accion
   const puede = leido?.datos?.habilitada && accion?.tipo === 'suscribirse'
-  const titulo = !puede ? 'Tu plan' : accion.medida ? 'Tu plan a medida' : `Pasarme al ${accion.nombre || 'Básico'}`
+  // Después de una caída (050) es volver al plan que tenía: «Reactivar…». La
+  // primera vez, «Pasarme al Básico» o «Tu plan a medida».
+  const caida = leido?.datos?.caida
+  const reactivar = !!caida && caida.motivo !== 'condiciones_quitadas'
+  const titulo = !puede ? 'Tu plan'
+    : reactivar ? (accion.medida ? 'Reactivar mi plan a medida' : `Reactivar mi plan ${accion.nombre || 'Básico'}`)
+      : accion.medida ? 'Tu plan a medida' : `Pasarme al ${accion.nombre || 'Básico'}`
   const errorDelCampo = error?.campo === 'email'
 
   let cuerpo

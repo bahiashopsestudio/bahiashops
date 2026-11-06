@@ -165,6 +165,8 @@ globalThis.fetch = async (url, init = {}) => {
   if (pre && init.method === 'PUT') { (f.puts ||= []).push({ id: pre[1], cuerpo: JSON.parse(init.body) }); return { ok: true, status: 200, json: async () => ({}) } }
   if (pre && f.preapprovals?.[pre[1]]) return { ok: true, status: 200, json: async () => f.preapprovals[pre[1]] }
   if (/\/authorized_payments\/search/.test(String(url))) return { ok: true, status: 200, json: async () => ({ results: f.cobros || [] }) }
+  const cobroUno = String(url).match(/\/authorized_payments\/([^/?]+)$/)
+  if (cobroUno && f.cobro?.[cobroUno[1]]) return { ok: true, status: 200, json: async () => f.cobro[cobroUno[1]] }
   throw new Error('llamada inesperada: ' + url)
 }
 
@@ -396,6 +398,16 @@ f.admin.respuestaRpc = { ok: true, estado: 'devuelta' }
 await avisarComo(2006, '999')
 okv(!f.puts && f.admin.tablas.suscripcion_diferencias[0].monto_mp_actualizado_en === null,
   'con la suscripción cancelada: no se llama a Mercado Pago, solo se anota')
+titulo('\n10a. Un cobro rechazado (050)')
+f = globalThis.__f = conSuscripcion(escenario([], {}, { cobro: { 71: { id: 71, preapproval_id: 'pre1', status: 'recycling', external_reference: 'bs-sus-abc',
+  transaction_amount: 10000, debit_date: '2026-12-04T12:00:00.000-03:00', payment: { id: 3101, status: 'rejected' } } } }))
+resp = await webhook({ json: async () => ({ type: 'subscription_authorized_payment', action: 'updated', data: { id: '71' } }), headers: { get: () => null } })
+const rechazado = f.admin.rpcs.find((r) => r.nombre === 'rpc_registrar_cobro_suscripcion')
+okv(resp.status === 200 && rechazado?.args.p_estado_cobro === 'recycling' && rechazado.args.p_estado_pago === 'rejected' && rechazado.args.p_mp_cobro_id === '71'
+  && rechazado.args.p_cobrado_en === '2026-12-04T15:00:00.000Z',
+  'el aviso de un cobro en reintento se registra (recycling, rejected, con su fecha): la base anota cobro_fallido_desde')
+okv(f.avisos.sinResolver.length === 0, 'sin mails de pago sin resolver')
+
 titulo('\n10b. El formato viejo (IPN) y los pagos de la plataforma fuera del camino de las ventas')
 // La prueba real (05/11): el aviso viejo del pago de una diferencia
 // (?id=…&topic=payment, sin user_id) lo leyó un token de tienda y entró al

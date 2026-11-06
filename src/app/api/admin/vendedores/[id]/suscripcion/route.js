@@ -1,7 +1,10 @@
 // La suscripción al plan de una tienda (migración 048), para la ficha del
 // admin.
 //
-//   GET   -> { suscripciones, cobros, diferencias, avisos, plan }
+//   GET   -> { suscripciones, cobros, diferencias, caidas, avisos, plan }
+//            caidas         las caídas del plan (050), la más nueva primero
+//            avisos.tipo 'cancelacion_pendiente': cayó por falta de pago y
+//                         Mercado Pago no canceló la suscripción
 //            suscripciones  todas las de la tienda, la más nueva primero
 //            cobros         los de esas suscripciones, el más nuevo primero
 //            diferencias    los pagos de la diferencia de un plan a medida
@@ -44,16 +47,19 @@ export async function GET(_request, { params }) {
   const { respuesta, vendedorId, admin } = await inicio(params)
   if (respuesta) return respuesta
 
-  const [suscripciones, diferencias, plan] = await Promise.all([
+  const [suscripciones, diferencias, plan, caidas] = await Promise.all([
     admin.from('vendedor_suscripciones')
-      .select('id, plan_clave, monto, estado, mp_preapproval_id, payer_email, proximo_cobro_en, ultimo_cobro_en, ultimo_cobro_monto, pagado_hasta, consultada_en, creada_en, cancelada_en, error_mp')
+      .select('id, plan_clave, monto, estado, mp_preapproval_id, payer_email, proximo_cobro_en, ultimo_cobro_en, ultimo_cobro_monto, pagado_hasta, consultada_en, creada_en, cancelada_en, error_mp, cobro_fallido_desde')
       .eq('vendedor_id', vendedorId).order('creada_en', { ascending: false }),
     admin.from('suscripcion_diferencias')
       .select('id, suscripcion_id, precio_nuevo, monto_anterior, monto, estado, mp_pago_id, pagada_en, monto_mp_actualizado_en, intentos_monto_mp, error_monto_mp, cubre_hasta, creada_en')
       .eq('vendedor_id', vendedorId).order('creada_en', { ascending: false }),
     admin.rpc('rpc_plan_de_tienda', { p_vendedor_id: vendedorId }),
+    admin.from('plan_caidas')
+      .select('id, suscripcion_id, plan_clave, a_medida, tope_antes, tope_despues, motivo, cayo_en, pausados, restaurada_en, restaurados, reemplazada_por, mp_cancelada_en, intentos_cancelar_mp, error_cancelar_mp')
+      .eq('vendedor_id', vendedorId).order('cayo_en', { ascending: false }),
   ])
-  const error = suscripciones.error || diferencias.error || plan.error
+  const error = suscripciones.error || diferencias.error || plan.error || caidas.error
   if (error) {
     console.error('[admin-suscripcion/leer]', vendedorId, error.message)
     return NextResponse.json({ error: ERROR }, { status: 500 })
@@ -93,11 +99,26 @@ export async function GET(_request, { params }) {
     avisos.push({ tipo: 'paga_sin_precio', texto: `Esta tienda sigue pagando ${textoPrecio(viva.monto)} por mes y tiene condiciones sin abono. Cancelala si ya no corresponde.` })
   }
 
+  // Una caída por falta de pago que Mercado Pago no dejó cancelar (050).
+  for (const c of caidas.data || []) {
+    if (c.motivo === 'falta_de_pago' && !c.restaurada_en && !c.mp_cancelada_en && c.intentos_cancelar_mp > 0) {
+      avisos.push({
+        tipo: 'cancelacion_pendiente',
+        texto: `La tienda volvió al Gratis por falta de pago, pero Mercado Pago no canceló la suscripción #${c.suscripcion_id}`
+          + ` (${c.intentos_cancelar_mp} intento${c.intentos_cancelar_mp === 1 ? '' : 's'}${c.error_cancelar_mp ? `: ${c.error_cancelar_mp}` : ''}).`
+          + ' La tarea diaria lo reintenta; si sigue, «Cancelar en Mercado Pago».',
+      })
+    }
+  }
+
   const p = plan.data || {}
   return NextResponse.json({
     suscripciones: suscripciones.data || [],
     cobros: cobros.data || [],
     diferencias: diferencias.data || [],
+    // Sin las que dejó cerradas la 050 para lo de antes (cayeron y se
+    // cerraron en el mismo momento, sin pausar nada).
+    caidas: (caidas.data || []).filter((c) => !(c.restaurada_en && c.restaurada_en === c.cayo_en && !c.pausados)),
     avisos,
     // El plan que rige, para «Plan» y la pastilla «Diferencia sin pagar».
     plan: {

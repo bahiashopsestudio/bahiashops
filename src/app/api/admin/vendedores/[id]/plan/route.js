@@ -12,8 +12,12 @@
 //                        atajos)
 //   PUT     { plan_clave, tope_productos, sin_tope, precio_especial, motivo }
 //           -> { ok }  carga o reemplaza la condición especial
-//   DELETE  -> { ok }  la quita: la tienda vuelve al Gratis. Si queda por
-//              encima del tope, no se pausa nada.
+//   DELETE  -> { ok, pausados }  la quita. Con condiciones de $0 (o un plan a
+//              medida que no estaba pagando), la tienda vuelve a su plan y, si
+//              queda por encima del tope, no se pausa nada. Con un plan a medida
+//              pago (050): primero baja el monto de la suscripción al del
+//              Básico en Mercado Pago (si no lo acepta, no quita nada) y después
+//              pausa lo que pasa del tope que queda (condiciones_quitadas).
 //
 // Las reglas: validarEspecial (src/lib/planes.js) y, de respaldo, las de la
 // tabla y su disparador (solo planes con tope y fotos). El motivo no lo ve la
@@ -22,6 +26,8 @@
 import { NextResponse } from 'next/server'
 import { getServiceRoleClient, verificarAdmin } from '@/lib/supabase/admin'
 import { validarEspecial } from '@/lib/planes'
+import { cambiarMontoMp } from '@/lib/mercadopago/suscripciones'
+import { suscripcionViva } from '@/lib/suscripcionesServidor'
 
 const NO_SE_PUDO = 'No pudimos guardar el plan. Probá de nuevo.'
 
@@ -117,13 +123,52 @@ export async function PUT(request, { params }) {
 }
 
 export async function DELETE(_request, { params }) {
-  const { respuesta, vendedorId, admin } = await inicio(params)
+  const { respuesta, adminUser, vendedorId, admin } = await inicio(params)
   if (respuesta) return respuesta
+
+  // ¿Es un plan a medida que la tienda está pagando? (050) Entonces, antes de
+  // quitarlo, el monto de su suscripción baja al del Básico en Mercado Pago, y
+  // después se pausa lo que pasa del tope que queda.
+  const [rige, especial, basico, viva] = await Promise.all([
+    admin.rpc('rpc_plan_de_tienda', { p_vendedor_id: vendedorId }),
+    admin.from('vendedor_planes').select('plan_clave, tope_productos, sin_tope').eq('vendedor_id', vendedorId).maybeSingle(),
+    admin.from('planes').select('precio_mensual, tope_productos').eq('clave', 'basico').maybeSingle(),
+    suscripcionViva(admin, vendedorId),
+  ])
+  const errorLectura = rige.error || especial.error || basico.error || viva.error
+  if (errorLectura) {
+    console.error('[admin-plan/quitar/leer]', vendedorId, errorLectura.message)
+    return NextResponse.json({ error: 'No pudimos quitar las condiciones. Probá de nuevo.' }, { status: 500 })
+  }
+  const pago = rige.data?.origen === 'especial' && Number(rige.data?.precio_mensual) > 0
+  const precioBasico = Number(basico.data?.precio_mensual)
+  const sus = viva.fila
+  if (pago && sus?.estado === 'authorized' && Number.isInteger(precioBasico) && precioBasico > 0 && Number(sus.monto) > precioBasico) {
+    const mp = await cambiarMontoMp(sus.mp_preapproval_id, precioBasico)
+    if (!mp.ok) {
+      console.error('[admin-plan/quitar/monto]', vendedorId, sus.id, mp.status, mp.error)
+      return NextResponse.json({ error: 'Mercado Pago no aceptó bajar el monto de la suscripción al del Básico: no se quitó nada. Probá de nuevo en unos minutos.' }, { status: 502 })
+    }
+    const { error: errorMonto } = await admin.from('vendedor_suscripciones')
+      .update({ monto: precioBasico, actualizada_en: new Date().toISOString() }).eq('id', sus.id)
+    if (errorMonto) console.error('[admin-plan/quitar/monto/anotar]', vendedorId, sus.id, errorMonto.message)
+    console.log(`[admin-plan] admin ${adminUser.id}: suscripción ${sus.id} de la tienda ${vendedorId} pasó de $${sus.monto} a $${precioBasico}.`)
+  }
 
   const { error } = await admin.from('vendedor_planes').delete().eq('vendedor_id', vendedorId)
   if (error) {
     console.error('[admin-plan/quitar]', vendedorId, error.message)
     return NextResponse.json({ error: 'No pudimos quitar las condiciones. Probá de nuevo.' }, { status: 500 })
   }
-  return NextResponse.json({ ok: true })
+
+  let pausados = 0
+  if (pago) {
+    const topeAntes = especial.data?.sin_tope ? null : (especial.data?.tope_productos ?? null)
+    const { data: ajuste, error: errorAjuste } = await admin.rpc('rpc_ajustar_productos_al_plan', {
+      p_vendedor_id: vendedorId, p_motivo: 'condiciones_quitadas', p_tope_antes: topeAntes,
+    })
+    if (errorAjuste) console.error('[admin-plan/quitar/ajustar]', vendedorId, errorAjuste.message)
+    else pausados = Number(ajuste?.pausados) || 0
+  }
+  return NextResponse.json({ ok: true, pausados })
 }

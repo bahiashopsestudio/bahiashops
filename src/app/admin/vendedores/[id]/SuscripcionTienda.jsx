@@ -10,6 +10,10 @@
 //     Diferencia sin pagar, Cancelada), con tres datos en fila.
 //   · Una sola tabla «Cobros» con los de todas sus suscripciones y los pagos
 //     de la diferencia (filasDeCobros).
+//   · En la gracia de un cobro rechazado (050): la pastilla ámbar «En gracia
+//     hasta el 14/12» y el dato «Cobro rechazado»; en la tabla, en rojo.
+//   · «Caídas del plan» (050): fecha, motivo, cuántos se pausaron y cuándo
+//     se restauraron (o si falta cancelar en Mercado Pago).
 //   · Plegados: «Datos de Mercado Pago» y «Altas que Mercado Pago rechazó».
 //   · Sincronizar ahora, Cancelar en Mercado Pago (con confirmación en el
 //     mismo recuadro, como «Quitar condiciones») y Reintentar el monto.
@@ -54,6 +58,28 @@ function textoDelPlan(plan) {
   return plan.nombre
 }
 
+// Una caída del plan (050), en una línea: «14/12/26 · falta de pago · 15
+// pausados · restaurados el 20/12/26».
+const MOTIVOS = {
+  falta_de_pago: 'falta de pago',
+  baja: 'baja',
+  devolucion: 'cobro devuelto',
+  condiciones_quitadas: 'condiciones quitadas',
+}
+function textoDeCaida(c) {
+  const partes = [fecha(c.cayo_en)]
+  partes.push(c.motivo === 'condiciones_quitadas' && c.tope_antes && c.tope_despues
+    ? `condiciones quitadas (a medida ${c.tope_antes} → ${c.tope_despues})`
+    : `${MOTIVOS[c.motivo] || c.motivo}${c.a_medida ? ' (a medida)' : ''}`)
+  partes.push(c.pausados === 1 ? '1 pausado' : `${c.pausados || 0} pausados`)
+  if (c.reemplazada_por) partes.push('la reemplazó otra caída')
+  else if (c.restaurada_en) partes.push(`restaurados el ${fecha(c.restaurada_en)}`)
+  if (c.motivo === 'falta_de_pago' && !c.restaurada_en) {
+    partes.push(c.mp_cancelada_en ? `cancelada en Mercado Pago el ${fecha(c.mp_cancelada_en)}` : 'sin cancelar en Mercado Pago')
+  }
+  return partes.join(' · ')
+}
+
 // Los tres datos de arriba, según el estado.
 function datosDeArriba(actual, { plan, diferenciaPendiente, diferenciaSinPagar, ahora }) {
   if (actual.estado === 'pending' || actual.estado === 'creando') {
@@ -66,6 +92,10 @@ function datosDeArriba(actual, { plan, diferenciaPendiente, diferenciaSinPagar, 
       ['Pagado hasta', fecha(actual.pagado_hasta)],
       ['Plan', conDias ? `${plan?.nombre || '—'} hasta el ${fechaCorta(actual.pagado_hasta)}` : textoDelPlan(plan)],
     ]
+  }
+  // En la gracia de un cobro rechazado (050).
+  if (actual.cobro_fallido_desde && (actual.estado === 'authorized' || actual.estado === 'paused')) {
+    return [['Pagado hasta', fecha(actual.pagado_hasta)], ['Cobro rechazado', fecha(actual.cobro_fallido_desde)], ['Plan', textoDelPlan(plan)]]
   }
   if (diferenciaSinPagar) {
     return [
@@ -136,7 +166,8 @@ export default function SuscripcionTienda({ vendedorId }) {
   const pendiente = plan?.especialPendiente
   const diferenciaSinPagar = actual?.estado === 'authorized' && !!pendiente && Number(pendiente.precio) > Number(actual.monto)
   const diferenciaPendiente = diferencias.find((d) => d.estado === 'pendiente') || null
-  const pastilla = pastillaDeLaFicha(actual, { diferenciaSinPagar })
+  const pastilla = pastillaDeLaFicha(actual, { diferenciaSinPagar, ahoraMs: datos.leidoEn })
+  const caidas = datos.caidas || []
   const filas = filasDeCobros({ cobros, diferencias })
   const avisoPagaSinPrecio = avisos.find((a) => a.tipo === 'paga_sin_precio')
   const avisosMonto = avisos.filter((a) => a.tipo !== 'paga_sin_precio')
@@ -159,7 +190,9 @@ export default function SuscripcionTienda({ vendedorId }) {
               {textoPrecio(actual.monto)} por mes{diferenciaSinPagar ? ` → ${textoPrecio(pendiente.precio)}` : ''}
             </span>
             {pastilla && (
-              <span style={{ fontSize: '10.5px', fontWeight: 600, borderRadius: '999px', padding: '3px 9px', ...PASTILLAS[pastilla.tono] }}>{pastilla.texto}</span>
+              <span style={{ fontSize: '10.5px', fontWeight: 600, borderRadius: '999px', padding: '3px 9px', ...PASTILLAS[pastilla.tono] }}>
+                {pastilla.hasta ? `${pastilla.texto} hasta el ${fechaCorta(pastilla.hasta)}` : pastilla.texto}
+              </span>
             )}
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3" style={{ gap: '12px' }}>
@@ -195,6 +228,13 @@ export default function SuscripcionTienda({ vendedorId }) {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {caidas.length > 0 && (
+        <div className="flex flex-col" style={{ gap: '4px', fontSize: '12.5px', lineHeight: 1.5, color: 'rgba(10,10,10,0.65)' }}>
+          <small style={PEQUENA}>Caídas del plan</small>
+          {caidas.map((c) => <span key={c.id}>{textoDeCaida(c)}</span>)}
         </div>
       )}
 

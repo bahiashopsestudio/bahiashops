@@ -265,26 +265,99 @@ export function recienConfirmada(fila, ahoraMs = Date.now()) {
   return ahoraMs - creada < 7 * DIA_MS && ahoraMs - cobro < HORAS_RECIEN_CONFIRMADA * 3600 * 1000
 }
 
+// ── El cobro rechazado y la gracia (050) ─────────────────────────────────────
+
+// Los últimos días de la gracia: el recuadro cambia y sale el mail 2.
+export const DIAS_AVISO_FIN_GRACIA = 3
+
+// Hasta cuándo una suscripción con un cobro rechazado sigue dando el plan:
+// pagado_hasta + DIAS_DE_GRACIA (la misma regla que privado.suscripcion_al_dia).
+// ISO o null.
+export function graciaHasta(pagadoHasta) {
+  const ms = Date.parse(pagadoHasta ?? '')
+  return Number.isFinite(ms) ? new Date(ms + DIAS_DE_GRACIA * DIA_MS).toISOString() : null
+}
+
+// ¿Está en la gracia de un cobro rechazado? Viva, con cobro_fallido_desde y
+// antes del fin de la gracia.
+//   fila  { estado, cobro_fallido_desde, pagado_hasta } (la de la base) o
+//         { estado, cobroFallidoDesde, pagadoHasta } (la del panel)
+export function enGracia(fila, ahoraMs = Date.now()) {
+  if (!fila || !['authorized', 'paused'].includes(fila.estado)) return false
+  if (!(fila.cobro_fallido_desde ?? fila.cobroFallidoDesde)) return false
+  const hasta = Date.parse(graciaHasta(fila.pagado_hasta ?? fila.pagadoHasta) ?? '')
+  return Number.isFinite(hasta) && ahoraMs < hasta
+}
+
+// Cuántos días faltan hasta una fecha, redondeado para arriba (al menos 1).
+export function diasHasta(iso, ahoraMs = Date.now()) {
+  const ms = Date.parse(iso ?? '')
+  return Number.isFinite(ms) ? Math.max(1, Math.ceil((ms - ahoraMs) / DIA_MS)) : null
+}
+
+// ¿Todavía no llegó esa fecha?
+export function esFutura(iso, ahoraMs = Date.now()) {
+  const ms = Date.parse(iso ?? '')
+  return Number.isFinite(ms) && ms > ahoraMs
+}
+
+// ¿Quedan DIAS_AVISO_FIN_GRACIA días o menos de la gracia?
+export function ultimosDiasDeGracia(fila, ahoraMs = Date.now()) {
+  if (!enGracia(fila, ahoraMs)) return false
+  return Date.parse(graciaHasta(fila.pagado_hasta ?? fila.pagadoHasta)) - ahoraMs <= DIAS_AVISO_FIN_GRACIA * DIA_MS
+}
+
+// El mail del cobro rechazado que le toca hoy a una suscripción (la de la
+// base): 'fin_gracia' (mail 2, en los últimos días, si no salió), 'rechazo'
+// (mail 1, si no salió) o null. Si el rechazo se ve recién en los últimos
+// días, sale solo el 2.
+export function mailDeCobroQueToca(fila, ahoraMs = Date.now()) {
+  if (!enGracia(fila, ahoraMs)) return null
+  if (ultimosDiasDeGracia(fila, ahoraMs)) return fila.aviso_fin_gracia_en ? null : 'fin_gracia'
+  return fila.aviso_rechazo_en ? null : 'rechazo'
+}
+
+// Las caídas que mandan el mail 3 («Tu tienda volvió al plan Gratis»): las
+// del plan pago que terminó. Las de condiciones quitadas, no (las decidió el
+// admin, que habla con la tienda).
+export const MOTIVOS_CON_MAIL = ['falta_de_pago', 'baja', 'devolucion']
+// Una caída más vieja que esto ya no manda el mail (por ejemplo, si la tarea
+// estuvo parada).
+export const DIAS_PARA_MAIL_DE_CAIDA = 7
+
+// ¿Le toca el mail 3 a esta caída (la de plan_caidas)?
+export function caidaConMail(caida, ahoraMs = Date.now()) {
+  if (!caida || caida.restaurada_en || caida.aviso_mail_en) return false
+  if (!MOTIVOS_CON_MAIL.includes(caida.motivo)) return false
+  const cayo = Date.parse(caida.cayo_en ?? '')
+  return Number.isFinite(cayo) && ahoraMs - cayo <= DIAS_PARA_MAIL_DE_CAIDA * DIA_MS
+}
+
 // Qué muestra «Tu plan» (SuscripcionPlan), con lo que devuelve
 // GET /api/vendedor/suscripcion:
-//   suscripcion       { estado, monto, initPoint, pagadoHasta, recienConfirmada } o null
+//   suscripcion       { estado, monto, initPoint, pagadoHasta, recienConfirmada,
+//                       cobroFallidoDesde } o null
 //   accion            la de accionDeLaTienda (con medida) o null
+//   caida             la caída abierta ({ motivo, ... }) o null (050)
 //   volvio            entró con ?suscripcion=volvio o ?diferencia=volvio
 //   consultaAgotada   ya pasó el rato de consultar después de volver
 //   listoVisto        el navegador ya mostró el «¡Listo!» de esta suscripción
-// Devuelve { tipo, pendienteVieja }:
+// Devuelve { tipo, pendienteVieja, ultimosDias }:
 //   'confirmando'  volvió de Mercado Pago y todavía no se confirma, o Mercado
 //                  Pago ya la autorizó y falta que llegue el cobro
 //   'sin_pagar'    volvió, pasó el rato y sigue esperando el pago
 //   'esperando'    tiene una esperando el pago
 //   'gratis'       puede pasarse al Básico
 //   'medida'       tiene un plan a medida sin pagar (sin suscripción activa)
+//   'de_vuelta'    su plan pago terminó y volvió al Gratis (caída abierta)
 //   'diferencia'   tiene un plan a medida y ya paga el Básico
+//   'gracia'       Mercado Pago no pudo cobrar; sigue con el plan hasta el fin
+//                  de la gracia (ultimosDias: quedan 3 días o menos)
 //   'listo'        recién confirmada (una sola vez)
 //   'al_dia'       activa y al día
-//   'cancelada'    cancelada, todavía con días pagos
+//   'cancelada'    dada de baja, todavía con días pagos
 //   'nada'         nada que mostrar (por ejemplo, condiciones de $0)
-export function estadoParaPantalla({ suscripcion, accion, volvio = false, consultaAgotada = false, listoVisto = false, ahoraMs = Date.now() } = {}) {
+export function estadoParaPantalla({ suscripcion, accion, caida = null, volvio = false, consultaAgotada = false, listoVisto = false, ahoraMs = Date.now() } = {}) {
   const sus = suscripcion || null
   const esperandoVolver = volvio && !consultaAgotada
 
@@ -295,8 +368,14 @@ export function estadoParaPantalla({ suscripcion, accion, volvio = false, consul
   // que se cargara un plan a medida) no tapa la que corresponde: se ofrece la
   // nueva, y al crearla se cancela la vieja.
   const pendienteVieja = sus?.estado === 'pending' && accion?.tipo === 'suscribirse' && !deEsteMonto
+  // Volvió al Gratis (la caída abierta): «Tu plan volvió al Gratis», salvo
+  // que ya esté pagando de nuevo (esperando, confirmando).
+  const deVuelta = !!caida && caida.motivo !== 'condiciones_quitadas' && accion?.tipo === 'suscribirse'
+  const rechazada = !!(sus?.cobroFallidoDesde)
+
   // Mercado Pago ya la autorizó, pero el cobro todavía no está registrado.
-  if (sus?.estado === 'authorized' && deEsteMonto) return { tipo: 'confirmando' }
+  // No si tiene un cobro rechazado: esa es la que dejó de pagar.
+  if (sus?.estado === 'authorized' && deEsteMonto && !rechazada && !deVuelta) return { tipo: 'confirmando' }
 
   if (accion?.tipo === 'suscribirse') {
     if (sus?.estado === 'pending' && !pendienteVieja) {
@@ -304,9 +383,11 @@ export function estadoParaPantalla({ suscripcion, accion, volvio = false, consul
       if (volvio) return { tipo: 'sin_pagar' }
       if (sus.initPoint) return { tipo: 'esperando' }
     }
+    if (deVuelta) return { tipo: 'de_vuelta' }
     return { tipo: accion.medida ? 'medida' : 'gratis', pendienteVieja }
   }
 
+  if (enGracia(sus, ahoraMs)) return { tipo: 'gracia', ultimosDias: ultimosDiasDeGracia(sus, ahoraMs) }
   if (sus?.estado === 'authorized') return { tipo: sus.recienConfirmada && !listoVisto ? 'listo' : 'al_dia' }
   if (sus?.estado === CANCELADA && Date.parse(sus.pagadoHasta ?? '') > ahoraMs) return { tipo: 'cancelada' }
   return { tipo: 'nada' }
@@ -322,7 +403,9 @@ export function estadoDeCobro({ estado_pago: pago, estado_cobro: cobro } = {}) {
   if (pago === 'refunded' || pago === 'charged_back') return { texto: 'Devuelto', tono: 'espera' }
   if (['pending', 'in_process', 'authorized', 'in_mediation'].includes(pago)) return { texto: 'Esperando', tono: 'espera' }
   if (pago === 'rejected' || pago === 'cancelled') return { texto: 'Rechazado', tono: 'no' }
-  if (!pago && ['scheduled', 'processed', 'recycling'].includes(cobro)) return { texto: 'Esperando', tono: 'espera' }
+  // En reintento: Mercado Pago ya lo rechazó una vez (050: en rojo).
+  if (cobro === 'recycling') return { texto: 'Rechazado', tono: 'no' }
+  if (!pago && ['scheduled', 'processed'].includes(cobro)) return { texto: 'Esperando', tono: 'espera' }
   return { texto: pago || cobro || 'Sin dato', tono: 'gris' }
 }
 
@@ -363,10 +446,13 @@ export function suscripcionDeLaFicha(suscripciones = []) {
   return suscripciones.find((s) => esViva(s.estado)) || suscripciones.find((s) => s.estado !== 'error') || null
 }
 
-// La pastilla de estado de la ficha: { texto, tono: 'ok' | 'espera' | 'gris' }.
+// La pastilla de estado de la ficha: { texto, tono: 'ok' | 'espera' | 'gris',
+// hasta? }. En la gracia, hasta: la fecha del fin (la ficha la suma al texto:
+// «En gracia hasta el 14/12»).
 //   diferenciaSinPagar  tiene un plan a medida por encima de lo que paga
-export function pastillaDeLaFicha(fila, { diferenciaSinPagar = false } = {}) {
+export function pastillaDeLaFicha(fila, { diferenciaSinPagar = false, ahoraMs = Date.now() } = {}) {
   if (!fila) return null
+  if (enGracia(fila, ahoraMs)) return { texto: 'En gracia', tono: 'espera', hasta: graciaHasta(fila.pagado_hasta) }
   if (fila.estado === 'authorized') return diferenciaSinPagar ? { texto: 'Diferencia sin pagar', tono: 'espera' } : { texto: 'Al día', tono: 'ok' }
   if (fila.estado === 'pending' || fila.estado === 'creando') return { texto: 'Esperando el pago', tono: 'espera' }
   if (fila.estado === 'paused') return { texto: 'Pausada', tono: 'espera' }

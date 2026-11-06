@@ -12,6 +12,7 @@ import {
   emailValido, mensajeDeAltaRechazada, MAIL_DE_LA_PLATAFORMA, pendienteAbandonada, problemaDeSuscripcion, reusarPendiente, suscripcionesHabilitadas, tipoDePagoDePlataforma,
   errorDeAltaRechazada, MAIL_RECHAZADO, MP_NO_RESPONDIO, estadoParaPantalla, recienConfirmada, estadoDeCobro, filasDeCobros,
   suscripcionDeLaFicha, pastillaDeLaFicha, seCancelaSola,
+  graciaHasta, enGracia, ultimosDiasDeGracia, mailDeCobroQueToca, caidaConMail,
 } from '../src/lib/suscripciones.js'
 import { manifiesto, verificarFirma, firmaEstricta } from '../src/lib/mercadopago/firma.js'
 
@@ -172,6 +173,52 @@ ok(suscripcionDeLaFicha([{ id: 9, estado: 'error' }]) === null, 'solo altas rech
 ok(pastillaDeLaFicha({ estado: 'authorized' }).texto === 'Al día' && pastillaDeLaFicha({ estado: 'authorized' }, { diferenciaSinPagar: true }).texto === 'Diferencia sin pagar', 'pastilla: Al día o Diferencia sin pagar')
 ok(pastillaDeLaFicha({ estado: 'pending' }).texto === 'Esperando el pago' && pastillaDeLaFicha({ estado: 'cancelled' }).tono === 'gris', 'pastilla: Esperando el pago, Cancelada en gris')
 ok(seCancelaSola({ creada_en: '2026-11-04T12:00:00Z' }) === '2026-11-11T12:00:00.000Z', 'se cancela sola a los 7 días')
+
+console.log('\n6e. Cuando deja de pagar (050)')
+const H = Date.parse('2026-12-10T12:00:00Z')
+const dia = 864e5
+const isoH = (d) => new Date(H + d * dia).toISOString()
+ok(graciaHasta('2026-12-04T15:00:00Z') === '2026-12-14T15:00:00.000Z' && graciaHasta(null) === null, 'la gracia: pagado_hasta + 10 días')
+const rech = (extra = {}) => ({ estado: 'authorized', cobro_fallido_desde: isoH(-6), pagado_hasta: isoH(-6), aviso_rechazo_en: null, aviso_fin_gracia_en: null, ...extra })
+ok(enGracia(rech(), H) && !enGracia(rech({ cobro_fallido_desde: null }), H) && !enGracia(rech({ pagado_hasta: isoH(-11) }), H) && !enGracia(rech({ estado: 'cancelled' }), H),
+  'en gracia: viva, con cobro rechazado y antes del fin (no sin rechazo, ni pasada, ni cancelada)')
+ok(!ultimosDiasDeGracia(rech(), H) && ultimosDiasDeGracia(rech({ pagado_hasta: isoH(-8) }), H), 'los últimos 3 días')
+ok(mailDeCobroQueToca(rech(), H) === 'rechazo' && mailDeCobroQueToca(rech({ aviso_rechazo_en: isoH(-1) }), H) === null, 'mail 1: una sola vez')
+ok(mailDeCobroQueToca(rech({ pagado_hasta: isoH(-8), aviso_rechazo_en: isoH(-1) }), H) === 'fin_gracia'
+  && mailDeCobroQueToca(rech({ pagado_hasta: isoH(-8) }), H) === 'fin_gracia'
+  && mailDeCobroQueToca(rech({ pagado_hasta: isoH(-8), aviso_fin_gracia_en: isoH(0) }), H) === null, 'mail 2 en los últimos días (aunque el 1 no haya salido), una sola vez')
+ok(mailDeCobroQueToca(rech({ pagado_hasta: isoH(-11) }), H) === null, 'terminada la gracia, ninguno de los dos')
+const caidaM = (extra = {}) => ({ motivo: 'falta_de_pago', cayo_en: isoH(-1), restaurada_en: null, aviso_mail_en: null, ...extra })
+ok(caidaConMail(caidaM(), H) && caidaConMail(caidaM({ motivo: 'baja' }), H) && caidaConMail(caidaM({ motivo: 'devolucion' }), H), 'mail 3: falta de pago, baja y devolución')
+ok(!caidaConMail(caidaM({ motivo: 'condiciones_quitadas' }), H) && !caidaConMail(caidaM({ aviso_mail_en: isoH(0) }), H)
+  && !caidaConMail(caidaM({ restaurada_en: isoH(0) }), H) && !caidaConMail(caidaM({ cayo_en: isoH(-8) }), H),
+  'no con condiciones quitadas, ya avisada, ya restaurada (volvió a pagar) ni de hace más de 7 días')
+ok(estadoDeCobro({ estado_cobro: 'recycling', estado_pago: null }).tono === 'no' && estadoDeCobro({ estado_cobro: 'recycling', estado_pago: 'rejected' }).texto === 'Rechazado',
+  'un cobro en reintento: Rechazado, en rojo')
+const enG = pastillaDeLaFicha({ estado: 'authorized', cobro_fallido_desde: isoH(-6), pagado_hasta: isoH(-6) }, { ahoraMs: H })
+ok(enG.texto === 'En gracia' && enG.tono === 'espera' && enG.hasta === graciaHasta(isoH(-6)), 'la pastilla de la ficha: En gracia, con la fecha')
+
+const susP = (extra = {}) => ({ estado: 'authorized', monto: 10000, pagadoHasta: isoH(-6), cobroFallidoDesde: isoH(-6), ...extra })
+const basicoP = { tipo: 'suscribirse', monto: 10000, plan: 'basico', medida: false }
+const pant = (o) => estadoParaPantalla({ ahoraMs: H, ...o })
+let g = pant({ suscripcion: susP(), accion: null })
+ok(g.tipo === 'gracia' && g.ultimosDias === false, 'Tu plan: cobro rechazado, en gracia')
+g = pant({ suscripcion: susP({ pagadoHasta: isoH(-8) }), accion: null })
+ok(g.tipo === 'gracia' && g.ultimosDias === true, 'Tu plan: los últimos 3 días')
+ok(pant({ suscripcion: susP({ cobroFallidoDesde: null, pagadoHasta: isoH(20) }), accion: null }).tipo === 'al_dia', 'al día, sin rechazo')
+ok(pant({ suscripcion: susP({ estado: 'cancelled', cobroFallidoDesde: null, pagadoHasta: isoH(20) }), accion: null }).tipo === 'cancelada', 'de baja con días pagos')
+const caidaP = { motivo: 'falta_de_pago', pausados: 15 }
+ok(pant({ suscripcion: susP({ estado: 'cancelled', pagadoHasta: isoH(-11) }), accion: basicoP, caida: caidaP }).tipo === 'de_vuelta', 'volvió al Gratis (cancelada)')
+ok(pant({ suscripcion: susP({ pagadoHasta: isoH(-11) }), accion: basicoP, caida: caidaP }).tipo === 'de_vuelta',
+  'volvió al Gratis aunque Mercado Pago todavía no la canceló (no es «confirmando»)')
+ok(pant({ suscripcion: susP({ pagadoHasta: isoH(-11), cobroFallidoDesde: isoH(-11) }), accion: basicoP, caida: null }).tipo === 'gratis',
+  'gracia terminada sin caída todavía: el Gratis, no «confirmando»')
+ok(pant({ suscripcion: { estado: 'pending', monto: 10000, initPoint: 'x' }, accion: basicoP, caida: caidaP }).tipo === 'esperando',
+  'reactivando: la nueva esperando el pago tapa el «volvió al Gratis»')
+ok(pant({ suscripcion: { estado: 'pending', monto: 10000, initPoint: 'x' }, accion: basicoP, caida: caidaP, volvio: true }).tipo === 'confirmando', 'y volviendo de pagar, confirmando')
+ok(pant({ suscripcion: susP({ cobroFallidoDesde: null, pagadoHasta: isoH(20) }), accion: null, caida: { motivo: 'condiciones_quitadas' } }).tipo === 'al_dia',
+  'con condiciones quitadas sigue en su Básico al día')
+ok(pant({ suscripcion: null, accion: { ...basicoP, monto: 20000, medida: true }, caida: { motivo: 'falta_de_pago', pausados: 32 } }).tipo === 'de_vuelta', 'volvió, era a medida')
 
 console.log('\n7. La firma del webhook')
 const secreto = 'clave-de-prueba'

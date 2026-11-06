@@ -37,7 +37,26 @@ export function planDesdeLaBase(fila) {
     especialPendiente: f.especial_pendiente && Number.isInteger(Number(f.especial_pendiente.precio))
       ? { plan: f.especial_pendiente.plan ?? null, precio: Number(f.especial_pendiente.precio) }
       : null,
+    // La caída abierta (050): su plan pago terminó y volvió a un plan más
+    // chico. { motivo, nombre, aMedida, pausados } o null.
+    caida: f.caida && typeof f.caida === 'object'
+      ? { motivo: f.caida.motivo ?? null, nombre: f.caida.nombre ?? null, aMedida: f.caida.a_medida === true, pausados: entero(f.caida.pausados) ?? 0 }
+      : null,
+    // Los productos que pausó el sistema por el plan (050).
+    pausadosPorPlan: entero(f.pausados_por_plan) ?? 0,
   }
+}
+
+// ¿Volvió al Gratis porque terminó su plan pago? La caída abierta, salvo la
+// de condiciones quitadas (ahí sigue en el Básico).
+export function volvioAlGratis(datos) {
+  return !!datos?.caida && datos.caida.motivo !== 'condiciones_quitadas'
+}
+
+// «tu plan Básico» o «tu plan a medida», el de la caída.
+export function planQueTenia(caida) {
+  if (caida?.aMedida) return 'tu plan a medida'
+  return `tu plan ${caida?.nombre || 'Básico'}`
 }
 
 // Qué dice el contador «usados de tope»:
@@ -196,12 +215,11 @@ export function planesParaLaVenta(filas) {
 export const LINK_PLANES = '/vender#planes'
 
 // La nota debajo del contador de Mis productos, o null si no lleva:
-//   { texto, link?: { texto, href }, despues? }
-// Por encima del tope, en el Gratis, invita al plan siguiente.
-// F4: cuando la base sepa que la tienda venía del Básico, el texto pasa a
-// «Tu plan volvió al Gratis. [Reactivar mi plan Básico]. Si no, eliminá
-// productos hasta bajar a 10.»; hasta entonces, este (no sabemos de dónde
-// venía).
+//   { texto, link?: { texto, href } | { texto, modal: true }, despues? }
+// Por encima del tope, en el Gratis, invita al plan siguiente. Si volvió al
+// Gratis porque terminó su plan pago (la caída abierta, 050): «Tu plan volvió
+// al Gratis. Para reactivar tu plan Básico [hacé click acá]. Si no, eliminá
+// productos hasta bajar a 10.» (el link abre el alta de la suscripción).
 export function notaDelContador(datos) {
   const d = datos || {}
   const contador = d.contador ?? estadoDelContador(d)
@@ -215,6 +233,9 @@ export function notaDelContador(datos) {
   if (contador !== 'por_encima') return null
 
   const despues = `Si no, eliminá productos hasta bajar a ${tope}.`
+  if (volvioAlGratis(d) && d.suscripciones === true) {
+    return { texto: `Tu plan volvió al Gratis. Para reactivar ${planQueTenia(d.caida)}`, link: { texto: 'hacé click acá', modal: true }, despues }
+  }
   if (d.especial) return { texto: `Tenés ${usados} productos y tu plan guarda ${tope}.`, despues }
   const nombre = d.plan?.nombre ? ` ${d.plan.nombre}` : ''
   const nota = { texto: `Tenés ${usados} productos y tu plan${nombre} guarda ${tope}.`, despues }
@@ -247,10 +268,37 @@ export function etiquetaDelPlan(datos) {
 // siguiente, en ningún motivo: va «Escribinos». Con un plan a medida que
 // espera el pago (datos.especialPendiente), en todos los motivos, el cartel
 // lo ofrece: «Tu plan a medida te está esperando».
+// Si volvió al Gratis porque terminó su plan pago (050), en todos los
+// motivos: el cierre es el texto del contador, con el link que abre el alta:
+//   cierre: { antes, link: { texto, modal: true }, despues } (un objeto, no
+//   un texto).
 export function textosDelCartel({ motivo = 'productos', accion = 'activar', datos, tope, usados } = {}) {
   const d = datos || {}
   const t = tope ?? d.tope ?? null
   const u = usados ?? d.usados ?? null
+
+  if (volvioAlGratis(d) && d.suscripciones === true) {
+    const verbo = accion === 'reenviar' ? 'reenviar' : 'activar'
+    const titulo = motivo === 'fotos'
+      ? (d.fotosPorProducto ? `Llegaste a las ${d.fotosPorProducto} fotos de tu plan` : 'Llegaste a las fotos de tu plan')
+      : motivo === 'superado' ? `Para ${verbo} este producto, hacé lugar`
+        : t && u && u > t ? `Tenés ${u} productos y tu plan guarda ${t}`
+          : t ? `Llegaste a los ${t} productos de tu plan` : 'Llegaste al tope de productos de tu plan'
+    return {
+      eyebrow: d.plan?.nombre ? `Tu plan ${d.plan.nombre}` : 'Tu plan',
+      titulo,
+      intro: null,
+      chips: [],
+      cierre: {
+        antes: `Tu plan volvió al Gratis. Para reactivar ${planQueTenia(d.caida)} `,
+        link: { texto: 'hacé click acá', modal: true },
+        despues: motivo === 'fotos' || !t ? '.' : `. Si no, eliminá productos hasta bajar a ${t}.`,
+      },
+      boton: null,
+      secundario: null,
+      contacto: false,
+    }
+  }
 
   const pendiente = d.suscripciones === true && !d.especial ? d.especialPendiente : null
   if (pendiente && Number.isInteger(pendiente.precio)) {

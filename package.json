@@ -57,6 +57,7 @@
     "probar:046": "node scripts/probar-046.mjs",
     "probar:047": "node scripts/probar-047.mjs",
     "probar:048": "node scripts/probar-048.mjs",
+    "probar:050": "node scripts/probar-050.mjs",
     "probar:suscripciones": "node scripts/probar-suscripciones.mjs",
     "probar:planes": "node scripts/probar-planes.mjs",
     "probar:vender": "node scripts/probar-vender.mjs",

@@ -11,15 +11,19 @@ import CopiarLink from '@/components/CopiarLink';
 import { textoMotivoRechazo } from '@/lib/productos';
 import { linkPropio } from '@/lib/marcaLink';
 import CartelPlan from '@/components/CartelPlan';
+import ModalSuscripcion from '@/components/ModalSuscripcion';
 import { cargarPlan } from '@/lib/planDelPanel';
 import { estadoDelContador, notaDelContador, etiquetaDelPlan } from '@/lib/planes';
 
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage'];
 
-function infoEstado(estado) {
+// porElPlan: lo pausó el sistema cuando el plan volvió al Gratis (050). Va en
+// celeste, distinto del «Pausado» que pone ella: vuelve solo al reactivar el plan.
+function infoEstado(estado, { porElPlan = false } = {}) {
+  if (estado === 'pausado' && porElPlan) return { texto: 'Pausado por tu plan', fondo: 'bg-[#eef3f8]', color: 'text-[#24425f]', punto: 'bg-[#5f8fbd]' };
   if (estado === 'en_revision') return { texto: 'En revisión', fondo: 'bg-amber-100', color: 'text-amber-700', punto: 'bg-amber-500' };
   if (estado === 'activo')     return { texto: 'Publicado',   fondo: 'bg-emerald-100', color: 'text-emerald-700', punto: 'bg-emerald-500' };
-  if (estado === 'pausado')    return { texto: 'Pausado',     fondo: 'bg-gray-100', color: 'text-gray-500', punto: 'bg-gray-400' };
+  if (estado === 'pausado')    return { texto: 'Pausado',     fondo: 'bg-[#fffbeb]', color: 'text-[#b45309]', punto: 'bg-[#f59e0b]' };
   if (estado === 'agotado')    return { texto: 'Agotado',     fondo: 'bg-red-100', color: 'text-red-700', punto: 'bg-red-400' };
   if (estado === 'rechazado')  return { texto: 'No publicado', fondo: 'bg-[#fbe8da]', color: 'text-[#8a3410]', punto: 'bg-[#8a3410]' };
   return { texto: estado, fondo: 'bg-gray-100', color: 'text-gray-500', punto: 'bg-gray-400' };
@@ -75,7 +79,9 @@ function FranjaCompartir({ productoId }) {
 // etiqueta del plan y una barrita (ámbar faltando 2 o menos, negra en el tope
 // o por encima). Sin tope, solo «N productos». Cuentan todos los productos
 // guardados, también los pausados (migración 047).
-function ContadorPlan({ plan }) {
+// onReactivar: abre el alta de la suscripción (el link de «Tu plan volvió al
+// Gratis… hacé click acá», 050).
+function ContadorPlan({ plan, onReactivar }) {
   const contador = estadoDelContador(plan);
   const etiqueta = etiquetaDelPlan(plan);
   const nota = notaDelContador({ ...plan, contador });
@@ -110,7 +116,11 @@ function ContadorPlan({ plan }) {
           {nota.link && (
             <>
               {' '}
-              <Link href={nota.link.href} className="text-[#015444] font-medium underline underline-offset-2">{nota.link.texto}</Link>.
+              {nota.link.modal ? (
+                <button type="button" onClick={onReactivar} className="bg-transparent border-0 p-0 cursor-pointer text-[#015444] font-medium underline underline-offset-2" style={{ font: 'inherit', fontWeight: 500 }}>{nota.link.texto}</button>
+              ) : (
+                <Link href={nota.link.href} className="text-[#015444] font-medium underline underline-offset-2">{nota.link.texto}</Link>
+              )}.
             </>
           )}
           {nota.despues && <> {nota.despues}</>}
@@ -138,6 +148,8 @@ export default function MisProductosPage() {
   const [plan, setPlan] = useState(null);
   // El cartel de reactivar por encima del tope: { tope, usados } del 409.
   const [cartel, setCartel] = useState(null);
+  // El alta de la suscripción, desde el link del contador (050).
+  const [altaAbierta, setAltaAbierta] = useState(false);
   const refCartel = useRef(null);
 
   useEffect(() => {
@@ -185,7 +197,7 @@ export default function MisProductosPage() {
 
         const { data: lista, error: errProductos } = await supabase
           .from('productos')
-          .select('id, nombre, precio, precio_anterior, estado, motivo_rechazo, subcategoria_id')
+          .select('id, nombre, precio, precio_anterior, estado, motivo_rechazo, subcategoria_id, pausado_por_plan_en')
           .eq('vendedor_id', vendedor.id)
           .order('id', { ascending: false });
 
@@ -239,7 +251,8 @@ export default function MisProductosPage() {
         body: JSON.stringify({ estado: nuevoEstado }),
       });
       const datos = await res.json().catch(() => ({}));
-      if (datos.estado) setProductos(prev => prev.map(p => p.id === producto.id ? { ...p, estado: datos.estado } : p));
+      // Al cambiar de estado a mano pierde la marca de «Pausado por tu plan» (050).
+      if (datos.estado) setProductos(prev => prev.map(p => p.id === producto.id ? { ...p, estado: datos.estado, pausado_por_plan_en: null } : p));
       // Por encima del tope: el cartel arriba de la lista, en vez del alert.
       if (res.status === 409 && datos.motivo === 'tope_superado') {
         // El plan pudo cambiar con la página abierta (por ejemplo, una
@@ -314,7 +327,7 @@ export default function MisProductosPage() {
             <div className="flex justify-between items-start gap-3 mb-6">
               <div className="min-w-0">
                 <h1 className="text-2xl md:text-3xl font-black text-[#0a0a0a] tracking-tight m-0">Mis productos</h1>
-                {!error && (plan ? <ContadorPlan plan={plan} /> : (
+                {!error && (plan ? <ContadorPlan plan={plan} onReactivar={() => setAltaAbierta(true)} /> : (
                   <p className="text-sm text-[#0a0a0a]/30 font-light mt-1 mb-0">
                     {productos.length} {productos.length === 1 ? 'producto' : 'productos'}
                   </p>
@@ -341,7 +354,7 @@ export default function MisProductosPage() {
 
             {/* Lista de productos */}
             {!error && productos.map((p) => {
-              const estado = infoEstado(p.estado);
+              const estado = infoEstado(p.estado, { porElPlan: !!p.pausado_por_plan_en });
               const estaEliminando = eliminando === p.id;
               const rechazado = p.estado === 'rechazado';
               return (
@@ -475,6 +488,8 @@ export default function MisProductosPage() {
           </div>
         </div>
       </div>
+
+      <ModalSuscripcion abierto={altaAbierta} onClose={() => setAltaAbierta(false)} />
     </>
   );
 }

@@ -1,5 +1,5 @@
 // La tarea diaria (Vercel Cron → /api/cron/diaria, una vez por día entre las
-// 10 y las 11 de Argentina; migración 040). Hace cinco cosas, cada una por su
+// 10 y las 11 de Argentina; migración 040). Hace seis cosas, cada una por su
 // lado: si una falla, las otras siguen.
 //
 //   1. vencidos       cancela los pedidos cuyo link o cupón venció
@@ -20,8 +20,14 @@
 //                     hace más de 7 días, reintenta el monto nuevo de las
 //                     diferencias pagadas, revisa si se devolvió alguna y
 //                     vuelve al monto anterior el de las devueltas.
-//                     No manda mails. Sin MP_ACCESS_TOKEN_PLATAFORMA, no
+//                     Después (050): hace caer las tiendas cuyo plan pago
+//                     terminó (la red de pg_cron) y cancela en Mercado Pago
+//                     las que cayeron por falta de pago (si falla, se
+//                     reintenta mañana). Sin MP_ACCESS_TOKEN_PLATAFORMA, no
 //                     corre.
+//   6. mails_del_plan los tres mails de cuando deja de pagar (050): el cobro
+//                     rechazado, los últimos días de la gracia y la vuelta al
+//                     Gratis. Una sola vez cada uno (src/lib/mailsPlan.js).
 //
 // Cada mail se marca en la base ANTES de mandarlo, con un UPDATE que solo se
 // lleva la fila si la marca estaba en null: dos corridas el mismo día (o a la
@@ -41,11 +47,12 @@ import { ESTADOS_PARA_RESENAR, estadoDeResena, ventanaDeResena } from '@/lib/res
 import { avisarResena14Dias, recordarResena, armarMailAviso14Dias, armarMailRecordatorioResena } from '@/lib/mailsPedidos'
 import { renovarToken, marcarRenovacionFallida } from '@/lib/mercadopago/tokens'
 import { enviarMailRenovacionFallida, enviarMailRenovacionFallidaInterno } from '@/lib/mailsCuentaMp'
-import { ESTADOS_VIVOS, pendienteAbandonada } from '@/lib/suscripciones'
+import { ESTADOS_VIVOS, caidaConMail, graciaHasta, mailDeCobroQueToca, pendienteAbandonada } from '@/lib/suscripciones'
 import { tokenDePlataforma } from '@/lib/mercadopago/suscripciones'
 import {
-  aplicarMontoNuevo, cancelarSuscripcion, revertirMonto, revisarPagoDeDiferencia, sincronizarSuscripcion,
+  aplicarMontoNuevo, cancelarCaidasPorFaltaDePago, cancelarSuscripcion, revertirMonto, revisarPagoDeDiferencia, sincronizarSuscripcion,
 } from '@/lib/suscripcionesServidor'
+import { enviarMailPlan } from '@/lib/mailsPlan'
 
 const DIA_MS = 24 * 60 * 60 * 1000
 
@@ -453,6 +460,121 @@ async function tareaSuscripciones({ admin, prueba, ahoraMs }) {
     if (prueba) continue
     if (!(await revisarPagoDeDiferencia(admin, d)).ok) r.fallidas++
   }
+
+  // ── Cuando deja de pagar (050) ──
+  // Las tiendas cuyo plan pago ya terminó y todavía no cayeron (la red de
+  // pg_cron), y la cancelación en Mercado Pago de las que cayeron por falta de
+  // pago (si falla, queda anotada en la caída y se reintenta mañana).
+  if (prueba) {
+    const { data: caidasAbiertas, error: errorAbiertas } = await admin.from('plan_caidas')
+      .select('id, vendedor_id, motivo, mp_cancelada_en').is('restaurada_en', null)
+    if (errorAbiertas) fallar('plan_caidas', errorAbiertas)
+    for (const c of caidasAbiertas || []) {
+      if (c.motivo === 'falta_de_pago' && !c.mp_cancelada_en) r.lista.push({ caida: c.id, tienda: c.vendedor_id, accion: 'cancelar_en_mercado_pago' })
+    }
+  } else {
+    const { data: cayeron, error: errorCaidas } = await admin.rpc('rpc_aplicar_caidas_vencidas')
+    if (errorCaidas) fallar('las caídas', errorCaidas)
+    r.caidas = Number(cayeron) || 0
+    const cancelacion = await cancelarCaidasPorFaltaDePago(admin)
+    r.canceladas_por_caida = cancelacion.canceladas
+    r.fallidas += cancelacion.fallidas
+  }
+  return r
+}
+
+// ── Los mails del plan (050) ──────────────────────────────────────────────────
+//
+// 1 y 2: las suscripciones con un cobro rechazado, en la gracia
+// (mailDeCobroQueToca). 3: las caídas que todavía no avisaron (caidaConMail).
+// Cada mail reclama su marca antes de salir; si Resend falla, se suelta y sale
+// mañana.
+
+// El nombre de la tienda, la dirección de su cuenta, su plan y cuántos
+// productos tiene. null si la tienda está cerrada o no se encuentra.
+async function datosParaMail(admin, vendedorId) {
+  const { data: tienda, error } = await admin.from('vendedores').select('id, nombre_negocio, usuario_id, cerrada_en').eq('id', vendedorId).maybeSingle()
+  if (error) fallar('vendedores', error)
+  if (!tienda || tienda.cerrada_en) return null
+  const [dueno, plan, guardados, visibles, gratis] = await Promise.all([
+    admin.from('usuarios').select('email, cerrada_en').eq('id', tienda.usuario_id).maybeSingle(),
+    admin.rpc('rpc_plan_de_tienda', { p_vendedor_id: vendedorId }),
+    admin.from('productos').select('id', { count: 'exact', head: true }).eq('vendedor_id', vendedorId),
+    admin.from('productos').select('id', { count: 'exact', head: true }).eq('vendedor_id', vendedorId).in('estado', ['activo', 'agotado', 'en_revision']),
+    admin.from('planes').select('tope_productos').eq('clave', 'gratis').maybeSingle(),
+  ])
+  for (const x of [dueno, plan, guardados, visibles, gratis]) if (x.error) fallar('los datos del mail', x.error)
+  const email = dueno.data && !dueno.data.cerrada_en && !/\.invalid$/i.test(dueno.data.email || '') ? dueno.data.email : null
+  const topeGratis = Number(gratis.data?.tope_productos) || 10
+  return {
+    para: email,
+    tienda: String(tienda.nombre_negocio || '').trim() || `Tienda ${vendedorId}`,
+    plan: plan.data?.nombre || 'Básico',
+    aMedida: plan.data?.origen === 'especial',
+    // El plan que perdió (el de la caída abierta), para el mail 3.
+    planCaida: plan.data?.caida?.nombre || null,
+    productos: guardados.count ?? 0,
+    sePausarian: Math.max(0, (visibles.count ?? 0) - topeGratis),
+    topeGratis,
+  }
+}
+
+export async function tareaMailsDelPlan({ admin, prueba, ahoraMs, cupo }) {
+  // Sin la cuenta de la plataforma no hay suscripciones (como la tarea 5).
+  if (!tokenDePlataforma()) return { omitida: 'sin MP_ACCESS_TOKEN_PLATAFORMA' }
+  const r ={ rechazo: 0, fin_gracia: 0, caida: 0, no_enviados: 0, para_manana: 0, motivos_no_enviados: {} }
+  if (prueba) r.lista = []
+
+  // 1 y 2.
+  const { data: rechazadas, error } = await admin.from('vendedor_suscripciones')
+    .select('id, vendedor_id, estado, monto, plan_clave, pagado_hasta, cobro_fallido_desde, aviso_rechazo_en, aviso_fin_gracia_en')
+    .in('estado', ['authorized', 'paused']).not('cobro_fallido_desde', 'is', null)
+  if (error) fallar('vendedor_suscripciones', error)
+  for (const s of rechazadas || []) {
+    const tipo = mailDeCobroQueToca(s, ahoraMs)
+    if (!tipo || !s.vendedor_id) continue
+    const hasta = graciaHasta(s.pagado_hasta)
+    const datos = await datosParaMail(admin, s.vendedor_id)
+    if (!datos) continue
+    const dias = Math.max(1, Math.ceil((Date.parse(hasta) - ahoraMs) / DIA_MS))
+    if (prueba) { r.lista.push({ suscripcion: s.id, tienda: datos.tienda, para: datos.para, mail: tipo, hasta }); continue }
+    if (!cupo.tomar(1)) { r.para_manana++; continue }
+    const marca = tipo === 'rechazo' ? 'aviso_rechazo_en' : 'aviso_fin_gracia_en'
+    const { data: reclamo, error: errorReclamo } = await admin.from('vendedor_suscripciones')
+      .update({ [marca]: new Date().toISOString() }).eq('id', s.id).is(marca, null).select('id').maybeSingle()
+    if (errorReclamo) fallar('la marca del mail', errorReclamo)
+    if (!reclamo) continue
+    await cupo.pausar()
+    const envio = await enviarMailPlan({ ...datos, tipo, monto: s.monto, hasta, dias })
+    if (envio.enviado || envio.motivo === 'sin_destinatario') { if (envio.enviado) r[tipo]++; else r.no_enviados++; continue }
+    await admin.from('vendedor_suscripciones').update({ [marca]: null }).eq('id', s.id)
+    r.no_enviados++
+    contar(r.motivos_no_enviados, envio.motivo)
+  }
+
+  // 3.
+  const { data: caidas, error: errorCaidas } = await admin.from('plan_caidas')
+    .select('id, vendedor_id, motivo, plan_clave, a_medida, pausados, cayo_en, restaurada_en, aviso_mail_en')
+    .is('restaurada_en', null).is('aviso_mail_en', null)
+  if (errorCaidas) fallar('plan_caidas', errorCaidas)
+  for (const c of caidas || []) {
+    if (!caidaConMail(c, ahoraMs)) continue
+    const datos = await datosParaMail(admin, c.vendedor_id)
+    if (!datos) continue
+    const delMail = { ...datos, plan: datos.planCaida || 'Básico', aMedida: c.a_medida === true, motivo: c.motivo, pausados: Number(c.pausados) || 0 }
+    if (prueba) { r.lista.push({ caida: c.id, tienda: datos.tienda, para: datos.para, mail: 'caida', pausados: delMail.pausados }); continue }
+    if (!cupo.tomar(1)) { r.para_manana++; continue }
+    const { data: reclamo, error: errorReclamo } = await admin.from('plan_caidas')
+      .update({ aviso_mail_en: new Date().toISOString() }).eq('id', c.id).is('aviso_mail_en', null).is('restaurada_en', null).select('id').maybeSingle()
+    if (errorReclamo) fallar('la marca del mail', errorReclamo)
+    if (!reclamo) continue
+    await cupo.pausar()
+    const envio = await enviarMailPlan({ ...delMail, tipo: 'caida' })
+    if (envio.enviado || envio.motivo === 'sin_destinatario') { if (envio.enviado) r.caida++; else r.no_enviados++; continue }
+    await admin.from('plan_caidas').update({ aviso_mail_en: null }).eq('id', c.id)
+    r.no_enviados++
+    contar(r.motivos_no_enviados, envio.motivo)
+  }
   return r
 }
 
@@ -486,6 +608,8 @@ export async function correrTareaDiaria({
     ['aviso_14_dias', () => tareaResenas({ admin, prueba, ahoraMs, cupo, tipo: 'aviso_14_dias', pagadosDesdeMs })],
     ['recordatorio', () => tareaResenas({ admin, prueba, ahoraMs, cupo, tipo: 'recordatorio' })],
     ['suscripciones', () => tareaSuscripciones({ admin, prueba, ahoraMs })],
+    // Después de las suscripciones: ya sincronizadas y con las caídas al día.
+    ['mails_del_plan', () => tareaMailsDelPlan({ admin, prueba, ahoraMs, cupo })],
   ]
   for (const [nombre, correr] of tareas) {
     try {

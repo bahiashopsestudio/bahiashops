@@ -80,7 +80,12 @@ function Vigente({ plan, especial, onQuitar }) {
 
       {confirmando ? (
         <div className="flex flex-col" style={{ gap: '10px', backgroundColor: '#fce4e4', borderRadius: '6px', padding: '12px', fontSize: '12.5px', lineHeight: 1.5, color: '#7a0f1c' }}>
-          <span>¿Quitar las condiciones especiales? Vuelve al plan Gratis. Si queda por encima del tope, no se pausa nada, pero no puede sumar productos.</span>
+          <span>
+            {plan.origen === 'especial' && Number(plan.precio) > 0
+              // Un plan a medida que está pagando (050).
+              ? '¿Quitar el plan a medida? Su suscripción baja al precio del Básico en Mercado Pago y se pausan los productos que pasen del tope del Básico (los primeros que cargó quedan publicados). Lo ya cobrado no se devuelve solo.'
+              : '¿Quitar las condiciones especiales? Vuelve al plan Gratis. Si queda por encima del tope, no se pausa nada, pero no puede sumar productos.'}
+          </span>
           {error && <span style={{ fontWeight: 500 }}>{error}</span>}
           <div className="flex items-center flex-wrap" style={{ gap: '12px' }}>
             <button type="button" onClick={quitar} disabled={quitando}

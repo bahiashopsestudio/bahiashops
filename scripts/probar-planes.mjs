@@ -196,6 +196,25 @@ ok(c.titulo === 'Tu plan a medida te está esperando' && c.boton?.href === '/ven
 c = textosDelCartel({ motivo: 'productos', datos: { ...MEDIDA(50), suscripciones: true } })
 ok(c.contacto && !c.boton, 'plan a medida activo: sigue «Escribinos»')
 
+console.log('\n10c. Volvió al Gratis (050)')
+const VUELTA = (extra = {}) => GRATIS(25, { tope: 10, contador: 'por_encima', suscripciones: true, caida: { motivo: 'falta_de_pago', nombre: 'Básico', aMedida: false, pausados: 15 }, ...extra })
+n = notaDelContador(VUELTA())
+ok(n.texto === 'Tu plan volvió al Gratis. Para reactivar tu plan Básico' && n.link?.texto === 'hacé click acá' && n.link.modal === true && n.despues === 'Si no, eliminá productos hasta bajar a 10.',
+  `el contador: «${n.texto} [${n.link?.texto}]. ${n.despues}»`)
+n = notaDelContador(VUELTA({ caida: { motivo: 'falta_de_pago', nombre: 'Básico', aMedida: true, pausados: 32 } }))
+ok(n.texto === 'Tu plan volvió al Gratis. Para reactivar tu plan a medida', 'en el plan a medida, «tu plan a medida»')
+ok(notaDelContador(VUELTA({ caida: { motivo: 'condiciones_quitadas', nombre: 'Básico', aMedida: true } })).texto.startsWith('Tenés 25 productos'),
+  'con condiciones quitadas, el texto de siempre')
+ok(notaDelContador(VUELTA({ suscripciones: false })).link?.href === '/vender#planes', 'con las suscripciones cerradas, el de siempre')
+for (const [motivo, accion] of [['productos'], ['superado', 'activar'], ['fotos']]) {
+  c = textosDelCartel({ motivo, accion, datos: VUELTA() })
+  ok(c.cierre?.antes === 'Tu plan volvió al Gratis. Para reactivar tu plan Básico ' && c.cierre.link.modal === true
+    && (motivo === 'fotos' ? c.cierre.despues === '.' : c.cierre.despues === '. Si no, eliminá productos hasta bajar a 10.') && !c.boton && !c.contacto,
+    `el cartel, ${motivo}: el mismo texto, con el link que abre el alta`)
+}
+p = planDesdeLaBase({ plan: 'gratis', caida: { motivo: 'baja', nombre: 'Básico', a_medida: false, pausados: 3 }, pausados_por_plan: 3 })
+ok(p.caida?.motivo === 'baja' && p.caida.pausados === 3 && p.pausadosPorPlan === 3 && planDesdeLaBase({ plan: 'gratis' }).caida === null, 'planDesdeLaBase trae la caída')
+
 console.log('\n11. Los campos del admin')
 ok(enteroDelCampo('10.000') === 10000 && enteroDelCampo(' 25 ') === 25 && enteroDelCampo(8) === 8 && enteroDelCampo('') === null && enteroDelCampo(null) === null,
   "'10.000', ' 25 ', 8, '' y null")

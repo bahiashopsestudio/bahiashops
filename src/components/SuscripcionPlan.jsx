@@ -17,7 +17,15 @@
 //   al_dia       el monto, el próximo cobro y cómo darse de baja (hasta F4)
 //   medida       el plan a medida sin pagar · Suscribirme por $X por mes
 //   diferencia   el plan a medida y ya paga el Básico · Pagar $X
-//   cancelada    cancelada con días pagos (la pantalla completa llega en F4)
+//   cancelada    la dio de baja y le quedan días pagos (gris, sin botón: si
+//                se suscribe antes, pagaría dos veces ese mes)
+// Y los de cuando deja de pagar (F4a, mockup-tanda-f4a.html):
+//   al_dia       con «Dar de baja» (link chico) y la confirmación en rojo
+//   gracia       Mercado Pago no pudo cobrar: hasta cuándo tiene el plan,
+//                Ir a Mercado Pago y Dar de baja; en los últimos 3 días, el
+//                recuadro más directo con cuántos productos se pausarían
+//   de_vuelta    volvió al Gratis: cuántos se pausaron, Ver mis productos
+//                pausados y Reactivar mi plan (abre el alta)
 //
 // Con ?suscribirme=basico (desde /vender) abre el modal del alta apenas carga.
 //   plan      lo de /api/vendedor/plan (para los textos del «¡Listo!»)
@@ -25,11 +33,15 @@
 //   onCambio  para que la página vuelva a leer el plan cuando cambia
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import { textoPrecio } from '@/lib/planes'
-import { estadoParaPantalla } from '@/lib/suscripciones'
+import { diasHasta, esFutura, estadoParaPantalla } from '@/lib/suscripciones'
 import ModalSuscripcion, { BOTON_VERDE, Ruedita } from '@/components/ModalSuscripcion'
 
 const ROJO = '#cc152b'
+// Donde quien paga ve sus suscripciones en Mercado Pago (para revisar la
+// tarjeta o el saldo). A confirmar en la prueba real.
+const MIS_SUSCRIPCIONES_MP = 'https://www.mercadopago.com.ar/subscriptions'
 const FECHA = new Intl.DateTimeFormat('es-AR', { day: 'numeric', month: 'numeric', timeZone: 'America/Argentina/Buenos_Aires' })
 const fecha = (iso) => (iso ? FECHA.format(new Date(iso)) : '')
 
@@ -103,6 +115,7 @@ export default function SuscripcionPlan({ plan, franja, onCambio }) {
   const [errorAccion, setErrorAccion] = useState('')
   const [ocupado, setOcupado] = useState(false)
   const [modal, setModal] = useState(false)
+  const [confirmandoBaja, setConfirmandoBaja] = useState(false)
   const [consultaAgotada, setConsultaAgotada] = useState(false)
   // Si el navegador ya había mostrado el «¡Listo!» de cada suscripción, leído
   // la primera vez que llega: así se ve entero en esta visita.
@@ -150,6 +163,7 @@ export default function SuscripcionPlan({ plan, franja, onCambio }) {
         volvio: vuelta.volvio,
         consultaAgotada,
         listoVisto: !!vistoAntes[datos.suscripcion?.id],
+        caida: datos.caida,
       })
     : null
   const tipo = estado?.tipo
@@ -201,6 +215,16 @@ export default function SuscripcionPlan({ plan, franja, onCambio }) {
     const d = await pedir('POST', { accion: 'diferencia' })
     if (d?.initPoint) { setOcupado(true); window.location.href = d.initPoint }
     else if (d?.activada) { await cargar(); onCambio?.() }
+  }
+
+  // La baja (050): cancela en Mercado Pago; el plan sigue hasta el fin del mes
+  // pago. Después se vuelve a leer la suscripción y el plan.
+  async function darDeBaja() {
+    const d = await pedir('DELETE')
+    if (!d?.ok) return
+    setConfirmandoBaja(false)
+    await cargar()
+    onCambio?.()
   }
 
   async function cancelarPendiente() {
@@ -353,21 +377,111 @@ export default function SuscripcionPlan({ plan, franja, onCambio }) {
     )
   }
 
+  // La confirmación de la baja, en el mismo recuadro, en rojo (050).
+  const tuPlan = plan?.especial ? 'tu plan a medida' : `tu plan ${nombre}`
+  const topeGratis = datos.topeGratis ?? 10
+  const confirmacionBaja = (
+    <div className="flex flex-col" style={{ ...RECUADRO, gap: '10px', padding: '14px', backgroundColor: '#fce4e4', color: '#7a0f1c' }}>
+      <span>
+        <b style={{ fontWeight: 600 }}>¿Dar de baja {tuPlan}?</b>{' '}
+        {esFutura(sus?.pagadoHasta)
+          ? `No se te cobra más. Seguís con el plan hasta el ${fecha(sus.pagadoHasta)}; después tu tienda vuelve al Gratis: `
+          : 'No se te cobra más y tu tienda vuelve hoy al Gratis: '}
+        quedan publicados tus {topeGratis} primeros productos y el resto se pausa. No se borra nada.
+      </span>
+      {avisoError}
+      <div className="flex flex-wrap items-center" style={{ gap: '14px' }}>
+        <button type="button" onClick={darDeBaja} disabled={ocupado}
+          style={{ ...BOTON_VERDE, backgroundColor: ROJO, padding: '10px 18px', fontSize: '13px', opacity: ocupado ? 0.55 : 1, cursor: ocupado ? 'default' : 'pointer' }}>
+          {ocupado ? <><Ruedita />Dando de baja…</> : 'Sí, dar de baja'}
+        </button>
+        <button type="button" onClick={() => { setConfirmandoBaja(false); setErrorAccion('') }} disabled={ocupado} style={LINK}>Volver</button>
+      </div>
+    </div>
+  )
+  const linkBaja = (
+    <button type="button" onClick={() => setConfirmandoBaja(true)} style={{ ...LINK, fontSize: '12.5px', color: 'rgba(10,10,10,0.45)' }}>Dar de baja</button>
+  )
+
   if (tipo === 'al_dia') {
-    const hasta = sus.pagadoHasta || sus.proximoCobro
+    if (confirmandoBaja) return confirmacionBaja
     return (
-      <p className="m-0" style={SUBLINEA}>
-        Tu suscripción: {textoPrecio(sus.monto)} por mes{sus.proximoCobro ? ` · próximo cobro el ${fecha(sus.proximoCobro)}` : ''}.
-        {' '}Para darte de baja, cancelala desde tu cuenta de Mercado Pago{hasta ? `: seguís con ${conQue} hasta el ${fecha(hasta)}` : ''}.
-      </p>
+      <>
+        <p className="m-0" style={SUBLINEA}>
+          Tu suscripción: {textoPrecio(sus.monto)} por mes{sus.proximoCobro ? ` · próximo cobro el ${fecha(sus.proximoCobro)}` : ''}.
+        </p>
+        <div>{linkBaja}</div>
+      </>
+    )
+  }
+
+  if (tipo === 'gracia') {
+    if (confirmandoBaja) return confirmacionBaja
+    const hasta = fecha(sus.graciaHasta)
+    if (estado.ultimosDias) {
+      const dias = diasHasta(sus.graciaHasta) ?? 1
+      const pausa = datos.sePausarian > 0
+        ? ` y se pausan ${datos.sePausarian} ${datos.sePausarian === 1 ? 'producto' : 'productos'}`
+        : ''
+      return (
+        <>
+          <Recuadro color="ambar" titulo={`${dias === 1 ? 'Te queda 1 día' : `Te quedan ${dias} días`} de ${tuPlan}.`}>
+            Mercado Pago todavía no pudo cobrarlo. El {hasta} tu tienda vuelve al Gratis{pausa}. Para evitarlo, revisá tu medio de pago en Mercado Pago.
+          </Recuadro>
+          <Acciones>
+            <a href={MIS_SUSCRIPCIONES_MP} target="_blank" rel="noopener noreferrer" style={BOTON_VERDE}>Ir a Mercado Pago</a>
+          </Acciones>
+        </>
+      )
+    }
+    return (
+      <>
+        <Recuadro color="ambar" titulo={`Mercado Pago no pudo cobrar ${tuPlan}.`}>
+          Va a volver a intentarlo estos días. Revisá la tarjeta o el saldo de tu suscripción en Mercado Pago. Si el {hasta} sigue sin cobrarse, cancelamos la suscripción y tu tienda vuelve al Gratis.
+        </Recuadro>
+        <Acciones>
+          <a href={MIS_SUSCRIPCIONES_MP} target="_blank" rel="noopener noreferrer" style={BOTON_VERDE}>Ir a Mercado Pago</a>
+          {linkBaja}
+        </Acciones>
+      </>
     )
   }
 
   if (tipo === 'cancelada') {
     return (
-      <p className="m-0" style={SUBLINEA}>
-        Tu suscripción está cancelada: no se te cobra más. Seguís con {conQue} hasta el {fecha(sus.pagadoHasta)}.
-      </p>
+      <Recuadro color="gris" titulo={`Diste de baja ${tuPlan}.`}>
+        Seguís con el {plan?.especial ? 'plan a medida' : nombre} hasta el {fecha(sus.pagadoHasta)}. Después tu tienda vuelve al Gratis: quedan publicados tus {topeGratis} primeros productos y el resto se pausa.
+      </Recuadro>
+    )
+  }
+
+  if (tipo === 'de_vuelta') {
+    const caida = datos.caida
+    const elPlan = caida?.aMedida ? 'tu plan a medida' : `tu plan ${caida?.nombre || 'Básico'}`
+    const boton = caida?.aMedida ? `Reactivar mi plan a medida por ${textoPrecio(accion.monto)}` : `Reactivar mi plan ${caida?.nombre || 'Básico'}`
+    const pausados = caida?.pausados || 0
+    return (
+      <>
+        <div style={{ ...RECUADRO, ...COLORES.gris }}>
+          <b style={{ fontWeight: 600 }}>Tu plan volvió al Gratis.</b>
+          <span>
+            {pausados > 0
+              ? `Pausamos ${pausados} ${pausados === 1 ? 'producto' : 'productos'}: quedaron publicados tus ${topeGratis} primeros. Si reactivás ${elPlan}, se vuelven a publicar solos.`
+              : 'No se pausó ningún producto.'}
+          </span>
+          {pausados > 0 && (
+            <span className="flex flex-wrap" style={{ gap: '14px', marginTop: '4px' }}>
+              <Link href="/vendedor/productos" style={{ color: '#015444', fontWeight: 500, textDecoration: 'underline', textUnderlineOffset: '2px' }}>
+                Ver mis productos pausados
+              </Link>
+            </span>
+          )}
+        </div>
+        <Acciones>
+          <button type="button" onClick={() => setModal(true)} style={BOTON_VERDE}>{boton}</button>
+        </Acciones>
+        {modalAlta}
+      </>
     )
   }
 

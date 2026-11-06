@@ -69,7 +69,20 @@ export default function CartelPlan({ motivo = 'productos', accion, datos, tope, 
           </div>
         )}
         {t.cierre && (
-          <p className="m-0" style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 300, fontSize: '13.5px', lineHeight: 1.6, color: 'rgba(156,195,234,0.88)' }}>{t.cierre}</p>
+          <p className="m-0" style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 300, fontSize: '13.5px', lineHeight: 1.6, color: 'rgba(156,195,234,0.88)' }}>
+            {typeof t.cierre === 'string' ? t.cierre : (
+              // Volvió al Gratis (050): el link abre el alta ahí mismo.
+              <>
+                {t.cierre.antes}
+                <button type="button" onClick={() => setAltaAbierta(true)}
+                  className="cursor-pointer bg-transparent border-0 p-0 underline underline-offset-2"
+                  style={{ font: 'inherit', fontWeight: 500, color: CELESTE }}>
+                  {t.cierre.link.texto}
+                </button>
+                {t.cierre.despues}
+              </>
+            )}
+          </p>
         )}
 
         {(t.boton || t.secundario || t.contacto || volverHref) && (

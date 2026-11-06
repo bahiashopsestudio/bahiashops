@@ -15,7 +15,7 @@ import { fechaAR } from '@/lib/mercadopago/preferencias'
 import {
   CANCELADA, ESTADOS_VIVOS, MAIL_DE_LA_PLATAFORMA, MINIMO_DIFERENCIA, REUSAR_PENDIENTE_HORAS, errorDeAltaRechazada,
   cuerpoDeAlta, cuerpoDeDiferencia, datosDeCobro, datosDePagoDeSuscripcion, datosDeSuscripcion,
-  diferenciaProporcional, problemaDeSuscripcion, reusarPendiente, tipoDePagoDePlataforma,
+  diferenciaProporcional, esViva, problemaDeSuscripcion, reusarPendiente, tipoDePagoDePlataforma,
 } from '@/lib/suscripciones'
 import {
   buscarCobrosMp, cambiarMontoMp, cancelarSuscripcionMp, crearPreferenciaMp, crearSuscripcionMp,
@@ -271,6 +271,56 @@ export async function cancelarSuscripcionesVivas(admin, vendedorId) {
     if (!(await cancelarSuscripcion(admin, fila)).ok) ok = false
   }
   return { ok }
+}
+
+// ── La caída por falta de pago (050) ─────────────────────────────────────────
+
+// Las caídas por falta de pago con la suscripción todavía viva en Mercado
+// Pago: se cancela (decisión del 06/11: una tienda que volvió al Gratis no
+// recibe un cobro de sorpresa). Si Mercado Pago no la cancela, queda anotado
+// en la caída (intentos y error, para la ficha) y se reintenta la próxima vez
+// (la tarea diaria, el panel de la tienda o el alta de una nueva).
+//   vendedorId  solo las de esa tienda (null: todas)
+// Devuelve { canceladas, fallidas }. Nunca lanza.
+export async function cancelarCaidasPorFaltaDePago(admin, { vendedorId = null } = {}) {
+  let consulta = admin.from('plan_caidas').select('id, vendedor_id, suscripcion_id, intentos_cancelar_mp')
+    .eq('motivo', 'falta_de_pago').is('restaurada_en', null).is('mp_cancelada_en', null).not('suscripcion_id', 'is', null)
+  if (vendedorId) consulta = consulta.eq('vendedor_id', vendedorId)
+  const { data, error } = await consulta
+  if (error) {
+    console.error('[suscripciones/caidas-a-cancelar]', vendedorId ?? 'todas', error.message)
+    return { canceladas: 0, fallidas: 1 }
+  }
+  let canceladas = 0
+  let fallidas = 0
+  for (const caida of data || []) {
+    const { fila, error: errorFila } = await filaPor(admin, 'id', caida.suscripcion_id)
+    if (errorFila) { fallidas++; continue }
+    // Ya no está viva (la canceló Mercado Pago o la tienda): nada que hacer.
+    const r = fila && esViva(fila.estado) ? await cancelarSuscripcion(admin, fila) : { ok: true }
+    const cambios = r.ok
+      ? { mp_cancelada_en: ahoraIso(), error_cancelar_mp: null }
+      : { intentos_cancelar_mp: (caida.intentos_cancelar_mp || 0) + 1, error_cancelar_mp: String(r.error || 'sin respuesta').slice(0, 300) }
+    const { error: errorAnotar } = await admin.from('plan_caidas').update(cambios).eq('id', caida.id)
+    if (errorAnotar) console.error('[suscripciones/caidas-a-cancelar/anotar]', caida.id, errorAnotar.message)
+    if (r.ok) {
+      canceladas++
+      console.log(`[suscripciones] tienda ${caida.vendedor_id}: cayó por falta de pago; suscripción ${caida.suscripcion_id} cancelada.`)
+    } else {
+      fallidas++
+      console.error(`[suscripciones] tienda ${caida.vendedor_id}: cayó por falta de pago y Mercado Pago no canceló la suscripción ${caida.suscripcion_id}: ${r.error}`)
+    }
+  }
+  return { canceladas, fallidas }
+}
+
+// Si el plan pago de la tienda ya terminó, que caiga ahora (sin esperar a
+// pg_cron) y, por falta de pago, que se cancele en Mercado Pago. Para el panel
+// y el alta. Nunca lanza.
+export async function ponerAlDiaLaCaida(admin, vendedorId) {
+  const { error } = await admin.rpc('rpc_ajustar_productos_al_plan', { p_vendedor_id: vendedorId })
+  if (error) console.error('[suscripciones/ajustar]', vendedorId, error.message)
+  await cancelarCaidasPorFaltaDePago(admin, { vendedorId })
 }
 
 // ── La diferencia de un plan a medida ─────────────────────────────────────────

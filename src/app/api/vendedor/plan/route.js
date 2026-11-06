@@ -22,6 +22,10 @@
 //               suscripción (origen 'suscripcion'); si no, null.
 //   especialPendiente  { precio, tope, sinTope } de un plan a medida que
 //               espera el pago (el cartel lo ofrece), o null.
+//   caida       la caída abierta (050): { motivo, nombre, aMedida, pausados }
+//               o null. Con ella, el contador y los carteles dicen «Tu plan
+//               volvió al Gratis…».
+//   pausadosPorPlan  cuántos productos pausó el sistema por el plan.
 //
 // Si no se puede leer la lista de planes, sale igual con siguiente: null (el
 // cartel se muestra sin la comparación).
@@ -71,5 +75,7 @@ export async function GET() {
     suscripciones: suscripcionesHabilitadas(vendedor.id),
     precioMensual: plan.origen === 'suscripcion' ? plan.precioMensual : null,
     especialPendiente,
+    caida: plan.caida,
+    pausadosPorPlan: plan.pausadosPorPlan,
   })
 }
