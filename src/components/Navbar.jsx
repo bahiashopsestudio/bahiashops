@@ -213,6 +213,10 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
 
           {/* Zona 3: Secciones */}
           <div className="flex items-center gap-5 ml-auto mr-6">
+            {/* Para todos: quien ya tiene tienda ve en /vender «Ir a Mi negocio». */}
+            <Link href="/vender" className="text-[13px] font-light transition-colors" style={{ color: linkColor }}>
+              Vendé en Bahía Shops
+            </Link>
             <Link href="/sobre-nosotros" className="text-[13px] font-light transition-colors" style={{ color: linkColor }}>
               Quiénes somos
             </Link>
