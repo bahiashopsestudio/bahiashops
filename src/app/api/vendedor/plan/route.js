@@ -18,8 +18,8 @@
 //   origen      'gratis' | 'especial' | 'suscripcion' (048)
 //   suscripciones  si la tienda puede suscribirse (SUSCRIPCIONES_TIENDAS):
 //               el panel pide entonces /api/vendedor/suscripcion.
-//   precioMensual  lo que paga por mes, solo si el plan sale de una
-//               suscripción (origen 'suscripcion'); si no, null.
+//   precioMensual  lo que paga por mes: el de su suscripción o el de su plan
+//               a medida con precio; null en el Gratis o con condiciones de $0.
 //   especialPendiente  { precio, tope, sinTope } de un plan a medida que
 //               espera el pago (el cartel lo ofrece), o null.
 //   caida       la caída abierta (050): { motivo, nombre, aMedida, pausados }
@@ -73,7 +73,9 @@ export async function GET() {
     siguiente: planes.error ? null : planSiguiente(planes.data, plan.clave, { especial: plan.especial }),
     origen: plan.origen,
     suscripciones: suscripcionesHabilitadas(vendedor.id),
-    precioMensual: plan.origen === 'suscripcion' ? plan.precioMensual : null,
+    // Lo que paga: el monto de la suscripción o el de un plan a medida con
+    // precio. Con condiciones de $0, null.
+    precioMensual: (plan.origen === 'suscripcion' || plan.origen === 'especial') && plan.precioMensual > 0 ? plan.precioMensual : null,
     especialPendiente,
     caida: plan.caida,
     pausadosPorPlan: plan.pausadosPorPlan,

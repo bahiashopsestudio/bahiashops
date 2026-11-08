@@ -34,7 +34,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { textoPrecio } from '@/lib/planes'
+import { cantidad, quedanPublicados, quedaronPublicados, sePausan, textoPrecio } from '@/lib/planes'
 import { diasHasta, esFutura, estadoParaPantalla } from '@/lib/suscripciones'
 import ModalSuscripcion, { BOTON_VERDE, Ruedita } from '@/components/ModalSuscripcion'
 
@@ -84,7 +84,7 @@ function guardarMarca(id) {
 // «50 productos», «productos sin tope» o null.
 function cuantosProductos(trae) {
   if (trae?.sinTope) return 'productos sin tope'
-  return trae?.tope ? `${trae.tope} productos` : null
+  return trae?.tope ? cantidad(trae.tope, 'producto', 'productos') : null
 }
 
 // ¿Llegó de Mercado Pago o de /vender? Se lee una vez, al montar.
@@ -363,9 +363,9 @@ export default function SuscripcionPlan({ plan, franja, onCambio }) {
 
   if (tipo === 'listo') {
     const trae = [
-      plan?.sinTope ? 'productos sin tope' : plan?.tope ? `hasta ${plan.tope} productos` : null,
+      plan?.sinTope ? 'productos sin tope' : plan?.tope ? `hasta ${cantidad(plan.tope, 'producto', 'productos')}` : null,
     ].filter(Boolean)[0]
-    const fotos = plan?.fotosPorProducto ? ` con ${plan.fotosPorProducto} fotos cada uno` : ''
+    const fotos = plan?.fotosPorProducto ? ` con ${cantidad(plan.fotosPorProducto, 'foto', 'fotos')} cada uno` : ''
     const carritos = plan?.carritos ? ', y ver tus carritos abandonados en Pedidos' : ''
     return (
       <>
@@ -387,7 +387,7 @@ export default function SuscripcionPlan({ plan, franja, onCambio }) {
         {esFutura(sus?.pagadoHasta)
           ? `No se te cobra más. Seguís con el plan hasta el ${fecha(sus.pagadoHasta)}; después tu tienda vuelve al Gratis: `
           : 'No se te cobra más y tu tienda vuelve hoy al Gratis: '}
-        quedan publicados tus {topeGratis} primeros productos y el resto se pausa. No se borra nada.
+        {quedanPublicados(topeGratis)} y el resto se pausa. No se borra nada.
       </span>
       {avisoError}
       <div className="flex flex-wrap items-center" style={{ gap: '14px' }}>
@@ -421,7 +421,7 @@ export default function SuscripcionPlan({ plan, franja, onCambio }) {
     if (estado.ultimosDias) {
       const dias = diasHasta(sus.graciaHasta) ?? 1
       const pausa = datos.sePausarian > 0
-        ? ` y se pausan ${datos.sePausarian} ${datos.sePausarian === 1 ? 'producto' : 'productos'}`
+        ? ` y ${sePausan(datos.sePausarian)}`
         : ''
       return (
         <>
@@ -450,7 +450,7 @@ export default function SuscripcionPlan({ plan, franja, onCambio }) {
   if (tipo === 'cancelada') {
     return (
       <Recuadro color="gris" titulo={`Diste de baja ${tuPlan}.`}>
-        Seguís con el {plan?.especial ? 'plan a medida' : nombre} hasta el {fecha(sus.pagadoHasta)}. Después tu tienda vuelve al Gratis: quedan publicados tus {topeGratis} primeros productos y el resto se pausa.
+        Seguís con el {plan?.especial ? 'plan a medida' : nombre} hasta el {fecha(sus.pagadoHasta)}. Después tu tienda vuelve al Gratis: {quedanPublicados(topeGratis)} y el resto se pausa.
       </Recuadro>
     )
   }
@@ -466,7 +466,7 @@ export default function SuscripcionPlan({ plan, franja, onCambio }) {
           <b style={{ fontWeight: 600 }}>Tu plan volvió al Gratis.</b>
           <span>
             {pausados > 0
-              ? `Pausamos ${pausados} ${pausados === 1 ? 'producto' : 'productos'}: quedaron publicados tus ${topeGratis} primeros. Si reactivás ${elPlan}, se vuelven a publicar solos.`
+              ? `Pausamos ${cantidad(pausados, 'producto', 'productos')}: ${quedaronPublicados(topeGratis)}. Si reactivás ${elPlan}, ${pausados === 1 ? 'se vuelve a publicar solo' : 'se vuelven a publicar solos'}.`
               : 'No se pausó ningún producto.'}
           </span>
           {pausados > 0 && (

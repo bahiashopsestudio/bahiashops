@@ -97,6 +97,22 @@ const cobro = async (sus, dias, { estadoPago = "approved", estadoCobro = "proces
   `select public.rpc_registrar_cobro_suscripcion($1, $2, $3, $4, $5, $6, $7) as r`,
   [sus, `c${++n}`, `p${n}`, estadoCobro, estadoPago, monto, hace(dias)]))[0].r
 const fila = async (sus) => (await q(`select * from public.vendedor_suscripciones where id = $1`, [sus]))[0]
+// Que pase el tiempo: corre para atrás todas las fechas de la suscripción y
+// de sus cobros, como si se hubieran registrado antes, hasta que pagado_hasta
+// quede hace pagadoHace días. Los datos quedan como los dejaría la base
+// (pagado_hasta = último cobro aprobado + 1 mes): no se toca pagado_hasta
+// solo, que lo pisaría la próxima sincronización. Nadie llama al ajuste: eso
+// lo hace aplicar_caidas_vencidas (pg_cron), como en la realidad.
+async function pasarElTiempo(sus, pagadoHace) {
+  const seg = Number((await q(`select extract(epoch from (pagado_hasta - (now() - make_interval(secs => $2::float8 * 86400)))) as s
+    from public.vendedor_suscripciones where id = $1`, [sus, pagadoHace]))[0].s)
+  await q(`update public.suscripcion_cobros set cobrado_en = cobrado_en - make_interval(secs => $2::float8) where suscripcion_id = $1`, [sus, seg])
+  await q(`update public.vendedor_suscripciones set
+      pagado_hasta = pagado_hasta - make_interval(secs => $2::float8), ultimo_cobro_en = ultimo_cobro_en - make_interval(secs => $2::float8),
+      primer_cobro_en = primer_cobro_en - make_interval(secs => $2::float8), cobro_fallido_desde = cobro_fallido_desde - make_interval(secs => $2::float8),
+      creada_en = creada_en - make_interval(secs => $2::float8), cancelada_en = cancelada_en - make_interval(secs => $2::float8)
+    where id = $1`, [sus, seg])
+}
 const cambiarEstado = async (v, id, destino) => (await servicio(`select privado.cambiar_estado_producto($1, $2, $3) as r`, [v, id, destino]))[0].r
 
 // Una suscripción de antes de la 050 (como las pruebas de F3): cobró, se
@@ -136,7 +152,7 @@ await servicio(`update public.vendedor_suscripciones set aviso_rechazo_en = now(
 ok(await caidas() === 0 && (await cuenta_(T)).activo === 19, "en la gracia no cae ni se pausa nada")
 
 console.log("\n3. Termina la gracia: cae")
-await servicio(`update public.vendedor_suscripciones set pagado_hasta = $2 where id = $1`, [sus, hace(10.1)])
+await pasarElTiempo(sus, 10.1)
 ok(await caidas() === 1, "aplicar_caidas_vencidas encuentra la tienda")
 let c = await cuenta_(T)
 ok(c.activo === 10 && c["pausado*"] === 10 && c.pausado === 5,
@@ -148,6 +164,25 @@ p = await plan(T)
 ok(p.plan === "gratis" && p.caida?.motivo === "falta_de_pago" && p.caida.pausados === 10 && p.caida.tope_antes === 25 && p.caida.nombre === "Básico"
   && p.pausados_por_plan === 10, `plan_de_tienda trae la caída (${JSON.stringify(p.caida)})`)
 ok(await caidas() === 0 && (await cuenta_(T))["pausado*"] === 10, "correrla de nuevo no hace nada")
+
+console.log("\n3b. Como en la prueba manual: mover el cobro aprobado y recalcular")
+{
+  const X = await tienda()
+  await productos(X, 12)
+  const susX = await suscripcion(X)
+  await servicio(`select public.rpc_registrar_cobro_suscripcion($1, 'cx', 'px', 'processed', 'approved', 10000, now() - interval '3 days')`, [susX])
+  const original = (await q(`select cobrado_en from public.suscripcion_cobros where mp_cobro_id = 'cx'`))[0].cobrado_en
+  await q(`update public.suscripcion_cobros set cobrado_en = now() - interval '1 month 10 days 1 hour' where mp_cobro_id = 'cx'`)
+  r = (await servicio(`select public.rpc_registrar_cobro_suscripcion($1, 'cx', null, null, null, null, null) as r`, [susX]))[0].r
+  ok(r.ajuste?.caida !== null && (await cuenta_(X))["pausado*"] === 2 && (await plan(X)).plan === "gratis",
+    "mover cobrado_en y recalcular: pagado_hasta sale del cobro, y cae en ese momento")
+  await servicio(`select public.rpc_registrar_cobro_suscripcion($1, 'cx', 'px', 'processed', 'approved', 10000, $2)`, [susX, original])
+  ok(Date.parse((await q(`select cobrado_en from public.suscripcion_cobros where mp_cobro_id = 'cx'`))[0].cobrado_en) < Date.parse(hace(30)),
+    "una sincronización (el mismo cobro, con su fecha de Mercado Pago) no pisa la fecha movida")
+  await q(`update public.suscripcion_cobros set cobrado_en = $1 where mp_cobro_id = 'cx'`, [original])
+  await servicio(`select public.rpc_registrar_cobro_suscripcion($1, 'cx', null, null, null, null, null)`, [susX])
+  ok((await plan(X)).plan === "basico" && (await cuenta_(X)).activo === 12, "dejarla como estaba (la fecha original y recalcular): vuelve al Básico con todo publicado")
+}
 
 console.log("\n4. Reactivar a mano")
 const unPausado = (await q(`select id from public.productos where vendedor_id = $1 and pausado_por_plan_en is not null and estado_antes_del_plan = 'activo' limit 1`, [T]))[0].id
@@ -184,7 +219,7 @@ const susB = await suscripcion(B)
 await cobro(susB, 20)
 await servicio(`update public.vendedor_suscripciones set estado = 'cancelled', cancelada_en = now() where id = $1`, [susB])
 ok(await caidas() === 0 && (await cuenta_(B)).activo === 12, "cancelada con días pagos: nada")
-await servicio(`update public.vendedor_suscripciones set pagado_hasta = $2 where id = $1`, [susB, hace(0.01)])
+await pasarElTiempo(susB, 0.01)
 await caidas()
 p = await plan(B)
 ok(p.caida?.motivo === "baja" && (await cuenta_(B)).activo === 10, "pasado el mes pago: cae por baja y quedan 10")
@@ -225,7 +260,7 @@ ok(p.plan === "basico" && p.caida?.motivo === "condiciones_quitadas" && p.caida.
   "la caída dice 50 → 25, a medida")
 ok((await servicio(`select public.rpc_ajustar_productos_al_plan($1, 'condiciones_quitadas', 50) as r`, [M]))[0].r.pausados === 0, "llamarla de nuevo no hace nada")
 // Después deja de pagar: la caída nueva reemplaza la de condiciones quitadas.
-await servicio(`update public.vendedor_suscripciones set pagado_hasta = $2 where id = $1`, [susM, hace(10.1)])
+await pasarElTiempo(susM, 10.1)
 await caidas()
 c = await cuenta_(M)
 p = await plan(M)

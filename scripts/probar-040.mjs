@@ -140,6 +140,13 @@ ok(m30.texto.includes('Terminó tu plan Básico y tu tienda volvió al plan Grat
   'mail 3 sin productos pausados (la variante)')
 ok(MPL.armarMailCaida({ plan: 'Básico', aMedida: true, motivo: 'falta_de_pago', pausados: 32, productos: 42 }).texto.includes('Como no se pudo cobrar tu plan a medida')
   && MPL.armarMailCobroRechazado({ tienda: '<b>', monto: 20000, aMedida: true, hasta: '2026-12-14T15:00:00Z' }).html.includes('&lt;b&gt;'), 'el plan a medida, y el html escapado')
+const uno = MPL.armarMailCaida({ tienda: 'T', plan: 'Básico', motivo: 'falta_de_pago', pausados: 1, productos: 11, topeGratis: 1 })
+ok(uno.texto.includes('Pausamos 1 producto: quedó publicado tu primer producto.') && uno.texto.includes('Para recuperarlo, reactivá tu plan Básico desde Mi negocio: se vuelve a publicar solo.')
+  && MPL.armarMailCobroRechazado({ monto: 1, plan: 'Básico', hasta: '2026-12-14T15:00:00Z', topeGratis: 1 }).texto.includes('queda publicado tu primer producto y el resto se pausa')
+  && MPL.armarMailCaida({ plan: 'Básico', motivo: 'baja', pausados: 0, productos: 1 }).texto.includes('Tenías 1 producto,'),
+  'con 1: «Pausamos 1 producto», «tu primer producto», «Tenías 1 producto»')
+ok(MPL.armarMailFinDeGracia({ plan: 'Básico', hasta: '2026-12-14T15:00:00Z', dias: 2, sePausarian: 1 }).texto.includes('tu tienda vuelve al Gratis: se pausa 1 producto.'),
+  'mail 2 con 1: «se pausa 1 producto»')
 
 // ── 4. La migración ──────────────────────────────────────────────────────────
 console.log('4. La migración 040')
@@ -588,6 +595,19 @@ console.log('8. Cuando deja de pagar: la cancelación en Mercado Pago y los mail
     throw new Error(`fetch inesperado: ${u}`)
   }
   const cupo = () => ({ tomar: () => true, pausar: async () => {} })
+  // Que pase el tiempo (como en probar-050): todas las fechas de la
+  // suscripción y de sus cobros para atrás, hasta que pagado_hasta quede hace
+  // pagadoHace días. No se toca pagado_hasta solo.
+  async function pasarElTiempo(sus, pagadoHace) {
+    const seg = Number((await q2(`select extract(epoch from (pagado_hasta - (now() - make_interval(secs => $2::float8 * 86400)))) as s
+      from public.vendedor_suscripciones where id = $1`, [sus, pagadoHace]))[0].s)
+    await q2(`update public.suscripcion_cobros set cobrado_en = cobrado_en - make_interval(secs => $2::float8) where suscripcion_id = $1`, [sus, seg])
+    await q2(`update public.vendedor_suscripciones set
+        pagado_hasta = pagado_hasta - make_interval(secs => $2::float8), ultimo_cobro_en = ultimo_cobro_en - make_interval(secs => $2::float8),
+        primer_cobro_en = primer_cobro_en - make_interval(secs => $2::float8), cobro_fallido_desde = cobro_fallido_desde - make_interval(secs => $2::float8),
+        creada_en = creada_en - make_interval(secs => $2::float8)
+      where id = $1`, [sus, seg])
+  }
   const mailsDelPlan = () => T.tareaMailsDelPlan({ admin: admin2, prueba: false, ahoraMs: Date.now(), cupo: cupo() })
 
   let rm = await mailsDelPlan()
@@ -597,7 +617,7 @@ console.log('8. Cuando deja de pagar: la cancelación en Mercado Pago y los mail
   ok(rm.rechazo === 0 && mails2.length === 1, 'una segunda corrida no lo repite')
 
   // Faltando 2 días: el mail 2, con cuántos se pausarían; Resend falla una vez.
-  await q2(`update public.vendedor_suscripciones set pagado_hasta = now() - interval '8 days' where id = $1`, [SUS])
+  await pasarElTiempo(SUS, 8)
   resendFalla.add('duena@lud.com')
   rm = await mailsDelPlan()
   ok(rm.fin_gracia === 0 && rm.no_enviados === 1 && (await q2(`select aviso_fin_gracia_en from public.vendedor_suscripciones where id = $1`, [SUS]))[0].aviso_fin_gracia_en === null,
@@ -610,7 +630,7 @@ console.log('8. Cuando deja de pagar: la cancelación en Mercado Pago y los mail
   ok(mails2.length === 1, 'y no se repite')
 
   // Termina la gracia: cae y se cancela en Mercado Pago; la primera vez falla.
-  await q2(`update public.vendedor_suscripciones set pagado_hasta = now() - interval '10 days 1 hour' where id = $1`, [SUS])
+  await pasarElTiempo(SUS, 10.05)
   await admin2.rpc('rpc_aplicar_caidas_vencidas')
   let c = await S.cancelarCaidasPorFaltaDePago(admin2)
   let caida = (await q2(`select * from public.plan_caidas where vendedor_id = $1`, [V]))[0]

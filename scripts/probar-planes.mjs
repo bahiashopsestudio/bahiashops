@@ -11,6 +11,7 @@
 import {
   planDesdeLaBase, estadoDelContador, planSiguiente, planConCarritos, errorDeTope, textoDeTope, cuerpoDeTope, FALTAN_PARA_CERCA,
   textoPrecio, notaDelContador, etiquetaDelPlan, textosDelCartel, validarPlanAdmin, avisosDePlan, planesAsignables,
+  cantidad, aLos, quedanPublicados, quedaronPublicados, sePausan,
   validarEspecial, atajosEspecial, enteroDelCampo, LINK_PLANES,
 } from '../src/lib/planes.js'
 
@@ -214,6 +215,22 @@ for (const [motivo, accion] of [['productos'], ['superado', 'activar'], ['fotos'
 }
 p = planDesdeLaBase({ plan: 'gratis', caida: { motivo: 'baja', nombre: 'Básico', a_medida: false, pausados: 3 }, pausados_por_plan: 3 })
 ok(p.caida?.motivo === 'baja' && p.caida.pausados === 3 && p.pausadosPorPlan === 3 && planDesdeLaBase({ plan: 'gratis' }).caida === null, 'planDesdeLaBase trae la caída')
+
+console.log('\n10d. Singular y plural')
+ok(sePausan(1) === 'se pausa 1 producto' && sePausan(15) === 'se pausan 15 productos', 'se pausa 1 / se pausan 15 (el verbo también)')
+ok(cantidad(1, 'producto', 'productos') === '1 producto' && cantidad(25, 'producto', 'productos') === '25 productos' && cantidad(0, 'foto', 'fotos') === '0 fotos', 'cantidad: 1 y varios')
+ok(aLos(10, 'producto', 'productos') === 'a los 10 productos' && aLos(1, 'producto', 'productos') === 'al único producto'
+  && aLos(1, 'foto', 'fotos', { femenino: true }) === 'a la única foto' && aLos(4, 'foto', 'fotos', { femenino: true }) === 'a las 4 fotos', 'a los / al único, a las / a la única')
+ok(quedanPublicados(1) === 'queda publicado tu primer producto' && quedanPublicados(10) === 'quedan publicados tus 10 primeros productos'
+  && quedaronPublicados(1) === 'quedó publicado tu primer producto' && quedaronPublicados(10) === 'quedaron publicados tus 10 primeros'
+  && quedanPublicados(25, { tercera: true }) === 'quedan publicados sus 25 primeros productos' && quedanPublicados(1, { tercera: true }) === 'queda publicado su primer producto', '«tu primer producto» con 1, y «sus» para el admin')
+const UNO = { ...GRATIS(1, { tope: 1, contador: 'en_el_tope', fotosPorProducto: 1 }), siguiente: { ...SIG, tope: 1, fotosPorProducto: 1 } }
+c = textosDelCartel({ motivo: 'productos', datos: UNO })
+ok(c.titulo === 'Llegaste al único producto de tu plan' && c.chips.includes('Hasta 1 producto') && c.chips.includes('Hasta 1 foto por producto'), `el cartel con topes de 1: «${c.titulo}» · ${c.chips.join(' · ')}`)
+c = textosDelCartel({ motivo: 'fotos', datos: UNO })
+ok(c.titulo === 'Llegaste a la única foto de tu plan', `fotos con 1: «${c.titulo}»`)
+ok(textoDeTope({ motivo: 'tope_fotos', tope: 1 }).startsWith('Este producto puede tener hasta 1 foto con tu plan') && textoDeTope({ motivo: 'tope_productos', tope: 1 }).startsWith('Llegaste al único producto de tu plan.'),
+  'los textos del 409 con 1')
 
 console.log('\n11. Los campos del admin')
 ok(enteroDelCampo('10.000') === 10000 && enteroDelCampo(' 25 ') === 25 && enteroDelCampo(8) === 8 && enteroDelCampo('') === null && enteroDelCampo(null) === null,

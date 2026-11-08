@@ -17,7 +17,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import Link from 'next/link'
-import { textoPrecio } from '@/lib/planes'
+import { cantidad, textoPrecio } from '@/lib/planes'
 
 const VERDE = '#015444'
 const ROJO = '#cc152b'
@@ -42,8 +42,8 @@ export function Ruedita() {
 export function pastillasDelPlan(trae) {
   if (!trae) return []
   return [
-    trae.sinTope ? 'Productos sin tope' : trae.tope ? `Hasta ${trae.tope} productos` : null,
-    trae.fotos ? `${trae.fotos} fotos por producto` : null,
+    trae.sinTope ? 'Productos sin tope' : trae.tope ? `Hasta ${cantidad(trae.tope, 'producto', 'productos')}` : null,
+    trae.fotos ? `${cantidad(trae.fotos, 'foto', 'fotos')} por producto` : null,
     trae.carritos ? 'Carritos abandonados' : null,
   ].filter(Boolean)
 }

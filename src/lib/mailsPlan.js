@@ -14,7 +14,7 @@
 
 import { SITIO_URL } from '@/lib/sitio'
 import { GRIS, BORDE, FUENTE_TEXTO, TABLA, escapar, negrita, plantilla, lineaAzul, tituloTexto, parrafo, boton, enviarPorResend } from '@/lib/mailBase'
-import { textoPrecio } from '@/lib/planes'
+import { cantidad, quedanPublicados, quedaronPublicados, sePausan, textoPrecio } from '@/lib/planes'
 
 const LINK_MI_NEGOCIO = `${SITIO_URL}/vendedor/perfil`
 const PIE = `<table ${TABLA} width="100%" style="margin:28px 0 0;"><tr><td style="border-top:1px solid ${BORDE};padding:16px 0 0;font-family:${FUENTE_TEXTO};font-size:12px;font-weight:300;line-height:1.6;color:${GRIS};">Te escribimos porque tenés una tienda en Bahía Shops. Bahía Blanca, Argentina.</td></tr></table>`
@@ -45,7 +45,7 @@ function nombreDelPlan({ aMedida, plan }) {
   return aMedida ? 'tu plan a medida' : `tu plan ${plan || 'Básico'}`
 }
 
-const productos = (n) => `${n} ${n === 1 ? 'producto' : 'productos'}`
+const productos = (n) => cantidad(n, 'producto', 'productos')
 
 // ── 1. Cobro rechazado ──
 //   tienda, monto, plan ('Básico'), aMedida, hasta (ISO: el fin de la gracia),
@@ -60,7 +60,7 @@ export function armarMailCobroRechazado({ tienda, monto, plan, aMedida = false, 
       [`Hola, ${String(tienda || '').trim() || 'tu tienda'}.`],
       ['Mercado Pago no pudo cobrar los ', [textoPrecio(monto)], ` de ${nombre} y va a volver a intentarlo en los próximos días. `, [`Tenés el plan hasta el ${dia}.`]],
       ['Revisá en tu cuenta de Mercado Pago la tarjeta o el saldo de la suscripción.'],
-      [`Si el ${dia} sigue sin cobrarse, cancelamos la suscripción y tu tienda vuelve al plan Gratis: quedan publicados tus ${topeGratis} primeros productos y el resto se pausa. No se borra nada.`],
+      [`Si el ${dia} sigue sin cobrarse, cancelamos la suscripción y tu tienda vuelve al plan Gratis: ${quedanPublicados(topeGratis)} y el resto se pausa. No se borra nada.`],
     ],
     cta: 'Ir a Mi negocio',
   })
@@ -71,7 +71,7 @@ export function armarMailCobroRechazado({ tienda, monto, plan, aMedida = false, 
 export function armarMailFinDeGracia({ tienda, plan, aMedida = false, hasta, dias, sePausarian = 0 }) {
   const nombre = nombreDelPlan({ aMedida, plan })
   const quedan = dias === 1 ? 'Te queda 1 día' : `Te quedan ${dias} días`
-  const pausa = sePausarian > 0 ? `se pausan ${productos(sePausarian)}.` : 'no se pausa ningún producto.'
+  const pausa = sePausarian > 0 ? `${sePausan(sePausarian)}.` : 'no se pausa ningún producto.'
   return armar({
     asunto: `${quedan} de ${nombre}`,
     linea: 'Tu plan',
@@ -99,8 +99,8 @@ export function armarMailCaida({ tienda, plan, aMedida = false, motivo, pausados
       linea: 'Tu plan',
       parrafos: [
         hola,
-        [`${primera} `, [`Pausamos ${productos(pausados)}:`], ` quedaron publicados tus ${topeGratis} primeros. No se borró nada.`],
-        [`Para recuperarlos, reactivá ${nombre} desde Mi negocio: se vuelven a publicar solos. Si no, podés eliminar productos hasta bajar a ${topeGratis}.`],
+        [`${primera} `, [`Pausamos ${productos(pausados)}:`], ` ${quedaronPublicados(topeGratis)}. No se borró nada.`],
+        [`${pausados === 1 ? 'Para recuperarlo' : 'Para recuperarlos'}, reactivá ${nombre} desde Mi negocio: ${pausados === 1 ? 'se vuelve a publicar solo' : 'se vuelven a publicar solos'}. Si no, podés eliminar productos hasta bajar a ${topeGratis}.`],
       ],
       cta: `Reactivar ${nombre.replace(/^tu /, 'mi ')}`,
     })

@@ -13,7 +13,7 @@ import { linkPropio } from '@/lib/marcaLink';
 import CartelPlan from '@/components/CartelPlan';
 import ModalSuscripcion from '@/components/ModalSuscripcion';
 import { cargarPlan } from '@/lib/planDelPanel';
-import { estadoDelContador, notaDelContador, etiquetaDelPlan } from '@/lib/planes';
+import { cantidad, estadoDelContador, notaDelContador, etiquetaDelPlan } from '@/lib/planes';
 
 const MENU_CATEGORIAS = ['moda','belleza-y-bienestar','joyeria-y-accesorios','hogar-y-deco','artes-y-oficios','bebes-y-maternidad','juegos-y-juguetes','mascotas','libros','deporte','vintage'];
 
@@ -197,7 +197,7 @@ export default function MisProductosPage() {
 
         const { data: lista, error: errProductos } = await supabase
           .from('productos')
-          .select('id, nombre, precio, precio_anterior, estado, motivo_rechazo, subcategoria_id, pausado_por_plan_en')
+          .select('id, nombre, precio, precio_anterior, estado, motivo_rechazo, subcategoria_id, pausado_por_plan_en, pausado_con_tope')
           .eq('vendedor_id', vendedor.id)
           .order('id', { ascending: false });
 
@@ -252,7 +252,7 @@ export default function MisProductosPage() {
       });
       const datos = await res.json().catch(() => ({}));
       // Al cambiar de estado a mano pierde la marca de «Pausado por tu plan» (050).
-      if (datos.estado) setProductos(prev => prev.map(p => p.id === producto.id ? { ...p, estado: datos.estado, pausado_por_plan_en: null } : p));
+      if (datos.estado) setProductos(prev => prev.map(p => p.id === producto.id ? { ...p, estado: datos.estado, pausado_por_plan_en: null, pausado_con_tope: null } : p));
       // Por encima del tope: el cartel arriba de la lista, en vez del alert.
       if (res.status === 409 && datos.motivo === 'tope_superado') {
         // El plan pudo cambiar con la página abierta (por ejemplo, una
@@ -393,6 +393,12 @@ export default function MisProductosPage() {
                       <span className={`w-[6px] h-[6px] rounded-full ${estado.punto}`} />
                       {estado.texto}
                     </span>
+                    {/* Pausado por el plan (052): cuándo vuelve solo, con el tope con que se pausó. */}
+                    {p.estado === 'pausado' && p.pausado_por_plan_en && Number.isInteger(p.pausado_con_tope) && (
+                      <p className="text-xs text-[#0a0a0a]/45 m-0 mt-1" style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 300 }}>
+                        Vuelve solo si tu plan pasa a más de {cantidad(p.pausado_con_tope, 'producto', 'productos')}. Si tenés lugar, podés activarlo vos.
+                      </p>
+                    )}
                   </div>
 
                   {/* Acciones (un rechazado tiene las suyas en el recuadro de abajo) */}

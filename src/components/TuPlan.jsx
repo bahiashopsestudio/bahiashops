@@ -7,16 +7,16 @@
 //
 //   · Gratis: el plan, $0, productos, fotos y carritos, y abajo lo que trae el
 //     plan siguiente con «Ver planes».
-//   · Con el plan de una suscripción: lo que paga por mes (precioMensual).
-//   · Plan a medida: el tope especial, sin el precio (es una condición del
-//     admin; se ve en la suscripción).
+//   · Si paga algo (suscripción o plan a medida con precio): lo que paga por
+//     mes (precioMensual).
+//   · Plan a medida de $0: el tope especial, «Básico ampliado».
 //   · Sin tope: solo cuántos productos tiene.
 // La suscripción al plan (F3, migración 048) va abajo, en SuscripcionPlan,
 // con todos sus estados (mockup-tanda-f3-2.html). La franja de lo que trae el
 // plan siguiente se la pasa: va solo mientras puede pasarse al Básico.
 
 import Link from 'next/link'
-import { LINK_PLANES, textoPrecio } from '@/lib/planes'
+import { LINK_PLANES, cantidad, textoPrecio } from '@/lib/planes'
 import SuscripcionPlan from '@/components/SuscripcionPlan'
 
 const FUENTE_TEXTO = { fontFamily: 'Poppins, sans-serif', fontWeight: 300 }
@@ -38,7 +38,7 @@ function Franja({ sig }) {
       style={{ backgroundColor: '#f6f5f2', borderRadius: '10px', padding: '12px 14px', gap: '12px', fontSize: '13px', lineHeight: 1.55, color: 'rgba(10,10,10,0.7)' }}>
       <span>
         Con el <b style={{ fontWeight: 600, color: '#0a0a0a' }}>{sig.nombre}</b>:{' '}
-        {[sig.tope && `${sig.tope} productos`, sig.fotosPorProducto && `${sig.fotosPorProducto} fotos`, sig.carritos && 'carritos abandonados']
+        {[sig.tope && cantidad(sig.tope, 'producto', 'productos'), sig.fotosPorProducto && cantidad(sig.fotosPorProducto, 'foto', 'fotos'), sig.carritos && 'carritos abandonados']
           .filter(Boolean).join(', ').replace(/, ([^,]*)$/, ' y $1')}
         {Number.isInteger(sig.precio) ? `, por ${textoPrecio(sig.precio)} por mes.` : '.'}
       </span>
@@ -63,10 +63,12 @@ export default function TuPlan({ datos, onCambio }) {
 
   const nombre = datos.plan?.nombre || 'Tu plan'
   const titulo = datos.sinTope ? 'Sin tope' : datos.especial ? 'Plan a medida' : nombre
+  // Si paga algo, el monto (también un plan a medida o sin tope); con
+  // condiciones de $0, «Básico sin tope» o «Básico ampliado».
   let detalle = null
-  if (datos.sinTope) detalle = `${nombre} sin tope`
+  if (Number.isInteger(datos.precioMensual) && datos.precioMensual > 0) detalle = `${textoPrecio(datos.precioMensual)} por mes`
+  else if (datos.sinTope) detalle = `${nombre} sin tope`
   else if (datos.especial) detalle = `${nombre} ampliado`
-  else if (Number.isInteger(datos.precioMensual) && datos.precioMensual > 0) detalle = `${textoPrecio(datos.precioMensual)} por mes`
   else if (datos.plan?.clave === 'gratis') detalle = '$0'
   const productos = datos.sinTope ? String(datos.usados) : `${datos.usados} de ${datos.tope}`
   const sig = datos.especial ? null : datos.siguiente

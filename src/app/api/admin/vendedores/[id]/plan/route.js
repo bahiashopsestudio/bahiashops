@@ -1,7 +1,11 @@
 // El plan de una tienda y sus condiciones especiales (migración 046), para la
 // ficha del admin.
 //
-//   GET     -> { plan, especial, planes }
+//   GET     -> { plan, especial, planes, quitar }
+//              quitar    con un plan a medida pago y el mes en curso pagado:
+//                        { monto, pagadoHasta, topeDespues, sePausarian,
+//                        cobroBajaA } para la confirmación de «Quitar
+//                        condiciones»; si no, null
 //              plan      el que rige: { clave, nombre, origen, especial, sinTope,
 //                        tope, usados, fotosPorProducto, carritos, precio }
 //                        (usados: todos los productos guardados, 047)
@@ -11,7 +15,9 @@
 //              planes    las filas de public.planes (para el formulario y los
 //                        atajos)
 //   PUT     { plan_clave, tope_productos, sin_tope, precio_especial, motivo }
-//           -> { ok }  carga o reemplaza la condición especial
+//           -> { ok, restaurados }  carga o reemplaza la condición especial.
+//              Si da más lugar, los «Pausado por tu plan» que entran vuelven
+//              en el momento (052).
 //   DELETE  -> { ok, pausados }  la quita. Con condiciones de $0 (o un plan a
 //              medida que no estaba pagando), la tienda vuelve a su plan y, si
 //              queda por encima del tope, no se pausa nada. Con un plan a medida
@@ -46,6 +52,31 @@ async function inicio(params) {
 
 const PLANES = 'clave, nombre, orden, precio_mensual, tope_productos, fotos_por_producto, carritos_abandonados, disponible'
 
+// Para la confirmación de «Quitar condiciones» de un plan a medida que la
+// tienda pagó este mes (052): cuánto pagó y hasta cuándo, a qué baja el cobro
+// y cuántos productos se pausarían hoy. null si no es un plan a medida pago
+// con el mes en curso pagado (o si no se pudo leer: la confirmación sale sin
+// la línea).
+async function queQuitaria(admin, vendedorId, p, planes) {
+  if (p.origen !== 'especial' || !(Number(p.precio_mensual) > 0)) return null
+  const { fila: viva, error } = await suscripcionViva(admin, vendedorId)
+  if (error || viva?.estado !== 'authorized' || !(Date.parse(viva.pagado_hasta ?? '') > Date.now())) return null
+  const basico = planes.find((x) => x.clave === 'basico')
+  const topeDespues = basico?.tope_productos ?? null
+  const { count, error: errorConteo } = await admin.from('productos').select('id', { count: 'exact', head: true })
+    .eq('vendedor_id', vendedorId).in('estado', ['activo', 'agotado', 'en_revision'])
+  if (errorConteo) console.error('[admin-plan/quitar/visibles]', vendedorId, errorConteo.message)
+  const precioBasico = Number(basico?.precio_mensual)
+  return {
+    monto: Number(viva.ultimo_cobro_monto) || Number(p.precio_mensual),
+    pagadoHasta: viva.pagado_hasta,
+    topeDespues,
+    sePausarian: errorConteo || topeDespues === null ? null : Math.max(0, (count ?? 0) - topeDespues),
+    // A cuánto baja el cobro (solo si hoy cobra más que el Básico).
+    cobroBajaA: Number.isInteger(precioBasico) && Number(viva.monto) > precioBasico ? precioBasico : null,
+  }
+}
+
 export async function GET(_request, { params }) {
   const { respuesta, adminUser, vendedorId, admin } = await inicio(params)
   if (respuesta) return respuesta
@@ -66,7 +97,9 @@ export async function GET(_request, { params }) {
 
   const p = rige.data
   const { creado_por: creadoPor, ...restoEspecial } = especial.data || {}
+  const quitar = await queQuitaria(admin, vendedorId, p, planes.data || [])
   return NextResponse.json({
+    quitar,
     plan: {
       clave: p.plan,
       nombre: p.nombre,
@@ -119,7 +152,11 @@ export async function PUT(request, { params }) {
     console.error('[admin-plan/guardar]', vendedorId, error.code, error.message)
     return NextResponse.json({ error: NO_SE_PUDO }, { status: 500 })
   }
-  return NextResponse.json({ ok: true })
+  // Con más lugar, los «Pausado por tu plan» que entran vuelven ahora (052):
+  // solo los que se pausaron con un tope menor que el nuevo.
+  const { data: ajuste, error: errorAjuste } = await admin.rpc('rpc_ajustar_productos_al_plan', { p_vendedor_id: vendedorId })
+  if (errorAjuste) console.error('[admin-plan/guardar/ajustar]', vendedorId, errorAjuste.message)
+  return NextResponse.json({ ok: true, restaurados: Number(ajuste?.restaurados) || 0 })
 }
 
 export async function DELETE(_request, { params }) {

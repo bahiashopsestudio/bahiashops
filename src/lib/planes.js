@@ -135,16 +135,16 @@ export function errorDeTope(error) {
 export function textoDeTope({ motivo, tope, usados, accion = 'activar' } = {}) {
   if (motivo === 'tope_fotos') {
     return tope
-      ? `Este producto puede tener hasta ${tope} fotos con tu plan. Sacá alguna para poder guardarlo.`
+      ? `Este producto puede tener hasta ${cantidad(tope, 'foto', 'fotos')} con tu plan. Sacá alguna para poder guardarlo.`
       : 'Este producto tiene más fotos de las que permite tu plan. Sacá alguna para poder guardarlo.'
   }
   if (motivo === 'tope_superado') {
     const verbo = accion === 'reenviar' ? 'reenviar' : 'activar'
     if (tope && usados) return `Tenés ${usados} productos y tu plan guarda ${tope}. Para ${verbo} este, eliminá productos hasta tener ${tope}.`
-    if (tope) return `Tenés más productos de los ${tope} que guarda tu plan. Para ${verbo} este, eliminá productos hasta tener ${tope}.`
+    if (tope) return `Tenés más productos ${Number(tope) === 1 ? 'del único' : `de los ${tope}`} que guarda tu plan. Para ${verbo} este, eliminá productos hasta tener ${tope}.`
     return `Tenés más productos de los que guarda tu plan. Para ${verbo} este, eliminá productos hasta llegar al tope.`
   }
-  const inicio = tope ? `Llegaste a los ${tope} productos de tu plan.` : 'Llegaste al tope de productos de tu plan.'
+  const inicio = tope ? `Llegaste ${aLos(tope, 'producto', 'productos')} de tu plan.` : 'Llegaste al tope de productos de tu plan.'
   return `${inicio} Cuentan todos, también los pausados: para cargar otro, eliminá uno.`
 }
 
@@ -161,6 +161,39 @@ export function cuerpoDeTope({ motivo, tope = null, usados = null, accion }) {
 // también el panel de la tienda y el admin.
 export function textoPrecio(pesos) {
   return `$${Number(pesos).toLocaleString('es-AR', { maximumFractionDigits: 0 })}`
+}
+
+// ── Singular y plural ──
+// Todos los textos que cuentan algo (productos, fotos, días) pasan por acá,
+// para que con 1 no diga «1 productos».
+
+// «1 producto», «25 productos».
+export function cantidad(n, singular, plural) {
+  return `${n} ${Number(n) === 1 ? singular : plural}`
+}
+
+// «se pausan 15 productos» / «se pausa 1 producto» (el verbo también).
+export function sePausan(n) {
+  return Number(n) === 1 ? 'se pausa 1 producto' : `se pausan ${n} productos`
+}
+
+// «a los 10 productos» / «al único producto», para «Llegaste … de tu plan».
+//   femenino: «a las 4 fotos» / «a la única foto»
+export function aLos(n, singular, plural, { femenino = false } = {}) {
+  if (Number(n) === 1) return femenino ? `a la única ${singular}` : `al único ${singular}`
+  return `${femenino ? 'a las' : 'a los'} ${n} ${plural}`
+}
+
+// «quedan publicados tus 10 primeros productos» / «queda publicado tu primer
+// producto». tercera: «sus» / «su» (para el admin, que habla de la tienda).
+export function quedanPublicados(n, { tercera = false } = {}) {
+  if (Number(n) === 1) return `queda publicado ${tercera ? 'su' : 'tu'} primer producto`
+  return `quedan publicados ${tercera ? 'sus' : 'tus'} ${n} primeros productos`
+}
+
+// «quedaron publicados tus 10 primeros» / «quedó publicado tu primer producto».
+export function quedaronPublicados(n) {
+  return Number(n) === 1 ? 'quedó publicado tu primer producto' : `quedaron publicados tus ${n} primeros`
 }
 
 const enteroPositivo = (v) => Number.isInteger(v) && v > 0
@@ -280,10 +313,10 @@ export function textosDelCartel({ motivo = 'productos', accion = 'activar', dato
   if (volvioAlGratis(d) && d.suscripciones === true) {
     const verbo = accion === 'reenviar' ? 'reenviar' : 'activar'
     const titulo = motivo === 'fotos'
-      ? (d.fotosPorProducto ? `Llegaste a las ${d.fotosPorProducto} fotos de tu plan` : 'Llegaste a las fotos de tu plan')
+      ? (d.fotosPorProducto ? `Llegaste ${aLos(d.fotosPorProducto, 'foto', 'fotos', { femenino: true })} de tu plan` : 'Llegaste a las fotos de tu plan')
       : motivo === 'superado' ? `Para ${verbo} este producto, hacé lugar`
         : t && u && u > t ? `Tenés ${u} productos y tu plan guarda ${t}`
-          : t ? `Llegaste a los ${t} productos de tu plan` : 'Llegaste al tope de productos de tu plan'
+          : t ? `Llegaste ${aLos(t, 'producto', 'productos')} de tu plan` : 'Llegaste al tope de productos de tu plan'
     return {
       eyebrow: d.plan?.nombre ? `Tu plan ${d.plan.nombre}` : 'Tu plan',
       titulo,
@@ -302,8 +335,8 @@ export function textosDelCartel({ motivo = 'productos', accion = 'activar', dato
 
   const pendiente = d.suscripciones === true && !d.especial ? d.especialPendiente : null
   if (pendiente && Number.isInteger(pendiente.precio)) {
-    const cuanto = pendiente.sinTope ? 'productos sin tope' : pendiente.tope ? `${pendiente.tope} productos` : 'un plan a medida'
-    const rige = d.plan?.nombre ? `rige el plan ${d.plan.nombre}${t ? `: ${t} productos` : ''}` : 'rige tu plan de hoy'
+    const cuanto = pendiente.sinTope ? 'productos sin tope' : pendiente.tope ? cantidad(pendiente.tope, 'producto', 'productos') : 'un plan a medida'
+    const rige = d.plan?.nombre ? `rige el plan ${d.plan.nombre}${t ? `: ${cantidad(t, 'producto', 'productos')}` : ''}` : 'rige tu plan de hoy'
     // Si ya paga el Básico, el plan a medida se activa pagando la diferencia,
     // desde Mi negocio.
     const yaPaga = d.origen === 'suscripcion'
@@ -336,8 +369,8 @@ export function textosDelCartel({ motivo = 'productos', accion = 'activar', dato
     const masFotos = !!sig && sig.fotosPorProducto > (fotos || 0)
     return {
       eyebrow,
-      titulo: fotos ? `Llegaste a las ${fotos} fotos de tu plan` : 'Llegaste a las fotos de tu plan',
-      intro: masFotos ? `Con el plan ${sig.nombre} podés subir hasta ${sig.fotosPorProducto} fotos por producto.` : null,
+      titulo: fotos ? `Llegaste ${aLos(fotos, 'foto', 'fotos', { femenino: true })} de tu plan` : 'Llegaste a las fotos de tu plan',
+      intro: masFotos ? `Con el plan ${sig.nombre} podés subir hasta ${cantidad(sig.fotosPorProducto, 'foto', 'fotos')} por producto.` : null,
       chips: [],
       cierre: null,
       boton: masFotos ? boton : null,
@@ -351,8 +384,8 @@ export function textosDelCartel({ motivo = 'productos', accion = 'activar', dato
     : null
   const chips = sig
     ? [
-        sig.tope ? `Hasta ${sig.tope} productos` : null,
-        sig.fotosPorProducto ? `Hasta ${sig.fotosPorProducto} fotos por producto` : null,
+        sig.tope ? `Hasta ${cantidad(sig.tope, 'producto', 'productos')}` : null,
+        sig.fotosPorProducto ? `Hasta ${cantidad(sig.fotosPorProducto, 'foto', 'fotos')} por producto` : null,
         sig.carritos ? 'Carritos abandonados' : null,
       ].filter(Boolean)
     : []
@@ -388,7 +421,7 @@ export function textosDelCartel({ motivo = 'productos', accion = 'activar', dato
 
   return {
     eyebrow,
-    titulo: t ? `Llegaste a los ${t} productos de tu plan` : 'Llegaste al tope de productos de tu plan',
+    titulo: t ? `Llegaste ${aLos(t, 'producto', 'productos')} de tu plan` : 'Llegaste al tope de productos de tu plan',
     intro,
     chips,
     cierre: contacto

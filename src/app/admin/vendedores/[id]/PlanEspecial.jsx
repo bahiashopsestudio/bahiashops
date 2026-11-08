@@ -11,7 +11,7 @@
 // de la ficha la muestra.
 
 import { useEffect, useState } from 'react'
-import { MAX_MOTIVO_PLAN, atajosEspecial, planesAsignables, textoPrecio } from '@/lib/planes'
+import { MAX_MOTIVO_PLAN, atajosEspecial, cantidad, planesAsignables, quedanPublicados, sePausan, textoPrecio } from '@/lib/planes'
 
 const VERDE = '#015444'
 const ROJO = '#a01020'
@@ -38,7 +38,23 @@ function textoPrecioEspecial(especial, plan) {
   return `${textoPrecio(especial.precio_especial)} por mes`
 }
 
-function Vigente({ plan, especial, onQuitar }) {
+// La línea de la confirmación de «Quitar condiciones» cuando la tienda ya
+// pagó el mes en curso de su plan a medida (052). quitar: lo del GET.
+//   «Ya pagó $20.000 este mes, hasta el 4/12. Si quitás las condiciones ahora,
+//   pierde el lugar hoy: se pausan 15 productos y quedan publicados sus 25
+//   primeros. El cobro baja a $10.000 desde el próximo, el 4/12. Lo ya cobrado
+//   no se devuelve solo.»
+function textoQuitarPagado(quitar) {
+  const hasta = fecha(quitar.pagadoHasta)
+  const n = quitar.sePausarian
+  const pausa = n === null ? 'se pausan los productos que pasen del tope del Básico'
+    : n === 0 ? 'hoy no se pausa ningún producto'
+      : `${sePausan(n)} y ${quedanPublicados(quitar.topeDespues, { tercera: true })}`
+  const cobro = quitar.cobroBajaA ? ` El cobro baja a ${textoPrecio(quitar.cobroBajaA)} desde el próximo, el ${hasta}.` : ''
+  return `Ya pagó ${textoPrecio(quitar.monto)} este mes, hasta el ${hasta}. Si quitás las condiciones ahora, pierde el lugar hoy: ${pausa}.${cobro} Lo ya cobrado no se devuelve solo.`
+}
+
+function Vigente({ plan, especial, quitar: datosQuitar, onQuitar }) {
   const [confirmando, setConfirmando] = useState(false)
   const [quitando, setQuitando] = useState(false)
   const [error, setError] = useState('')
@@ -81,10 +97,13 @@ function Vigente({ plan, especial, onQuitar }) {
       {confirmando ? (
         <div className="flex flex-col" style={{ gap: '10px', backgroundColor: '#fce4e4', borderRadius: '6px', padding: '12px', fontSize: '12.5px', lineHeight: 1.5, color: '#7a0f1c' }}>
           <span>
-            {plan.origen === 'especial' && Number(plan.precio) > 0
-              // Un plan a medida que está pagando (050).
-              ? '¿Quitar el plan a medida? Su suscripción baja al precio del Básico en Mercado Pago y se pausan los productos que pasen del tope del Básico (los primeros que cargó quedan publicados). Lo ya cobrado no se devuelve solo.'
-              : '¿Quitar las condiciones especiales? Vuelve al plan Gratis. Si queda por encima del tope, no se pausa nada, pero no puede sumar productos.'}
+            {datosQuitar
+              // Pagó el mes en curso de su plan a medida (052).
+              ? <><b style={{ fontWeight: 600 }}>¿Quitar el plan a medida?</b> {textoQuitarPagado(datosQuitar)}</>
+              : plan.origen === 'especial' && Number(plan.precio) > 0
+                // Un plan a medida que está pagando (050).
+                ? '¿Quitar el plan a medida? Su suscripción baja al precio del Básico en Mercado Pago y se pausan los productos que pasen del tope del Básico (los primeros que cargó quedan publicados). Lo ya cobrado no se devuelve solo.'
+                : '¿Quitar las condiciones especiales? Vuelve al plan Gratis. Si queda por encima del tope, no se pausa nada, pero no puede sumar productos.'}
           </span>
           {error && <span style={{ fontWeight: 500 }}>{error}</span>}
           <div className="flex items-center flex-wrap" style={{ gap: '12px' }}>
@@ -279,7 +298,10 @@ export default function PlanEspecial({ vendedorId }) {
       const res = await fetch(`/api/admin/vendedores/${vendedorId}/plan`, { method: 'DELETE' })
       const datosRes = await res.json().catch(() => ({}))
       if (!res.ok) return datosRes.error || 'No pudimos quitar las condiciones.'
-      await recargar('Listo. Vuelve al plan Gratis.')
+      const pausados = Number(datosRes.pausados) || 0
+      await recargar(datos?.quitar
+        ? `Listo. Pasa al plan Básico${pausados ? `; se ${pausados === 1 ? 'pausó' : 'pausaron'} ${cantidad(pausados, 'producto', 'productos')}` : ''}.`
+        : 'Listo. Vuelve al plan Gratis.')
       return null
     } catch {
       return 'No nos pudimos conectar con el servidor. Probá de nuevo.'
@@ -307,7 +329,7 @@ export default function PlanEspecial({ vendedorId }) {
   return (
     <div className="flex flex-col" style={{ ...contenedor, gap: '18px' }}>
       {especial ? (
-        <Vigente key={`v-${vuelta}`} plan={plan} especial={especial} onQuitar={quitar} />
+        <Vigente key={`v-${vuelta}`} plan={plan} especial={especial} quitar={datos.quitar} onQuitar={quitar} />
       ) : (
         <p className="m-0" style={{ fontSize: '13.5px', fontWeight: 300, lineHeight: 1.55, color: 'rgba(10,10,10,0.6)' }}>
           Sin condiciones especiales. Rige el plan <b style={{ fontWeight: 500, color: '#0a0a0a' }}>{plan.nombre}</b>:{' '}
