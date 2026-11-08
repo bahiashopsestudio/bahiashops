@@ -11,7 +11,7 @@
 import {
   planDesdeLaBase, estadoDelContador, planSiguiente, planConCarritos, errorDeTope, textoDeTope, cuerpoDeTope, FALTAN_PARA_CERCA,
   textoPrecio, notaDelContador, etiquetaDelPlan, textosDelCartel, validarPlanAdmin, avisosDePlan, planesAsignables,
-  cantidad, aLos, quedanPublicados, quedaronPublicados, sePausan,
+  cantidad, aLos, quedanPublicados, quedaronPublicados, sePausan, ESTADOS_A_LA_VISTA, sePausarianAlBajar, textoAlQuitarPlanPagado,
   validarEspecial, atajosEspecial, enteroDelCampo, LINK_PLANES,
 } from '../src/lib/planes.js'
 
@@ -231,6 +231,21 @@ c = textosDelCartel({ motivo: 'fotos', datos: UNO })
 ok(c.titulo === 'Llegaste a la única foto de tu plan', `fotos con 1: «${c.titulo}»`)
 ok(textoDeTope({ motivo: 'tope_fotos', tope: 1 }).startsWith('Este producto puede tener hasta 1 foto con tu plan') && textoDeTope({ motivo: 'tope_productos', tope: 1 }).startsWith('Llegaste al único producto de tu plan.'),
   'los textos del 409 con 1')
+
+console.log('\n10e. Quitar un plan a medida pago (la confirmación)')
+ok(JSON.stringify(ESTADOS_A_LA_VISTA) === JSON.stringify(['activo', 'agotado', 'en_revision']), 'a la vista: activo, agotado y en revisión (sin los pausados)')
+ok(sePausarianAlBajar({ aLaVista: 26, tope: 25 }) === 1 && sePausarianAlBajar({ aLaVista: 20, tope: 25 }) === 0 && sePausarianAlBajar({ aLaVista: 26, tope: null }) === 0
+  && sePausarianAlBajar({ aLaVista: null, tope: 25 }) === null, 'cuántos se pausan: 26 a la vista con tope 25 → 1; con lugar → 0; sin tope → 0')
+const Q = { monto: 200, pagadoHasta: '2026-12-08T15:00:00Z', topeAntes: 30, topeDespues: 25, sePausarian: 1, cobroBajaA: null }
+ok(textoAlQuitarPlanPagado(Q) === 'Ya pagó $200 este mes, hasta el 8/12. Si quitás las condiciones ahora, su tope baja hoy de 30 a 25 productos, aunque el mes ya está pago: se pausa 1 producto y quedan publicados sus 25 primeros. Lo ya cobrado no se devuelve solo.',
+  `con 1 para pausar: «${textoAlQuitarPlanPagado(Q)}»`)
+ok(textoAlQuitarPlanPagado({ ...Q, sePausarian: 0 }) === 'Ya pagó $200 este mes, hasta el 8/12. Si quitás las condiciones ahora, su tope baja hoy de 30 a 25 productos, aunque el mes ya está pago. Hoy no se pausa ningún producto. Lo ya cobrado no se devuelve solo.',
+  'sin productos para pausar')
+ok(textoAlQuitarPlanPagado({ ...Q, monto: 20000, sePausarian: 15, cobroBajaA: 10000 }) === 'Ya pagó $20.000 este mes, hasta el 8/12. Si quitás las condiciones ahora, su tope baja hoy de 30 a 25 productos, aunque el mes ya está pago: se pausan 15 productos y quedan publicados sus 25 primeros. El cobro baja a $10.000 desde el próximo, el 8/12. Lo ya cobrado no se devuelve solo.',
+  'con varios y la línea del cobro')
+ok(textoAlQuitarPlanPagado({ ...Q, topeAntes: null, sePausarian: 0, cobroBajaA: 10000 }).includes('su tope baja hoy a 25 productos, aunque el mes ya está pago. Hoy no se pausa ningún producto. El cobro baja a $10.000 desde el próximo, el 8/12. Lo ya cobrado')
+  && textoAlQuitarPlanPagado({ ...Q, sePausarian: null }).includes('aunque el mes ya está pago: se pausan los que pasen de 25 productos. Lo ya cobrado'),
+  'sin tope antes, y sin saber cuántos')
 
 console.log('\n11. Los campos del admin')
 ok(enteroDelCampo('10.000') === 10000 && enteroDelCampo(' 25 ') === 25 && enteroDelCampo(8) === 8 && enteroDelCampo('') === null && enteroDelCampo(null) === null,

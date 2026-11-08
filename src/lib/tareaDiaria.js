@@ -53,6 +53,7 @@ import {
   aplicarMontoNuevo, cancelarCaidasPorFaltaDePago, cancelarSuscripcion, revertirMonto, revisarPagoDeDiferencia, sincronizarSuscripcion,
 } from '@/lib/suscripcionesServidor'
 import { enviarMailPlan } from '@/lib/mailsPlan'
+import { ESTADOS_A_LA_VISTA } from '@/lib/planes'
 
 const DIA_MS = 24 * 60 * 60 * 1000
 
@@ -500,7 +501,7 @@ async function datosParaMail(admin, vendedorId) {
     admin.from('usuarios').select('email, cerrada_en').eq('id', tienda.usuario_id).maybeSingle(),
     admin.rpc('rpc_plan_de_tienda', { p_vendedor_id: vendedorId }),
     admin.from('productos').select('id', { count: 'exact', head: true }).eq('vendedor_id', vendedorId),
-    admin.from('productos').select('id', { count: 'exact', head: true }).eq('vendedor_id', vendedorId).in('estado', ['activo', 'agotado', 'en_revision']),
+    admin.from('productos').select('id', { count: 'exact', head: true }).eq('vendedor_id', vendedorId).in('estado', ESTADOS_A_LA_VISTA),
     admin.from('planes').select('tope_productos').eq('clave', 'gratis').maybeSingle(),
   ])
   for (const x of [dueno, plan, guardados, visibles, gratis]) if (x.error) fallar('los datos del mail', x.error)

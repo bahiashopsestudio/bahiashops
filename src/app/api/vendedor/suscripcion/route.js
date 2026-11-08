@@ -33,6 +33,7 @@
 
 import { NextResponse } from 'next/server'
 import { tiendaDeLaSesion } from '@/lib/tiendaDeLaSesion'
+import { ESTADOS_A_LA_VISTA } from '@/lib/planes'
 import {
   MAIL_INVALIDO, MINIMO_DIFERENCIA, accionDeLaTienda, diferenciaProporcional, emailValido, graciaHasta, recienConfirmada,
   suscripcionesHabilitadas,
@@ -173,7 +174,7 @@ export async function GET() {
   let sePausarian = null
   if (Number.isInteger(topeGratis) && (e.viva?.estado === 'authorized' || e.viva?.estado === 'paused')) {
     const { count, error: errorConteo } = await admin.from('productos').select('id', { count: 'exact', head: true })
-      .eq('vendedor_id', vendedor.id).in('estado', ['activo', 'agotado', 'en_revision'])
+      .eq('vendedor_id', vendedor.id).in('estado', ESTADOS_A_LA_VISTA)
     if (errorConteo) console.error('[suscripcion/visibles]', vendedor.id, errorConteo.message)
     else sePausarian = Math.max(0, (count ?? 0) - topeGratis)
   }

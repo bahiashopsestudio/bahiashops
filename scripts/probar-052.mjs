@@ -18,6 +18,7 @@
 
 import { readFileSync } from "node:fs"
 import { baseDeTiendas } from "./base-tiendas-prueba.mjs"
+import { ESTADOS_A_LA_VISTA, sePausarianAlBajar } from "../src/lib/planes.js"
 
 const leer = (f) => readFileSync(new URL(`../sql/migrations/${f}`, import.meta.url), "utf8")
 
@@ -149,6 +150,28 @@ const unoU = (await q(`select id from public.productos where vendedor_id = $1 an
 const rr = (await servicio(`select privado.cambiar_estado_producto($1, $2, 'activo') as r`, [U, unoU]))[0].r
 const pr = (await q(`select estado, pausado_por_plan_en, pausado_con_tope from public.productos where id = $1`, [unoU]))[0]
 ok(rr.ok && pr.estado === "activo" && pr.pausado_por_plan_en === null && pr.pausado_con_tope === null, "activo, sin marca y sin tope")
+
+console.log("\n4b. La confirmación cuenta lo mismo que la base (9 activos + 17 en revisión)")
+{
+  const def = (await q(`select pg_get_functiondef('privado.ajustar_productos_al_plan(integer, text, integer)'::regprocedure) as d`))[0].d
+  const lista = ESTADOS_A_LA_VISTA.map((e) => `'${e}'`).join(', ')
+  const usos = def.split(`estado in (${lista})`).length - 1
+  ok(usos === 2, `ESTADOS_A_LA_VISTA (${lista}) es la lista que usa ajustar_productos_al_plan en la base para contar y para pausar (${usos} usos)`)
+  const V = await tienda()
+  await productos(V, 9)
+  for (let i = 0; i < 17; i++) await q(`insert into public.productos (vendedor_id, nombre, estado, creado_en) values ($1, $2, 'en_revision', $3)`, [V, `r${i}`, hace(50 - i)])
+  await q(`insert into public.productos (vendedor_id, nombre, estado, creado_en) values ($1, 'suyo', 'pausado', $2)`, [V, hace(1)])
+  await especial(V, 30, 200)
+  const susV2 = await suscripcion(V, 200)
+  await cobro(susV2, 3, 200)
+  // Lo que cuenta el GET de la ficha (admin/…/plan/route.js), con la misma lista.
+  const aLaVista = (await q(`select count(*)::int as n from public.productos where vendedor_id = $1 and estado = any($2)`, [V, ESTADOS_A_LA_VISTA]))[0].n
+  const anuncia = sePausarianAlBajar({ aLaVista, tope: 25 })
+  ok(aLaVista === 26 && anuncia === 1, `la confirmación anuncia 1 (26 a la vista: 9 activos y 17 en revisión; el pausado suyo no cuenta)`)
+  await q(`delete from public.vendedor_planes where vendedor_id = $1`, [V])
+  const hecho = await ajustar(V, "condiciones_quitadas", 30)
+  ok(hecho.pausados === anuncia, `y la base pausa exactamente esos (${hecho.pausados})`)
+}
 
 console.log("\n5. El disparador: la marca solo vive en un pausado")
 {

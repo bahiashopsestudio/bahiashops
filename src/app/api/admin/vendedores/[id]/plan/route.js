@@ -3,8 +3,8 @@
 //
 //   GET     -> { plan, especial, planes, quitar }
 //              quitar    con un plan a medida pago y el mes en curso pagado:
-//                        { monto, pagadoHasta, topeDespues, sePausarian,
-//                        cobroBajaA } para la confirmación de «Quitar
+//                        { monto, pagadoHasta, topeAntes, topeDespues,
+//                        sePausarian, cobroBajaA } para la confirmación de «Quitar
 //                        condiciones»; si no, null
 //              plan      el que rige: { clave, nombre, origen, especial, sinTope,
 //                        tope, usados, fotosPorProducto, carritos, precio }
@@ -31,7 +31,7 @@
 
 import { NextResponse } from 'next/server'
 import { getServiceRoleClient, verificarAdmin } from '@/lib/supabase/admin'
-import { validarEspecial } from '@/lib/planes'
+import { ESTADOS_A_LA_VISTA, sePausarianAlBajar, validarEspecial } from '@/lib/planes'
 import { cambiarMontoMp } from '@/lib/mercadopago/suscripciones'
 import { suscripcionViva } from '@/lib/suscripcionesServidor'
 
@@ -64,14 +64,18 @@ async function queQuitaria(admin, vendedorId, p, planes) {
   const basico = planes.find((x) => x.clave === 'basico')
   const topeDespues = basico?.tope_productos ?? null
   const { count, error: errorConteo } = await admin.from('productos').select('id', { count: 'exact', head: true })
-    .eq('vendedor_id', vendedorId).in('estado', ['activo', 'agotado', 'en_revision'])
+    .eq('vendedor_id', vendedorId).in('estado', ESTADOS_A_LA_VISTA)
   if (errorConteo) console.error('[admin-plan/quitar/visibles]', vendedorId, errorConteo.message)
   const precioBasico = Number(basico?.precio_mensual)
   return {
     monto: Number(viva.ultimo_cobro_monto) || Number(p.precio_mensual),
     pagadoHasta: viva.pagado_hasta,
+    // El tope del plan a medida que se quita (null: sin tope) y el que queda.
+    topeAntes: p.sin_tope === true ? null : (Number(p.tope_productos) || null),
     topeDespues,
-    sePausarian: errorConteo || topeDespues === null ? null : Math.max(0, (count ?? 0) - topeDespues),
+    // Sin el conteo o sin el tope del Básico, no se sabe: la confirmación lo
+    // dice sin número.
+    sePausarian: errorConteo || topeDespues === null ? null : sePausarianAlBajar({ aLaVista: count ?? 0, tope: topeDespues }),
     // A cuánto baja el cobro (solo si hoy cobra más que el Básico).
     cobroBajaA: Number.isInteger(precioBasico) && Number(viva.monto) > precioBasico ? precioBasico : null,
   }

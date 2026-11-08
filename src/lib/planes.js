@@ -163,6 +163,20 @@ export function textoPrecio(pesos) {
   return `$${Number(pesos).toLocaleString('es-AR', { maximumFractionDigits: 0 })}`
 }
 
+// Los productos que «se ven o están por verse»: los que cuentan para cuántos
+// quedan publicados al bajar el tope y cuántos se pausan. Tiene que ser la
+// misma lista que privado.ajustar_productos_al_plan (050 y 052): la compara
+// scripts/probar-052.mjs con la función que quedó en la base.
+export const ESTADOS_A_LA_VISTA = ['activo', 'agotado', 'en_revision']
+
+// Cuántos se pausarían al bajar a `tope` con `aLaVista` productos a la vista
+// (contados con ESTADOS_A_LA_VISTA). Sin tope: ninguno. null si no se sabe.
+export function sePausarianAlBajar({ aLaVista, tope }) {
+  if (tope === null || tope === undefined) return 0
+  if (!Number.isInteger(aLaVista) || !Number.isInteger(tope)) return null
+  return Math.max(0, aLaVista - tope)
+}
+
 // ── Singular y plural ──
 // Todos los textos que cuentan algo (productos, fotos, días) pasan por acá,
 // para que con 1 no diga «1 productos».
@@ -186,9 +200,42 @@ export function aLos(n, singular, plural, { femenino = false } = {}) {
 
 // «quedan publicados tus 10 primeros productos» / «queda publicado tu primer
 // producto». tercera: «sus» / «su» (para el admin, que habla de la tienda).
-export function quedanPublicados(n, { tercera = false } = {}) {
+// sinPalabra: «quedan publicados sus 25 primeros» (con 1 dice igual «producto»).
+export function quedanPublicados(n, { tercera = false, sinPalabra = false } = {}) {
   if (Number(n) === 1) return `queda publicado ${tercera ? 'su' : 'tu'} primer producto`
-  return `quedan publicados ${tercera ? 'sus' : 'tus'} ${n} primeros productos`
+  return `quedan publicados ${tercera ? 'sus' : 'tus'} ${n} primeros${sinPalabra ? '' : ' productos'}`
+}
+
+const FECHA_CORTA = new Intl.DateTimeFormat('es-AR', { day: 'numeric', month: 'numeric', timeZone: 'America/Argentina/Buenos_Aires' })
+
+// El texto de la confirmación de «Quitar condiciones» cuando la tienda ya
+// pagó el mes en curso de su plan a medida (va después de «¿Quitar el plan a
+// medida?»). quitar: lo que devuelve el GET de /api/admin/vendedores/[id]/plan
+//   { monto, pagadoHasta, topeAntes, topeDespues, sePausarian, cobroBajaA }
+// Con productos para pausar:
+//   «Ya pagó $200 este mes, hasta el 8/12. Si quitás las condiciones ahora, su
+//   tope baja hoy de 30 a 25 productos, aunque el mes ya está pago: se pausa 1
+//   producto y quedan publicados sus 25 primeros. Lo ya cobrado no se devuelve
+//   solo.»
+// Sin productos para pausar: «… aunque el mes ya está pago. Hoy no se pausa
+// ningún producto. Lo ya cobrado no se devuelve solo.»
+// «El cobro baja a $10.000 desde el próximo, el 8/12.» va antes de «Lo ya
+// cobrado…» solo si el cobro baja.
+export function textoAlQuitarPlanPagado(quitar) {
+  const q = quitar || {}
+  const ms = Date.parse(q.pagadoHasta ?? '')
+  const hasta = Number.isFinite(ms) ? FECHA_CORTA.format(new Date(ms)) : ''
+  const despues = Number.isInteger(q.topeDespues) ? cantidad(q.topeDespues, 'producto', 'productos') : null
+  const baja = !despues ? 'su tope baja hoy al del Básico'
+    : Number.isInteger(q.topeAntes) ? `su tope baja hoy de ${q.topeAntes} a ${despues}`
+      : `su tope baja hoy a ${despues}`
+  const n = q.sePausarian
+  const pausa = n === null || n === undefined
+    ? `: se pausan los que pasen de ${despues || 'ese tope'}.`
+    : n === 0 ? '. Hoy no se pausa ningún producto.'
+      : `: ${sePausan(n)} y ${quedanPublicados(q.topeDespues, { tercera: true, sinPalabra: true })}.`
+  const cobro = q.cobroBajaA ? ` El cobro baja a ${textoPrecio(q.cobroBajaA)} desde el próximo, el ${hasta}.` : ''
+  return `Ya pagó ${textoPrecio(q.monto)} este mes, hasta el ${hasta}. Si quitás las condiciones ahora, ${baja}, aunque el mes ya está pago${pausa}${cobro} Lo ya cobrado no se devuelve solo.`
 }
 
 // «quedaron publicados tus 10 primeros» / «quedó publicado tu primer producto».
