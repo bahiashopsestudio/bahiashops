@@ -308,7 +308,7 @@ $$;
 -- pausado_con_tope. Cubre los caminos que no pasan por las funciones del plan:
 -- la aprobación y el rechazo de la moderación (src/app/api/admin/productos/
 -- [id]/moderacion/route.js), el rechazo por una denuncia
--- (privado.rechazar_producto_denunciado, 035) y el reenvío de un rechazado
+-- (privado.rechazar_producto, 035) y el reenvío de un rechazado
 -- (guardar_producto, 047). Corre antes del check, así nunca lo rompe.
 -- ---------------------------------------------------------------------------
 create or replace function privado.productos_marca_del_plan()
