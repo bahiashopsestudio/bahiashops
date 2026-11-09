@@ -65,6 +65,21 @@ export function validarPedidoLocalShops(cuerpo) {
   return { ok: true, provincia: cuerpo.provincia, ciudad }
 }
 
+// Quien se anota en /servicios: { email, rubro }, los dos obligatorios. El email
+// sale en minúscula y sin espacios (así lo guarda la base, migración 053); el
+// rubro, recortado y como lo escriben. Los mensajes son los de la página.
+export const MAX_RUBRO = 80
+export function validarInteresServicios(cuerpo) {
+  const email = comoTexto(cuerpo?.email).toLowerCase()
+  if (!emailValido(email)) return { ok: false, campo: 'email', error: 'Revisá el email: parece que le falta algo.' }
+  if (typeof cuerpo?.rubro !== 'string') return { ok: false, campo: 'rubro', error: 'Contanos qué servicio ofrecés.' }
+  const rubro = cuerpo.rubro.trim()
+  if (!rubro) return { ok: false, campo: 'rubro', error: 'Contanos qué servicio ofrecés.' }
+  if (rubro.length > MAX_RUBRO) return { ok: false, campo: 'rubro', error: `Puede tener hasta ${MAX_RUBRO} caracteres.` }
+  if (CONTROL.test(rubro)) return { ok: false, campo: 'rubro', error: 'Revisá lo que escribiste: tiene caracteres que no van.' }
+  return { ok: true, email, rubro }
+}
+
 // Interesados en vender alimentos: { nombre, queHace } obligatorios;
 // { whatsapp, email } opcionales.
 export function validarLead(cuerpo) {

@@ -90,6 +90,10 @@ export default function PrivacidadPage() {
 
               <p>Si nos pedís Local Shops en tu ciudad, guardamos la provincia, la ciudad y la fecha, sin datos de contacto.</p>
 
+              <h3 className="font-semibold text-[#0a0a0a] mt-4 mb-1.5">Si te anotás en Servicios</h3>
+              <p>Cuando te anotás para sumarte a Servicios, guardamos el email y el rubro que escribís, y la fecha. Lo usamos solo para avisarte cuando abramos Servicios y para saber por qué rubros empezar. No lo compartimos con nadie, salvo los proveedores de servicios indicados en esta política.</p>
+              <p>Se borra si eliminás la cuenta que tiene ese email, o antes si nos lo pedís escribiendo a <a href={`mailto:${EMAIL_LEGAL}`} className="underline underline-offset-2 hover:text-[#4164fe]">{EMAIL_LEGAL}</a>.</p>
+
               <h3 className="font-semibold text-[#0a0a0a] mt-4 mb-1.5">Datos de navegación</h3>
               <p>Información técnica como dirección IP, tipo de navegador, sistema operativo, páginas visitadas y duración de la visita. Estos datos se recolectan de forma automática y no permiten identificarte personalmente.</p>
             </Seccion>
@@ -105,6 +109,7 @@ export default function PrivacidadPage() {
                 <li>Facilitar la comunicación entre compradores y vendedores cuando sea necesario para completar una transacción.</li>
                 <li>Enviar notificaciones relacionadas con tus pedidos (confirmación de pago, despacho, etc.).</li>
                 <li>Avisarte si Bahía Shops llega a la ciudad que nos indicaste, si nos la pediste.</li>
+                <li>Avisarte cuando abramos Servicios, si te anotaste.</li>
                 <li>Gestionar la moderación de productos publicados.</li>
                 <li>Mejorar la experiencia de uso de la Plataforma y sus funcionalidades.</li>
                 <li>Cumplir con obligaciones legales y responder a requerimientos de autoridades competentes.</li>

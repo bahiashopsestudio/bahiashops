@@ -35,6 +35,7 @@ const MATRIZ = {
   mercadopago_cuentas: ["", ""], vendedor_bloqueos: ["", ""], ideas_admin: ["", ""], pagos_dobles: ["", ""],
   mensajes_contacto: ["", ""], leads_gastronomia: ["", ""], envio_zona_fallas: ["", ""], votos_funciones: ["", ""],
   denuncias_productos: ["", ""], // 035
+  servicios_interesados: ["", ""], // 053
 }
 const priv = { SELECT: "select", INSERT: "insert", UPDATE: "update", DELETE: "delete" }
 

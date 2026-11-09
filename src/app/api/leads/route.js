@@ -51,7 +51,7 @@ export async function POST(request) {
       subject: `🍳 Nuevo lead gastronómico: ${enUnaLinea(nombre)}`,
       html: `
         <div style="font-family: sans-serif; max-width: 500px;">
-          <h2 style="margin-bottom: 4px;">Nuevo interesado en planes gastronómicos</h2>
+          <h2 style="margin-bottom: 4px;">Nuevo interesado en gastronomía: comida para el día</h2>
           <p style="color: #666; margin-top: 0;">Alguien quiso registrarse como vendedor de alimentos frescos/preparados.</p>
           <hr style="border: none; border-top: 1px solid #eee;" />
           <p><strong>Nombre:</strong> ${escapar(nombre)}</p>

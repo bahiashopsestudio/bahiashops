@@ -372,7 +372,7 @@ export default function FormularioVendedor({ userId, panel = '/vendedor/perfil' 
               <div>
                 <p className="text-sm font-medium text-[#0a0a0a] m-0">¡Nos encanta que quieras sumarte!</p>
                 <p className={`mt-1 mb-0 ${ayudaClasses}`} style={fuenteAyuda}>
-                  Estamos preparando planes especiales para profesionales que prestan servicios. Dejanos tus datos y te contactamos cuando estén listos.
+                  Por ahora, en gastronomía solo se pueden vender productos envasados y no perecederos. Si hacés comida para el día, dejanos tus datos y te avisamos si eso cambia.
                 </p>
               </div>
               <label className="flex flex-col gap-1.5">
@@ -415,7 +415,7 @@ export default function FormularioVendedor({ userId, panel = '/vendedor/perfil' 
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-center">
               <p className="text-lg m-0" style={{ ...fuenteTitulo, color: '#065f46' }}>¡Gracias!</p>
               <p className="text-sm text-emerald-700 mt-2 mb-0">
-                Recibimos tus datos. Te vamos a contactar cuando los planes para gastronómicos estén listos.
+                Recibimos tus datos. Te avisamos si eso cambia.
               </p>
             </div>
           )}
