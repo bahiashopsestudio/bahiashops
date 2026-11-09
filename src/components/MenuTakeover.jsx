@@ -2,12 +2,15 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { SELLOS } from '@/components/Navbar'
 
+// marcaActivo: el link se resalta cuando estás en esa sección (o una subruta).
 const NAV_LINKS = [
-  { href: '/tesoros', label: 'Descubrí tesoros' },
-  { href: '/mapa', label: 'Mapa' },
+  { href: '/tesoros', label: 'Descubrí tesoros', marcaActivo: true },
+  { href: '/mapa', label: 'Mapa', marcaActivo: true },
+  { href: '/servicios', label: 'Servicios', marcaActivo: true },
   { href: '/sobre-nosotros', label: 'Quiénes somos' },
   { href: '/vender', label: 'Vendé en Bahía Shops' },
 ]
@@ -33,6 +36,8 @@ function HeaderSeccion({ children }) {
 export default function MenuTakeover({ onClose }) {
   const [categorias, setCategorias] = useState([])
   const [esAdmin, setEsAdmin] = useState(false)
+  const pathname = usePathname()
+  const enSeccion = (ruta) => pathname === ruta || !!pathname?.startsWith(`${ruta}/`)
 
   useEffect(() => {
     const supabase = createClient()
@@ -81,22 +86,28 @@ export default function MenuTakeover({ onClose }) {
       <div className="px-6 pb-16">
         {/* ── Links de navegación ── */}
         <div className="flex flex-col">
-          {NAV_LINKS.map((link) => (
-            <Link
-              key={link.label}
-              href={link.href}
-              onClick={onClose}
-              style={{
-                fontFamily: "'Inter', sans-serif",
-                fontSize: '15px',
-                fontWeight: 300,
-                color: '#0a0a0a',
-                padding: '12px 0',
-              }}
-            >
-              {link.label}
-            </Link>
-          ))}
+          {NAV_LINKS.map((link) => {
+            // Acá todos los links ya van en negro pleno: el activo se distingue
+            // por el peso.
+            const activo = link.marcaActivo && enSeccion(link.href)
+            return (
+              <Link
+                key={link.label}
+                href={link.href}
+                onClick={onClose}
+                aria-current={activo ? 'page' : undefined}
+                style={{
+                  fontFamily: "'Inter', sans-serif",
+                  fontSize: '15px',
+                  fontWeight: activo ? 500 : 300,
+                  color: '#0a0a0a',
+                  padding: '12px 0',
+                }}
+              >
+                {link.label}
+              </Link>
+            )
+          })}
         </div>
 
         {/* ── Categorías ── */}

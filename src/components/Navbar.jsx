@@ -150,6 +150,9 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
   const showDark = isSolid || pasoHero
 
   const linkColor = showDark ? 'rgba(10,10,10,0.6)' : 'rgba(255,255,255,1)'
+  // El link de la sección en la que estás (o una subruta) va en negro pleno.
+  const enSeccion = (ruta) => pathname === ruta || !!pathname?.startsWith(`${ruta}/`)
+  const colorDe = (ruta) => (enSeccion(ruta) && showDark ? '#0a0a0a' : linkColor)
   const iconColorClass = showDark
     ? 'text-[#0a0a0a] hover:text-[#0a0a0a]/60'
     : 'text-white hover:text-white/70'
@@ -171,10 +174,10 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
           </Link>
 
           {/* Zona 2: Navegación principal */}
-          <div className="flex items-center gap-5 ml-12">
+          <div className="flex items-center gap-4 xl:gap-5 ml-12">
             <button
               onClick={() => setCategoriasAbiertas((v) => !v)}
-              className="inline-flex items-center gap-2 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-2 whitespace-nowrap transition-colors cursor-pointer"
               style={{
                 fontFamily: "'Inter', sans-serif",
                 fontWeight: 500,
@@ -203,25 +206,34 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
                 </svg>
               )}
             </button>
-            <Link href="/tesoros" className="text-[13px] font-light transition-colors" style={{ color: linkColor }}>
-              Descubrí tesoros
-            </Link>
-            <Link href="/mapa" className="text-[13px] font-light transition-colors" style={{ color: linkColor }}>
-              Mapa
-            </Link>
+            {[
+              { href: '/tesoros', texto: 'Descubrí tesoros' },
+              { href: '/mapa', texto: 'Mapa' },
+              { href: '/servicios', texto: 'Servicios' },
+            ].map((l) => (
+              <Link
+                key={l.href}
+                href={l.href}
+                aria-current={enSeccion(l.href) ? 'page' : undefined}
+                className="text-[13px] font-light whitespace-nowrap transition-colors"
+                style={{ color: colorDe(l.href) }}
+              >
+                {l.texto}
+              </Link>
+            ))}
           </div>
 
           {/* Zona 3: Secciones */}
-          <div className="flex items-center gap-5 ml-auto mr-6">
+          <div className="flex items-center gap-4 xl:gap-5 ml-auto mr-6">
             {/* Para todos: quien ya tiene tienda ve en /vender «Ir a Mi negocio». */}
-            <Link href="/vender" className="text-[13px] font-light transition-colors" style={{ color: linkColor }}>
+            <Link href="/vender" className="text-[13px] font-light whitespace-nowrap transition-colors" style={{ color: linkColor }}>
               Vendé en Bahía Shops
             </Link>
-            <Link href="/sobre-nosotros" className="text-[13px] font-light transition-colors" style={{ color: linkColor }}>
+            <Link href="/sobre-nosotros" className="text-[13px] font-light whitespace-nowrap transition-colors" style={{ color: linkColor }}>
               Quiénes somos
             </Link>
             {esAdmin && (
-              <Link href="/admin" className="text-[13px] font-light transition-colors" style={{ color: linkColor }}>
+              <Link href="/admin" className="text-[13px] font-light whitespace-nowrap transition-colors" style={{ color: linkColor }}>
                 Admin
               </Link>
             )}
