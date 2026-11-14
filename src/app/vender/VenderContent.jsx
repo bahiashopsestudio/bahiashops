@@ -22,11 +22,13 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import Navbar from '@/components/Navbar'
 import HeroVideo from '@/components/HeroVideo'
+import PastillaComision from '@/components/PastillaComision'
+import LineaToldo from '@/components/LineaToldo'
 import MenuTakeover from '@/components/MenuTakeover'
 import ModalContacto from '@/components/ModalContacto'
 import ModalSuscripcion from '@/components/ModalSuscripcion'
-import { EMAIL_CONTACTO } from '@/lib/contacto'
-import { FONDO_BAHIA, CELESTE_BAHIA } from '@/lib/coloresBahia'
+import { FONDO_BAHIA, CELESTE_BAHIA, CELESTE_CLARO, AMARILLO_BAHIA, LADRILLO_BAHIA } from '@/lib/coloresBahia'
+import { estiloCuadrille } from '@/lib/cuadrille'
 
 const ALTA = '/vendedor/nuevo'
 // Sin tienda, «Sumarme con el Básico» pasa por el alta de tienda y al terminar
@@ -40,6 +42,7 @@ const SUAVE = 'rgba(10,10,10,0.62)'
 const TENUE = 'rgba(10,10,10,0.42)'
 const BEIGE = '#f4e9e1'
 const AZUL = '#4164fe'
+const NARANJA_BAHIA = '#ff5a1f'
 
 const DISPLAY = "'Fraunces', Georgia, 'Times New Roman', serif"
 const TEXTO = "'Poppins', system-ui, sans-serif"
@@ -47,7 +50,10 @@ const UI = "'Inter', system-ui, sans-serif"
 
 const MARCO = 'pl-[max(16px,env(safe-area-inset-left))] pr-[max(16px,env(safe-area-inset-right))]'
 const COL = 'max-w-[1080px] mx-auto'
-const FOCO = 'focus-visible:outline-2 focus-visible:outline-[#4164fe] focus-visible:outline-offset-[3px]'
+// Lo que va casi de punta a punta (la tarjeta de los beneficios): 10 px a
+// los costados en el celular y 16 px desde md.
+const MARGEN_TARJETA = 'mx-[10px] md:mx-4'
+const FOCO ='focus-visible:outline-2 focus-visible:outline-[#4164fe] focus-visible:outline-offset-[3px]'
 
 const titulo = { fontFamily: DISPLAY, fontWeight: 500, letterSpacing: '-0.02em', margin: 0, textWrap: 'balance' }
 const etiqueta = { fontFamily: UI, fontSize: '11px', fontWeight: 600, letterSpacing: '.12em', textTransform: 'uppercase', color: TENUE }
@@ -68,7 +74,10 @@ function Boton({ href, children }) {
 // El botón de la portada, sobre el video: blanco con texto negro; con el
 // mouse encima se invierte (transparente, borde y texto blancos). Los colores
 // van en línea, así que el hover es un estado.
-function BotonHero({ href, children }) {
+//   fondoEncima  el fondo con el mouse encima (transparente en la portada;
+//                azul en el cierre, para que no se vea el cuadrillé detrás)
+//   contorno     el color del foco de teclado (azul; blanco sobre la tarjeta azul)
+function BotonHero({ href, children, fondoEncima = 'transparent', contorno = AZUL }) {
   const [encima, setEncima] = useState(false)
   return (
     <Link
@@ -78,11 +87,11 @@ function BotonHero({ href, children }) {
       className="inline-block text-[13px] md:text-[14px] px-6 py-3 md:px-7 md:py-3.5 rounded-[4px] transition-colors duration-200 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-[3px]"
       style={{
         // El contorno solo aparece con foco de teclado (las clases); el color, acá.
-        outlineColor: AZUL,
+        outlineColor: contorno,
         fontFamily: UI,
         fontWeight: 500,
         border: '1px solid #fff',
-        background: encima ? 'transparent' : '#fff',
+        background: encima ? fondoEncima : '#fff',
         color: encima ? '#fff' : TINTA,
       }}
     >
@@ -112,7 +121,7 @@ function BotonAccion({ onClick, children }) {
 function Cabeza({ etiqueta: texto, children, bajada: b, claro = false }) {
   return (
     <div className="flex flex-col gap-3 mb-9">
-      <span style={{ ...etiqueta, ...(claro ? { color: 'rgba(156,195,234,0.7)' } : {}) }}>{texto}</span>
+      <span style={{ ...etiqueta, color: claro ? 'rgba(156,195,234,0.7)' : TINTA }}>{texto}</span>
       <h2 className="text-[clamp(28px,4vw,38px)] leading-[1.15]" style={{ ...titulo, ...(claro ? { color: CELESTE_BAHIA } : {}) }}>
         {children}
       </h2>
@@ -121,35 +130,40 @@ function Cabeza({ etiqueta: texto, children, bajada: b, claro = false }) {
   )
 }
 
+// Los ítems, las pastillas, las tarjetas y los precios de «Planes»: van sobre
+// tarjetas de color, así que todo en negro (tildes, rayitas y bordes también).
 function Item({ si = true, children }) {
   return (
-    <li className="grid grid-cols-[18px_1fr] gap-2 items-start text-[14px]" style={{ color: si ? TINTA : TENUE }}>
+    <li className="grid grid-cols-[18px_1fr] gap-2 items-start text-[14px]" style={{ color: TINTA }}>
       {si ? (
-        <span aria-hidden="true" className="mt-[7px] w-[9px] h-[5px] -rotate-45" style={{ borderLeft: `1.5px solid ${FONDO_BAHIA}`, borderBottom: `1.5px solid ${FONDO_BAHIA}` }} />
+        <span aria-hidden="true" className="mt-[7px] w-[9px] h-[5px] -rotate-45" style={{ borderLeft: `1.5px solid ${TINTA}`, borderBottom: `1.5px solid ${TINTA}` }} />
       ) : (
-        <span aria-hidden="true" className="mt-[10px] w-[9px] h-[1.5px]" style={{ background: TENUE }} />
+        <span aria-hidden="true" className="mt-[10px] w-[9px] h-[1.5px]" style={{ background: TINTA }} />
       )}
       <span>{!si && <span className="sr-only">No incluye: </span>}{children}</span>
     </li>
   )
 }
 
-function Pastilla({ azul = false, children }) {
+// Sobre las tarjetas de color: sin relleno, con borde y texto negros.
+function Pastilla({ children }) {
   return (
     <span
       className="px-2 py-1 rounded-full whitespace-nowrap"
-      style={{ fontFamily: UI, fontSize: '10.5px', fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase', background: azul ? AZUL : BEIGE, color: azul ? '#fff' : TINTA }}
+      style={{ fontFamily: UI, fontSize: '10.5px', fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase', background: 'transparent', border: `1px solid ${TINTA}`, color: TINTA }}
     >
       {children}
     </span>
   )
 }
 
-function Plan({ nombre, pastilla, precio, para, destacado = false, pro = false, children, boton, nota }) {
+// Cada plan es una tarjeta de color, sin borde ni sombra. La lista ocupa el
+// espacio que sobra, así el botón queda abajo de todo en las tres.
+function Plan({ nombre, pastilla, precio, para, fondo, children, boton, nota }) {
   return (
     <article
-      className={`rounded-2xl px-6 py-7 flex flex-col gap-[18px] min-w-0 border ${pro ? 'border-dashed' : ''}`}
-      style={{ background: pro ? 'transparent' : '#fff', borderColor: destacado ? TINTA : 'rgba(10,10,10,0.10)' }}
+      className="rounded-[20px] md:rounded-[24px] px-6 py-7 md:px-9 md:py-10 flex flex-col gap-[18px] min-w-0"
+      style={{ background: fondo, color: TINTA }}
     >
       <div className="flex flex-col gap-1.5">
         <div className="flex items-baseline justify-between gap-2.5 flex-wrap">
@@ -157,7 +171,7 @@ function Plan({ nombre, pastilla, precio, para, destacado = false, pro = false, 
           {pastilla}
         </div>
         {precio}
-        <p className="m-0 text-[14px]" style={{ color: SUAVE }}>{para}</p>
+        <p className="m-0 text-[14px]" style={{ color: TINTA }}>{para}</p>
       </div>
       <ul className="list-none p-0 m-0 flex flex-col gap-2.5 flex-1">{children}</ul>
       {boton}
@@ -170,7 +184,7 @@ function Precio({ children, chico = false }) {
   return (
     <div
       style={chico
-        ? { fontFamily: UI, fontSize: '20px', fontWeight: 700, letterSpacing: '-0.02em', color: TENUE }
+        ? { fontFamily: UI, fontSize: '20px', fontWeight: 700, letterSpacing: '-0.02em', color: TINTA }
         : { fontFamily: UI, fontSize: '30px', fontWeight: 700, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}
     >
       {children}
@@ -193,11 +207,53 @@ function Pregunta({ pregunta, children }) {
   )
 }
 
+// La cabeza de «Cómo funciona» y «Qué te da»: etiqueta en negro y título del
+// tamaño del de la portada. Las otras secciones siguen con Cabeza.
+function CabezaGrande({ etiqueta: texto, children }) {
+  return (
+    <div className="flex flex-col gap-3 mb-9">
+      <span style={{ ...etiqueta, color: TINTA }}>{texto}</span>
+      <h2 className="text-[28px] md:text-[42px]" style={{ ...titulo, lineHeight: 1.12, color: TINTA }}>
+        {children}
+      </h2>
+    </div>
+  )
+}
+
+// Una etiqueta de sección escrita sobre media curva (la de «Cuánto cuesta»):
+// la letra de las etiquetas (Inter 600, 11 px, mayúsculas) sobre un arco,
+// centrada. El arco es un círculo de radio 100 con el centro abajo; el texto
+// usa solo su parte de arriba, así que la caja recorta lo que no se ve.
+function EtiquetaEnArco({ color, children }) {
+  return (
+    <svg width="200" height="32" viewBox="0 0 200 32" role="img" aria-label={children} style={{ overflow: 'visible' }}>
+      <path id="arco-etiqueta" d="M 0 110 A 100 100 0 0 1 200 110" fill="none" />
+      <text
+        aria-hidden="true"
+        style={{ fontFamily: UI, fontSize: '11px', fontWeight: 600, letterSpacing: '.12em', textTransform: 'uppercase' }}
+        fill={color}
+      >
+        <textPath href="#arco-etiqueta" startOffset="50%" textAnchor="middle">{children}</textPath>
+      </text>
+    </svg>
+  )
+}
+
+// La letra de los títulos del panel («Mis productos»): Inter 900,
+// tracking-tight. La usan los títulos de los pasos y de los beneficios.
+const tituloInter = { fontFamily: UI, fontWeight: 900, letterSpacing: '-0.025em', margin: 0 }
+const tituloItem = { ...tituloInter, lineHeight: 1.2, color: TINTA }
+// Sus descripciones, del tamaño de la bajada de la portada (con text-[13px] md:text-[15px]).
+const textoItem = { lineHeight: 1.6, color: SUAVE, margin: 0 }
+
 function Beneficio({ titulo: t, children }) {
   return (
-    <div className="py-5 flex flex-col gap-1.5 min-w-0 border-b border-[rgba(10,10,10,0.10)] lg:pb-0 lg:border-b-0 lg:border-t lg:border-t-[#0a0a0a]">
-      <b style={{ fontFamily: UI, fontWeight: 600, fontSize: '15px' }}>{t}</b>
-      <span className="text-[14px]" style={{ color: SUAVE }}>{children}</span>
+    // Va sobre la tarjeta naranja: líneas en negro (abajo en celular y tablet,
+    // arriba en las 5 columnas) y descripción en negro al 80 %, no gris.
+    <div className="py-5 flex flex-col gap-1.5 min-w-0 border-b lg:pb-0 lg:border-b-0 lg:border-t" style={{ borderColor: TINTA }}>
+      {/* Más chicos que en «Cómo funciona»: acá son 5 columnas. */}
+      <h3 style={{ ...tituloItem, fontSize: '15px' }}>{t}</h3>
+      <p style={{ ...textoItem, fontSize: '14px', color: 'rgba(10,10,10,0.8)' }}>{children}</p>
     </div>
   )
 }
@@ -239,16 +295,6 @@ export default function VenderContent({ planes, comision }) {
   const proElegible = pro && !pro.proximamente
   const masDe = basico ? `más de ${basico.tope} productos` : 'más productos'
 
-  const escribinos = (
-    <button
-      type="button"
-      onClick={() => setContactoAbierto(true)}
-      className={`shrink-0 underline underline-offset-[3px] cursor-pointer ${FOCO}`}
-      style={{ fontFamily: UI, fontSize: '14px', fontWeight: 500 }}
-    >
-      Escribinos
-    </button>
-  )
   const sinValores = (
     <button
       type="button"
@@ -311,9 +357,10 @@ export default function VenderContent({ planes, comision }) {
           </HeroVideo>
 
           {/* 2. Cómo funciona */}
-          <section className={`${MARCO} py-[72px]`}>
+          {/* Abajo, poco: la tarjeta naranja de «Qué te da» arranca cerca. */}
+          <section className={`${MARCO} pt-[72px] pb-8 md:pb-10`}>
             <div className={COL}>
-              <Cabeza etiqueta="Cómo funciona">Abrís tu tienda en tres pasos</Cabeza>
+              <CabezaGrande etiqueta="Cómo funciona">Abrís tu tienda en tres pasos</CabezaGrande>
               <ol className="grid grid-cols-3 gap-7 list-none p-0 m-0 max-[760px]:grid-cols-1">
                 {[
                   ['Creá tu tienda', 'Es gratis y te lleva unos minutos: nombre, logo, categoría y dónde estás.'],
@@ -321,20 +368,25 @@ export default function VenderContent({ planes, comision }) {
                   ['Vendé', 'La plata de cada venta va directo a tu cuenta de Mercado Pago. Vos elegís cómo entregás.'],
                 ].map(([t, texto], i) => (
                   <li key={t} className="flex flex-col gap-2.5 pt-5 border-t border-[#0a0a0a] min-w-0">
-                    <span style={{ fontFamily: UI, fontSize: '12px', fontWeight: 600, color: AZUL }}>Paso {i + 1}</span>
-                    <h3 className="text-[22px]" style={titulo}>{t}</h3>
-                    <p className="m-0" style={{ color: SUAVE }}>{texto}</p>
+                    <span style={{ fontFamily: UI, fontSize: '12px', fontWeight: 400, color: TINTA }}>Paso {i + 1}</span>
+                    <h3 className="text-[18px] md:text-[20px]" style={tituloItem}>{t}</h3>
+                    <p className="text-[13px] md:text-[15px]" style={textoItem}>{texto}</p>
                   </li>
                 ))}
               </ol>
             </div>
           </section>
 
-          {/* 3. Qué te da (5 columnas desde 1024 px) */}
-          <section className={`${MARCO} pb-[72px]`}>
+          {/* 3. Qué te da (5 columnas desde 1024 px): una tarjeta naranja casi de
+              punta a punta (10 px a los costados y abajo; 16 px desde md). Adentro,
+              la misma columna que el resto de la página. */}
+          <section
+            className={`${MARCO} ${MARGEN_TARJETA} mb-[10px] md:mb-4 rounded-[20px] md:rounded-[24px] py-14 md:py-20`}
+            style={{ background: NARANJA_BAHIA, color: TINTA }}
+          >
             <div className={COL}>
-              <Cabeza etiqueta="Qué te da Bahía Shops">Lo que tenés desde el primer día</Cabeza>
-              <div className="grid grid-cols-1 border-t border-[rgba(10,10,10,0.10)] lg:grid-cols-5 lg:gap-6 lg:border-t-0">
+              <CabezaGrande etiqueta="Qué te da Bahía Shops">Lo que tenés desde el primer día</CabezaGrande>
+              <div className="grid grid-cols-1 border-t lg:grid-cols-5 lg:gap-6 lg:border-t-0" style={{ borderColor: TINTA }}>
                 <Beneficio titulo="Tu lugar en el mapa">Con dirección exacta o solo la zona, como prefieras.</Beneficio>
                 <Beneficio titulo="Compradores nuevos">Vecinos que buscan en el sitio, en el mapa o en Tesoros.</Beneficio>
                 <Beneficio titulo="Reseñas reales">Solo de quien te compró, y podés responderlas.</Beneficio>
@@ -346,29 +398,42 @@ export default function VenderContent({ planes, comision }) {
             </div>
           </section>
 
-          {/* 4. Cuánto cuesta */}
-          <section id="costos" className={`${MARCO} py-[72px] scroll-mt-20`} style={{ background: FONDO_BAHIA, color: CELESTE_BAHIA }}>
+          {/* 4. Cuánto cuesta: banda de punta a punta con el cuadrillé (verde
+              footer, líneas beige al 45 %) y los textos en beige. Las dos
+              comisiones van en tarjetas beige con el texto en verde. */}
+          <section
+            id="costos"
+            className={`${MARCO} py-14 md:py-20 scroll-mt-20`}
+            style={{ ...estiloCuadrille({ fondo: FONDO_BAHIA, linea: 'rgba(244,233,225,0.45)', grosor: 1 }), color: BEIGE }}
+          >
             <div className={COL}>
-              <Cabeza etiqueta="Cuánto cuesta" claro bajada="Una comisión sobre los productos, nunca sobre el envío. Es la misma en todos los planes.">
-                Pagás solo cuando vendés
-              </Cabeza>
-              <div className="grid grid-cols-2 gap-px rounded-2xl overflow-hidden max-[680px]:grid-cols-1" style={{ background: 'rgba(156,195,234,0.28)' }}>
-                {[
-                  [comision.base, 'Cliente nuevo que te trae Bahía Shops', 'Te encontró buscando en el sitio, en el mapa o en Tesoros.'],
-                  [comision.link, 'Tu propio cliente, por tu link', 'Llegó desde el link que compartiste en tus redes o por WhatsApp.'],
-                ].map(([num, quien, texto]) => (
-                  <div key={quien} className="px-7 py-8 flex flex-col gap-2.5 min-w-0" style={{ background: FONDO_BAHIA }}>
-                    <span className="text-[clamp(56px,9vw,84px)] leading-none" style={{ fontFamily: DISPLAY, fontWeight: 500, letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums' }}>{num}</span>
-                    <span style={{ fontFamily: UI, fontWeight: 600, fontSize: '16px' }}>{quien}</span>
-                    <p className="m-0 text-[14px]" style={{ color: 'rgba(156,195,234,0.82)' }}>{texto}</p>
-                  </div>
-                ))}
+              {/* Cabecera centrada: la etiqueta en arco, el título en Fraunces
+                  como el resto de los títulos de sección. */}
+              <div className="flex flex-col items-center text-center gap-3 mb-9">
+                <EtiquetaEnArco color={BEIGE}>Cuánto cuesta</EtiquetaEnArco>
+                <h2 className="text-[28px] md:text-[42px]" style={{ ...titulo, lineHeight: 1.12, color: BEIGE }}>
+                  Pagás solo cuando vendés
+                </h2>
+                <p style={{ ...bajada, color: 'rgba(244,233,225,0.9)', textWrap: 'balance' }}>
+                  Una comisión sobre los productos, nunca sobre el envío. Es la misma en todos los planes.
+                </p>
               </div>
-              <div className="mt-[22px] flex flex-col gap-1.5 text-[14px]">
-                <span style={{ fontFamily: UI, fontWeight: 600, fontSize: '15px' }}>+ Comisión de Mercado Pago</span>
-                <span>
+              {/* Los dos casos de comisión, en una pastilla que alterna sola.
+                  Mismo ancho que tenían las tarjetas (hasta 760 px, centrada). */}
+              <div className="max-w-[760px] mx-auto">
+                <PastillaComision
+                  casos={[
+                    { porcentaje: comision.base, quien: 'Cliente nuevo que te trae Bahía Shops', explicacion: 'Te encontró buscando en el sitio, en el mapa o en Tesoros.' },
+                    { porcentaje: comision.link, quien: 'Tu propio cliente, por tu link', explicacion: 'Llegó desde el link que compartiste en tus redes o por WhatsApp.' },
+                  ]}
+                />
+              </div>
+              {/* Con el mismo ancho que la pastilla, para que arranque y termine donde ella; justificado. */}
+              <div className="max-w-[760px] mx-auto mt-[22px] flex flex-col gap-1.5 text-[14px]" style={{ textAlign: 'justify' }}>
+                <span style={{ fontFamily: UI, fontWeight: 600, fontSize: '15px', color: BEIGE }}>+ Comisión de Mercado Pago</span>
+                <span style={{ fontFamily: TEXTO, fontWeight: 300, color: 'rgba(244,233,225,0.9)' }}>
                   La cobra Mercado Pago en cualquier venta online y depende del plazo en que elegís recibir la plata.{' '}
-                  <a href={COSTOS_MP} target="_blank" rel="noopener noreferrer" className={`underline ${FOCO}`} style={{ color: CELESTE_BAHIA }}>
+                  <a href={COSTOS_MP} target="_blank" rel="noopener noreferrer" className={`underline ${FOCO}`} style={{ color: BEIGE }}>
                     Revisá cuáles son las de tu negocio
                   </a>.
                 </span>
@@ -377,13 +442,25 @@ export default function VenderContent({ planes, comision }) {
           </section>
 
           {/* 5. Planes */}
-          <section id="planes" className={`${MARCO} py-[72px] scroll-mt-20`}>
-            <div className={COL}>
-              <Cabeza etiqueta="Planes" bajada="Los planes definen cuántos productos mostrás. La comisión sigue igual en todos.">
+          {/* Las tarjetas van en la columna de la página (hasta 1080 px), como
+              antes. El encabezado se alinea con el texto de adentro de las
+              tarjetas: el relleno de la tarjeta (24 px en el celular, 36 px
+              desde md, como la del plan a medida). */}
+          <section id="planes" className={`${MARCO} pt-[72px] scroll-mt-20`}>
+            <div className={`${COL} px-6 md:px-9 mb-7 md:mb-10 flex flex-col`}>
+              <span style={{ ...etiqueta, color: TINTA, marginBottom: '10px' }}>Planes</span>
+              <h2 className="text-[28px] md:text-[42px]" style={{ ...titulo, lineHeight: 1.12, color: TINTA }}>
                 Empezá gratis y crecé cuando quieras
-              </Cabeza>
-              <div className="grid grid-cols-3 gap-4 items-stretch max-[760px]:grid-cols-1">
+              </h2>
+              <p style={{ ...bajada, maxWidth: '420px', marginTop: '12px' }}>
+                Los planes definen cuántos productos mostrás. La comisión sigue igual en todos.
+              </p>
+            </div>
+            <div className={COL}>
+              {/* Tres columnas desde 1024 px; abajo, la del plan a medida a todo el ancho. 4 px entre todas. */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-1 items-stretch">
                 <Plan
+                  fondo={CELESTE_CLARO}
                   nombre={gratis?.nombre || 'Gratis'}
                   precio={<Precio>{gratis?.precio || '$0'}</Precio>}
                   para="Para empezar a vender."
@@ -398,11 +475,11 @@ export default function VenderContent({ planes, comision }) {
                 </Plan>
 
                 <Plan
+                  fondo={AMARILLO_BAHIA}
                   nombre={basico?.nombre || 'Básico'}
-                  destacado
-                  pastilla={<Pastilla azul>Más productos</Pastilla>}
+                  pastilla={<Pastilla>Más productos</Pastilla>}
                   precio={basico
-                    ? <Precio>{basico.precio} <small className="text-[14px] font-medium tracking-normal" style={{ color: SUAVE }}>por mes</small></Precio>
+                    ? <Precio>{basico.precio} <small className="text-[14px] font-medium tracking-normal" style={{ color: TINTA }}>por mes</small></Precio>
                     : null}
                   para="Para mostrar tu catálogo completo."
                   boton={tieneTienda
@@ -421,8 +498,9 @@ export default function VenderContent({ planes, comision }) {
 
                 {proElegible ? (
                   <Plan
+                    fondo={LADRILLO_BAHIA}
                     nombre={pro.nombre}
-                    precio={<Precio>{pro.precio} <small className="text-[14px] font-medium tracking-normal" style={{ color: SUAVE }}>por mes</small></Precio>}
+                    precio={<Precio>{pro.precio} <small className="text-[14px] font-medium tracking-normal" style={{ color: TINTA }}>por mes</small></Precio>}
                     para="Para tiendas con catálogos grandes."
                     boton={<Boton href={destino}>{textoBoton(`Sumarme con el ${pro.nombre}`)}</Boton>}
                   >
@@ -432,16 +510,17 @@ export default function VenderContent({ planes, comision }) {
                   </Plan>
                 ) : (
                   <Plan
+                    fondo={LADRILLO_BAHIA}
                     nombre={pro?.nombre || 'Pro'}
-                    pro
                     pastilla={<Pastilla>Próximamente</Pastilla>}
                     precio={<Precio chico>Lo estamos desarrollando</Precio>}
                     para="Para tiendas con catálogos grandes."
                     boton={
+                      // Apagado: en negro con opacidad.
                       <span
                         aria-disabled="true"
                         className="inline-flex items-center justify-center px-[22px] py-[13px] rounded-[4px] border cursor-not-allowed"
-                        style={{ fontFamily: UI, fontSize: '14px', fontWeight: 600, color: TENUE, borderColor: 'rgba(10,10,10,0.10)' }}
+                        style={{ fontFamily: UI, fontSize: '14px', fontWeight: 600, color: 'rgba(10,10,10,0.45)', borderColor: 'rgba(10,10,10,0.35)' }}
                       >
                         Próximamente
                       </span>
@@ -451,36 +530,52 @@ export default function VenderContent({ planes, comision }) {
                     <Item>Más herramientas para tu tienda</Item>
                   </Plan>
                 )}
+
+                {/* El plan a medida: a todo el ancho de las tres, mientras no se pueda elegir el Pro.
+                    Texto a la izquierda y «Escribinos» a la derecha; en el celular, debajo. */}
+                {!proElegible && (
+                  <aside
+                    className="lg:col-span-3 rounded-[20px] md:rounded-[24px] flex flex-col items-start gap-3 md:flex-row md:items-center md:justify-between md:gap-6"
+                    style={{ background: NARANJA_BAHIA, color: TINTA, padding: '32px 36px' }}
+                  >
+                    <div className="flex flex-col gap-1.5 min-w-0">
+                      <b style={{ fontFamily: DISPLAY, fontWeight: 500, fontSize: '20px', lineHeight: 1.2, letterSpacing: '-0.01em' }}>
+                        ¿Tenés {masDe}?
+                      </b>
+                      <p className="m-0 text-[14px]" style={{ color: TINTA }}>Escribinos y te armamos un plan a medida mientras llega el Pro.</p>
+                    </div>
+                    {/* El botón negro de las otras tarjetas; abre el formulario de contacto. */}
+                    <div className="shrink-0">
+                      <BotonAccion onClick={() => setContactoAbierto(true)}>Plan a medida</BotonAccion>
+                    </div>
+                  </aside>
+                )}
               </div>
+            </div>
 
-              {/* El plan a medida: una franja debajo de los tres planes, mientras no se pueda elegir el Pro */}
-              {!proElegible && (
-                <aside
-                  className="mt-4 rounded-2xl px-7 py-6 flex items-center justify-between gap-6 max-[640px]:flex-col max-[640px]:items-start max-[640px]:gap-3 max-[640px]:px-5"
-                  style={{ background: BEIGE }}
-                >
-                  <div className="flex flex-col gap-1.5 min-w-0">
-                    <b style={{ fontFamily: DISPLAY, fontWeight: 500, fontSize: '20px', lineHeight: 1.2, letterSpacing: '-0.01em' }}>
-                      ¿Tenés {masDe}?
-                    </b>
-                    <p className="m-0 text-[14px]" style={{ color: SUAVE }}>Escribinos y te armamos un plan a medida mientras llega el Pro.</p>
-                  </div>
-                  {escribinos}
-                </aside>
-              )}
-
-              <div className="mt-[22px] text-[13px] flex flex-col gap-1" style={{ color: SUAVE }}>
+            {/* La letra chica, en la columna de la página y centrada. */}
+            <div>
+              <div className={`${COL} mt-[22px] text-[13px] flex flex-col gap-1 text-center`} style={{ color: SUAVE }}>
                 <span>Cuentan todos tus productos, también los pausados. Los talles y colores de un producto cuentan como uno solo.</span>
-                <span>El precio se revisa cada 3 meses y te avisamos antes de cualquier cambio.</span>
-                <span>Te das de baja cuando quieras desde tu panel.</span>
+                <span>El precio se revisa cada 3 meses y te avisamos antes de cualquier cambio. Te das de baja cuando quieras desde tu panel.</span>
               </div>
             </div>
           </section>
 
+          {/* La línea de toldo entre «Planes» y «Preguntas»: medios círculos
+              verdes a lo ancho de la columna de texto (tantos como entren,
+              centrados), con todo el espacio entre las dos secciones (56 / 80
+              px arriba y abajo; ninguna de las dos suma relleno de ese lado). */}
+          <div className={`${MARCO} my-14 md:my-20`}>
+            <div className={COL}>
+              <LineaToldo curvas="llenar" onda={25} alto={11} color={FONDO_BAHIA} />
+            </div>
+          </div>
+
           {/* 6. Preguntas */}
           <section className={`${MARCO} pb-[72px]`}>
             <div className={COL}>
-              <Cabeza etiqueta="Preguntas frecuentes">Lo que nos suelen preguntar</Cabeza>
+              <Cabeza etiqueta="Preguntas frecuentes">¿Qué te estás preguntando?</Cabeza>
               <div className="border-t border-[rgba(10,10,10,0.10)]">
                 <Pregunta pregunta="¿Necesito cuenta de Mercado Pago?">
                   Elegimos abrir nuestra web con la billetera virtual más popular y confiable de nuestro país. Por eso, <strong className="font-medium">sí, necesitás una billetera de Mercado Pago</strong>. La conectás desde tu panel y cada venta se cobra directo en tu cuenta. A Bahía Shops solo le llega su comisión.
@@ -512,19 +607,35 @@ export default function VenderContent({ planes, comision }) {
             </div>
           </section>
 
-          {/* Cierre */}
-          <section className={`${MARCO} py-[72px] text-center`} style={{ background: BEIGE }}>
-            <div className={`${COL} flex flex-col items-center gap-[18px]`}>
-              <h2 className="text-[clamp(28px,4vw,38px)] leading-[1.15]" style={titulo}>
-                Bahía está llena de proyectos por conocer. Sumá el tuyo.
+          {/* Cierre: una tarjeta azul casi de punta a punta (como la de los
+              beneficios), con el título arriba y el cuadrillé abajo, recortado
+              por las esquinas; el botón va encima del cuadrillé, centrado. */}
+          <section
+            className={`${MARGEN_TARJETA} mb-[10px] md:mb-4 rounded-[20px] md:rounded-[24px] overflow-hidden flex flex-col`}
+            style={{ background: AZUL }}
+          >
+            {/* Más aire abajo (40 / 48 px), para que el cuadrillé no quede pegado al título. */}
+            <div className="px-6 pt-14 pb-10 md:px-12 md:pt-[82px] md:pb-12 flex flex-col items-center text-center">
+              <h2 className="text-[clamp(28px,4vw,38px)] leading-[1.15]" style={{ ...titulo, color: '#fff' }}>
+                <span className="block md:whitespace-nowrap">Bahía está llena de proyectos por conocer.</span>
+                {/* Un poco más chica que la frase de arriba (el 65 %), en la letra de los títulos de los pasos y los beneficios. */}
+                <span className="block" style={{ ...tituloInter, fontSize: '0.65em', marginTop: '14px' }}>¡Sumá el tuyo!</span>
               </h2>
-              <Boton href={destino}>{textoBoton('Sumá tu tienda gratis')}</Boton>
-              <p className="text-center" style={bajada}>
-                ¿Dudas? Escribinos a{' '}
-                <a href={`mailto:${EMAIL_CONTACTO}`} className={`underline underline-offset-2 ${FOCO}`} style={{ fontFamily: UI, fontWeight: 500, color: TINTA }}>
-                  {EMAIL_CONTACTO}
-                </a>
-              </p>
+            </div>
+            {/* El cuadrillé: celeste sobre el azul de la tarjeta. Arranca con las
+                verticales sueltas (las líneas van en el medio de cada cuadro, así
+                la primera horizontal queda 24 px más abajo). Una franja baja
+                (120 / 130 px); encima, el botón, centrado y un poco más arriba
+                que el medio (20 px en el celular, 28 px desde md). */}
+            <div className="relative shrink-0 h-[120px] md:h-[130px] flex items-center justify-center px-6">
+              <div
+                aria-hidden="true"
+                className="absolute inset-0"
+                style={estiloCuadrille({ fondo: 'transparent', linea: 'rgba(156,195,234,0.75)' })}
+              />
+              <div className="relative [--sube:-20px] md:[--sube:-28px]" style={{ transform: 'translateY(var(--sube))' }}>
+                <BotonHero href={destino} fondoEncima={AZUL} contorno="#fff">{textoBoton('Sumá tu tienda gratis')}</BotonHero>
+              </div>
             </div>
           </section>
         </main>

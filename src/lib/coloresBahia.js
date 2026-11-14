@@ -8,3 +8,11 @@
 
 export const FONDO_BAHIA = '#015444'
 export const CELESTE_BAHIA = '#9cc3ea'
+
+// Los de la pastilla de comisión de /vender (PastillaComision): el beige de
+// la página, un celeste claro y el amarillo.
+export const BEIGE_BAHIA = '#f4e9e1'
+export const CELESTE_CLARO = '#c6e4ff'
+export const AMARILLO_BAHIA = '#fec830'
+// El de la tarjeta del plan Pro en /vender.
+export const LADRILLO_BAHIA = '#da3e25'
