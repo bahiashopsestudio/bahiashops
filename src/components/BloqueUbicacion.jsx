@@ -10,7 +10,7 @@
 //
 // En los dos casos se busca con calle y número.
 //   Dirección exacta: la dirección se guarda ("calle número"), con el punto
-//     exacto y la casita arrastrable.
+//     exacto y el punto arrastrable.
 //   Solo la zona: la calle y el número sirven solo para buscar en el mapa. No
 //     se guardan, no se mandan a la ruta y no se escriben en ningún log: al
 //     servidor le llega solo el centro del aro. El aro aparece en la celda de
@@ -18,7 +18,7 @@
 //     se ve es exactamente lo que se guarda.
 //
 // Al cambiar de opción se conserva el punto. En zona, redondeado. Al volver a
-// la dirección exacta, la casita regresa al último punto exacto de esta visita
+// la dirección exacta, el punto regresa al último punto exacto de esta visita
 // (ultimoExacto), que queda solo acá, en el navegador: nunca va en onChange
 // mientras la opción sea la zona.
 
@@ -28,7 +28,7 @@ import {
   inputClasses, selectClasses, fuenteAyuda, ayudaClasses, labelClasses, btnNegro, btnNegroInactivo,
 } from '@/lib/estilosVendedor'
 import LineaBarrio from '@/components/LineaBarrio'
-import { CASA, CASA_VIEWBOX, CLASE_ALTO_MAPA_UBICACION, PIELES } from '@/lib/mapaEstilo'
+import { CLASE_ALTO_MAPA_UBICACION, PIELES } from '@/lib/mapaEstilo'
 
 const MapaUbicacion = dynamic(() => import('@/app/vendedor/nuevo/MapaUbicacion'), {
   ssr: false,
@@ -47,7 +47,7 @@ const ZOOM_ZONA = 14.5
 const ZOOM_SIN_DIRECCION = 13
 const zoomDe = (direccionVisible) => (direccionVisible ? ZOOM_EXACTA : ZOOM_ZONA)
 
-const NO_ENCONTRADA = 'No encontramos esa dirección. Arrastrá el aro (o la casita) hasta tu zona.'
+const NO_ENCONTRADA = 'No encontramos esa dirección. Arrastrá el aro (o el punto) hasta tu zona.'
 
 const VERDE = PIELES.claro.pin
 const NOTA_EXACTA = 'Tu dirección escrita no se muestra en la tienda: la recibe solo quien te compra con retiro.'
@@ -81,9 +81,9 @@ const ICONO_ARO = {
   viewBox: '0 0 26 26',
   dibujo: <circle cx="13" cy="13" r="10" fill="none" stroke={VERDE} strokeWidth="3.5" />,
 }
-const ICONO_CASITA = {
-  viewBox: CASA_VIEWBOX,
-  dibujo: <path d={CASA} fill={VERDE} />,
+const ICONO_PUNTO = {
+  viewBox: '0 0 26 26',
+  dibujo: <circle cx="13" cy="13" r="7" fill={VERDE} />,
 }
 
 // Búsqueda estructurada: calle y número por un lado y la ciudad por otro.
@@ -211,7 +211,7 @@ export default function BloqueUbicacion({ localidades = [], barrios = [], inicia
   }
 
   // Conserva el punto: el mapa lo redondea si pasa a zona, y al volver a la
-  // dirección exacta la casita regresa al último punto exacto que hubo.
+  // dirección exacta el punto regresa al último punto exacto que hubo.
   function cambiarOpcion(visible) {
     if (visible === direccionVisible) return
     setDireccionVisible(visible)
@@ -248,7 +248,7 @@ export default function BloqueUbicacion({ localidades = [], barrios = [], inicia
       }
     } catch {
       setMapaVisible(true)
-      setAvisoMapa('Hubo un problema al buscar. Arrastrá el aro (o la casita) hasta tu zona.')
+      setAvisoMapa('Hubo un problema al buscar. Arrastrá el aro (o el punto) hasta tu zona.')
       setPosicionBuscada({ ...CENTRO_BB, zoom: ZOOM_SIN_DIRECCION, nonce: Date.now() })
     }
     enCurso.current = false
@@ -308,9 +308,9 @@ export default function BloqueUbicacion({ localidades = [], barrios = [], inicia
               <TarjetaOpcion
                 elegida={direccionVisible}
                 onElegir={() => cambiarOpcion(true)}
-                icono={ICONO_CASITA}
+                icono={ICONO_PUNTO}
                 titulo="La dirección exacta"
-                texto="Para locales a la calle. Se ve la casita en tu puerta."
+                texto="Para locales a la calle. Se ve un punto en tu puerta."
               />
             </div>
           </div>

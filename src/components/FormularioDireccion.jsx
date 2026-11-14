@@ -101,7 +101,7 @@ export default function FormularioDireccion({ onGuardada, onCancelar, esPrimera 
   const [mostrarFallback, setMostrarFallback] = useState(false);
   const [barrioFallo, setBarrioFallo] = useState(false);
   // Arriba del mapa: la búsqueda cayó en otra ciudad, o no encontró la calle.
-  // No bloquea: la persona mueve la casita y guarda.
+  // No bloquea: la persona mueve el punto y guarda.
   const [avisoMapa, setAvisoMapa] = useState('');
 
   // El nombre del barrio guardado, para mostrarlo.
@@ -164,14 +164,14 @@ export default function FormularioDireccion({ onGuardada, onCancelar, esPrimera 
         return;
       }
       // Sin la calle, al menos la ciudad (con su código postal y su
-      // provincia), para arrastrar la casita desde ahí.
+      // provincia), para arrastrar el punto desde ahí.
       const soloCiudad = enBahia ? null : await buscarEnNominatim({ ...donde });
       const centro = soloCiudad || (enBahia ? CENTRO_BAHIA : CENTRO_ARGENTINA);
       setPosicionBuscada({ lat: centro.lat, lng: centro.lng, zoom: soloCiudad || enBahia ? ZOOM_CIUDAD : ZOOM_PAIS, nonce: Date.now() });
       const otraCiudad = soloCiudad ? avisoLugar(donde, soloCiudad.address) : null;
       setAvisoMapa(otraCiudad || (soloCiudad || enBahia
-        ? 'No encontramos esa calle. Te mostramos la ciudad: arrastrá la casita hasta tu casa.'
-        : 'No encontramos esa ciudad. Arrastrá la casita hasta tu casa.'));
+        ? 'No encontramos esa calle. Te mostramos la ciudad: arrastrá el punto hasta tu casa.'
+        : 'No encontramos esa ciudad. Arrastrá el punto hasta tu casa.'));
     } catch (err) {
       console.error('Error buscando dirección:', err);
       alert('No se pudo buscar la dirección. Probá de nuevo.');

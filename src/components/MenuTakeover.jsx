@@ -12,7 +12,7 @@ const NAV_LINKS = [
   { href: '/mapa', label: 'Mapa', marcaActivo: true },
   { href: '/servicios', label: 'Servicios', marcaActivo: true },
   { href: '/sobre-nosotros', label: 'Quiénes somos' },
-  { href: '/vender', label: 'Vendé en Bahía Shops' },
+  { href: '/vender', label: 'Vendé en Bahía Shops', marcaActivo: true },
 ]
 
 function HeaderSeccion({ children }) {

@@ -99,7 +99,7 @@ export function avisoLugar({ ciudad, provincia }, address) {
   const encontrada = [r.ciudadEncontrada, provinciaDistinta ? r.provinciaEncontrada : null].filter(Boolean).join(', ') ||
     r.provinciaEncontrada || 'otro lugar'
   const pedida = provinciaDistinta ? `${escrita}, ${provincia}` : escrita
-  return `Encontramos esta dirección en ${encontrada}, no en ${pedida}. Revisá los datos o mové el pin hasta tu casa.`
+  return `Encontramos esta dirección en ${encontrada}, no en ${pedida}. Revisá los datos o mové el punto hasta tu casa.`
 }
 
 // Lo que el formulario guarda. Devuelve el error para mostrar, o null.

@@ -378,14 +378,14 @@ console.log("\n12b. La búsqueda cayó en otra ciudad (respuestas reales de Nomi
 
   ok(D.avisoLugar({ ciudad: "Mendoza", provincia: "Mendoza" }, MENDOZA) === null, "Mendoza → Ciudad de Mendoza: coincide")
   ok(D.avisoLugar({ ciudad: "Mendoza", provincia: "Mendoza" }, SAN_MARTIN_MZA) ===
-    "Encontramos esta dirección en San Martín, no en Mendoza. Revisá los datos o mové el pin hasta tu casa.",
+    "Encontramos esta dirección en San Martín, no en Mendoza. Revisá los datos o mové el punto hasta tu casa.",
     "Mendoza → San Martín (lo que pasaba sin código postal): avisa")
   ok(/en Godoy Cruz, no en Mendoza/.test(D.avisoLugar({ ciudad: "Mendoza", provincia: "Mendoza" }, GODOY_CRUZ)), "Mendoza → Godoy Cruz: avisa")
   ok(D.avisoLugar({ ciudad: "Punta Alta", provincia: "Buenos Aires" }, PUNTA_ALTA) === null, "Punta Alta: coincide")
   ok(D.avisoLugar({ ciudad: "San Martín", provincia: "Mendoza" }, SAN_MARTIN_MZA) === null, "San Martín (Mendoza): coincide")
   ok(D.avisoLugar({ ciudad: "san martin", provincia: "Buenos Aires" }, SAN_MARTIN_BA) === null, "San Martín (Buenos Aires), sin acentos: coincide")
   ok(D.avisoLugar({ ciudad: "San Martín", provincia: "Buenos Aires" }, SAN_MARTIN_MZA) ===
-    "Encontramos esta dirección en San Martín, Mendoza, no en San Martín, Buenos Aires. Revisá los datos o mové el pin hasta tu casa.",
+    "Encontramos esta dirección en San Martín, Mendoza, no en San Martín, Buenos Aires. Revisá los datos o mové el punto hasta tu casa.",
     "mismo nombre, otra provincia: avisa con las provincias")
   ok(/no en Mar/.test(D.avisoLugar({ ciudad: "Mar", provincia: "Buenos Aires" }, PUNTA_ALTA) || ""), "una palabra suelta no alcanza para coincidir")
   ok(D.avisoLugar({ ciudad: "Alta", provincia: "Buenos Aires" }, PUNTA_ALTA) === null, "…pero una frase entera dentro del nombre sí (Alta ⊂ Punta Alta)")

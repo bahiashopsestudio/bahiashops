@@ -7,8 +7,8 @@
 // docs/mapa-mockup.html. La piel la elige quien mira y la guarda el padre
 // (usePielMapa), porque la leyenda está fuera del mapa.
 //
-// Quien eligió mostrar su dirección exacta aparece con la casita, con la
-// punta de la cola en su punto. Quien no, solo con el aro de su zona
+// Quien eligió mostrar su dirección exacta aparece con un punto relleno,
+// centrado en su ubicación. Quien no, solo con el aro de su zona
 // alrededor del punto redondeado (migración 018): nunca con un pin. El aro
 // responde al mouse y al toque en todo el círculo, no solo sobre la línea. Las
 // tiendas que caen en la misma celda de la grilla comparten un solo aro,
@@ -31,7 +31,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { textoPuntajeTarjeta } from '@/lib/resenas'
 import {
-  PIELES, PIEL_INICIAL, CASA, CASA_VIEWBOX, CENTRO_MAPA, TAMANO_LOCALIDAD, ESPACIADO_LOCALIDAD,
+  PIELES, PIEL_INICIAL, DIAMETRO_PUNTO, CENTRO_MAPA, TAMANO_LOCALIDAD, ESPACIADO_LOCALIDAD,
   MENSAJES_GESTOS, buildStyle, centro, partir, soportaWebGL,
 } from '@/lib/mapaEstilo'
 import 'maplibre-gl/dist/maplibre-gl.css'
@@ -40,17 +40,15 @@ const DEMORA_CIERRE_MS = 150
 // La vista con que arranca el mapa (la del mockup).
 const VISTA_INICIAL = { center: CENTRO_MAPA, zoom: 13.4 }
 const ZOOM_NOMBRES = 12.5
-// La ventanita de un pin sale del techo de la casita (29 x 42,4 px, anclada
-// abajo a la izquierda); la de una zona, del centro del círculo. Va arriba
-// salvo que no entre: cerca del borde MapLibre la pone abajo o al costado
-// (el mapa no se mueve al abrirla), con la cola en el borde de la casita.
-const OFFSET_PIN = {
-  bottom: [14, -44], 'bottom-left': [14, -44], 'bottom-right': [14, -44],
-  top: [14, 0], 'top-left': [14, 0], 'top-right': [14, 0],
-  left: [29, -21], right: [0, -21], center: [14, -21],
-}
+// La ventanita de un pin sale del borde del punto (su radio ya agrandado,
+// más un margen), hacia el lado que le toque; la de una zona, del centro del
+// círculo. Va arriba salvo que no entre: cerca del borde MapLibre la pone abajo
+// o al costado (el mapa no se mueve al abrirla).
+const OFFSET_PIN = 12
+// Lo que se toca de un punto: más grande que el dibujo, y transparente.
+const AREA_TOQUE_PIN = 32
 const OFFSET_ZONA = [0, 0]
-// Lo que tarda el aro de una zona en crecer o volver, como las casitas.
+// Lo que tarda el aro de una zona en crecer o volver, como los puntos.
 const DURACION_ARO_MS = 150
 
 function iniciales(nombre) {
@@ -120,8 +118,8 @@ function ContenidoPopup({ tiendas, zona, barriosMap }) {
   )
 }
 
-function svgCasa(color) {
-  return `<svg viewBox="${CASA_VIEWBOX}" aria-hidden="true"><path d="${CASA}" fill="${color}"/></svg>`
+function htmlPunto(color) {
+  return `<span class="punto" aria-hidden="true" style="background:${color}"></span>`
 }
 
 // El borde de los nombres de barrio: una sombra en ocho direcciones.
@@ -313,7 +311,7 @@ export default function MapaVendedores({ vendedores = [], piel = PIEL_INICIAL, o
         const g = a.objetivo > a.g ? Math.min(a.objetivo, a.g + paso) : Math.max(a.objetivo, a.g - paso)
         if (g !== a.g) {
           a.g = g
-          // Ease-out, como la transición de las casitas.
+          // Ease-out, como la transición de los puntos.
           if (mapa.getSource('zonas')) mapa.setFeatureState({ source: 'zonas', id }, { g: 1 - (1 - g) ** 2 })
         }
         if (a.g !== a.objetivo) siguen = true
@@ -332,14 +330,14 @@ export default function MapaVendedores({ vendedores = [], piel = PIEL_INICIAL, o
     // el centro. Con "reducir movimiento" en el sistema, salta directo.
     function centrar(lngLat, zona) {
       const altoVentana = popup.getElement()?.offsetHeight || 0
-      // Lo que hay debajo de la ventanita: la cola y, en un pin, la casita.
-      const debajo = zona ? 10 : 54
+      // Lo que hay debajo de la ventanita: la cola y, en un pin, medio punto
+      // con su margen.
+      const debajo = zona ? 10 : 10 + OFFSET_PIN
       const altoMapa = mapa.getContainer().clientHeight
       const dy = Math.min((altoVentana + debajo) / 2, altoMapa / 2 - 12)
       const reducir = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-      // offset: dónde queda el punto respecto del centro. La ventanita de un
-      // pin sale 14 px a la derecha de la punta.
-      mapa.easeTo({ center: lngLat, offset: [zona ? 0 : -14, dy], duration: reducir ? 0 : 500 })
+      // offset: dónde queda el lugar respecto del centro de la pantalla.
+      mapa.easeTo({ center: lngLat, offset: [0, dy], duration: reducir ? 0 : 500 })
     }
     // conClic: viene de un clic o un toque, no de pasar el mouse.
     // aro: el id de la zona, si la ventanita es de una zona.
@@ -433,7 +431,7 @@ export default function MapaVendedores({ vendedores = [], piel = PIEL_INICIAL, o
     if (!mapa || pielAplicada.current === piel) return
     pielAplicada.current = piel
     mapa.setStyle(buildStyle(piel, zonasGeoRef.current))
-    contenedorRef.current?.querySelectorAll('.pin path').forEach((p) => p.setAttribute('fill', PIELES[piel].pin))
+    contenedorRef.current?.querySelectorAll('.pin .punto').forEach((p) => { p.style.background = PIELES[piel].pin })
   }, [piel])
 
   // ── Pines de las tiendas con dirección visible ──
@@ -445,14 +443,14 @@ export default function MapaVendedores({ vendedores = [], piel = PIEL_INICIAL, o
       el.type = 'button'
       el.className = 'pin'
       el.setAttribute('aria-label', v.nombre_negocio || 'Tienda')
-      el.innerHTML = svgCasa(PIELES[pielRef.current].pin)
+      el.innerHTML = htmlPunto(PIELES[pielRef.current].pin)
       const lngLat = [Number(v.longitud), Number(v.latitud)]
       const abrirEsta = (conClic) => accionesRef.current?.abrir({ clave: `t:${v.id}`, tiendas: [v], zona: false, lngLat, offset: OFFSET_PIN, pin: el, conClic })
       el.addEventListener('mouseenter', () => abrirEsta(false))
       el.addEventListener('mouseleave', () => accionesRef.current?.cerrarConDemora())
       el.addEventListener('click', (ev) => { ev.stopPropagation(); abrirEsta(true) })
-      // La punta de la casita es la esquina de abajo a la izquierda del dibujo.
-      return new maplibregl.Marker({ element: el, anchor: 'bottom-left' }).setLngLat(lngLat).addTo(mapa)
+      // El centro del punto marca el lugar.
+      return new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat(lngLat).addTo(mapa)
     })
     return () => marcadores.forEach((m) => m.remove())
   }, [exactas])
@@ -627,12 +625,14 @@ export default function MapaVendedores({ vendedores = [], piel = PIEL_INICIAL, o
         }
         .mapa-vendedores .pin {
           z-index: 1; cursor: pointer; background: none; border: 0; padding: 0;
+          width: ${AREA_TOQUE_PIN}px; height: ${AREA_TOQUE_PIN}px; border-radius: 50%;
+          display: grid; place-items: center;
         }
-        .mapa-vendedores .pin svg {
-          display: block; width: 29px; height: 42.4px;
-          transition: transform .15s ease; transform-origin: 0 100%;
+        .mapa-vendedores .pin .punto {
+          display: block; width: ${DIAMETRO_PUNTO}px; height: ${DIAMETRO_PUNTO}px; border-radius: 50%;
+          transition: transform .15s ease;
         }
-        .mapa-vendedores .pin:hover svg, .mapa-vendedores .pin.on svg { transform: scale(1.18); }
+        .mapa-vendedores .pin:hover .punto, .mapa-vendedores .pin.on .punto { transform: scale(1.18); }
         .mapa-vendedores .pin:focus-visible { outline: 2px solid #4164fe; outline-offset: 2px; }
         .mapa-vendedores .maplibregl-popup.mapa-popup { z-index: 10; }
         .mapa-vendedores .mapa-popup .maplibregl-popup-content {
@@ -678,7 +678,7 @@ export default function MapaVendedores({ vendedores = [], piel = PIEL_INICIAL, o
           padding: 24px; font-size: 13px; color: rgba(10,10,10,.55); background: #faf9f7;
         }
         @media (prefers-reduced-motion: reduce) {
-          .mapa-vendedores .pin svg, .mapa-vendedores .barrio-lbl { transition: none; }
+          .mapa-vendedores .pin .punto, .mapa-vendedores .barrio-lbl { transition: none; }
         }
       `}</style>
     </div>

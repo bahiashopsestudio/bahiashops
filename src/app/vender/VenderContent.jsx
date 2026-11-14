@@ -2,13 +2,13 @@
 
 // La página /vender (ver page.jsx). Copia mockup-vender.html: la estructura,
 // los textos y los cortes de pantalla (820, 760, 680, 640 y 1024 px), con los
-// cambios de después: el mapa real en la portada, el plan a medida en una
-// franja debajo de los planes y las preguntas a todo el ancho.
+// cambios de después: la portada con video (HeroVideo) en lugar del mapa, el
+// plan a medida en una franja debajo de los planes y las preguntas a todo el
+// ancho.
 //
 //   planes   lo que arma planesParaLaVenta (src/lib/planes.js), o null si no
 //            se pudieron leer: entonces la sección de planes sale sin números.
 //   comision { base, link, linkEsLaMitad }, de src/lib/comision.js.
-//   tiendas  las del mapa de la portada ([] si no se pudieron leer).
 //
 // Si quien entra ya tiene tienda, los botones dicen «Ir a Mi negocio». Se
 // sabe después de cargar (la página es fija); si la consulta falla quedan los
@@ -19,27 +19,14 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import dynamic from 'next/dynamic'
 import { createClient } from '@/lib/supabase/client'
 import Navbar from '@/components/Navbar'
+import HeroVideo from '@/components/HeroVideo'
 import MenuTakeover from '@/components/MenuTakeover'
 import ModalContacto from '@/components/ModalContacto'
 import ModalSuscripcion from '@/components/ModalSuscripcion'
 import { EMAIL_CONTACTO } from '@/lib/contacto'
 import { FONDO_BAHIA, CELESTE_BAHIA } from '@/lib/coloresBahia'
-import { VISTA_HOME } from '@/components/MapaDestacado'
-
-// El mapa de la home, en Claro y con gestos cooperativos (la página se
-// scrollea pasando por encima; el zoom va con Ctrl + rueda o dos dedos).
-// Mientras carga, o si no carga, el fondo celeste de su caja.
-const MapaVendedores = dynamic(() => import('@/components/MapaVendedores'), {
-  ssr: false,
-  loading: () => (
-    <div className="h-full w-full flex items-center justify-center">
-      <span className="text-white/60 text-sm font-light">Cargando mapa...</span>
-    </div>
-  ),
-})
 
 const ALTA = '/vendedor/nuevo'
 // Sin tienda, «Sumarme con el Básico» pasa por el alta de tienda y al terminar
@@ -77,6 +64,36 @@ function Boton({ href, children }) {
     </Link>
   )
 }
+
+// El botón de la portada, sobre el video: blanco con texto negro; con el
+// mouse encima se invierte (transparente, borde y texto blancos). Los colores
+// van en línea, así que el hover es un estado.
+function BotonHero({ href, children }) {
+  const [encima, setEncima] = useState(false)
+  return (
+    <Link
+      href={href}
+      onMouseEnter={() => setEncima(true)}
+      onMouseLeave={() => setEncima(false)}
+      className="inline-block text-[13px] md:text-[14px] px-6 py-3 md:px-7 md:py-3.5 rounded-[4px] transition-colors duration-200 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-[3px]"
+      style={{
+        // El contorno solo aparece con foco de teclado (las clases); el color, acá.
+        outlineColor: AZUL,
+        fontFamily: UI,
+        fontWeight: 500,
+        border: '1px solid #fff',
+        background: encima ? 'transparent' : '#fff',
+        color: encima ? '#fff' : TINTA,
+      }}
+    >
+      {children}
+    </Link>
+  )
+}
+
+// La capa de oscurecido de la portada: más fuerte en el centro, donde va el
+// texto, y más suave hacia los bordes.
+const OSCURECIDO = 'radial-gradient(ellipse 70% 65% at 50% 52%, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.30) 55%, rgba(0,0,0,0.18) 100%)'
 
 // El mismo botón, cuando abre algo en la página en vez de llevar a otra.
 function BotonAccion({ onClick, children }) {
@@ -185,7 +202,7 @@ function Beneficio({ titulo: t, children }) {
   )
 }
 
-export default function VenderContent({ planes, comision, tiendas = [] }) {
+export default function VenderContent({ planes, comision }) {
   const [menuAbierto, setMenuAbierto] = useState(false)
   const [tieneTienda, setTieneTienda] = useState(false)
   const [contactoAbierto, setContactoAbierto] = useState(false)
@@ -250,39 +267,48 @@ export default function VenderContent({ planes, comision, tiendas = [] }) {
 
       <div className="min-h-screen" style={{ background: '#faf9f7', color: TINTA, fontFamily: TEXTO, fontWeight: 300, lineHeight: 1.6 }}>
         {menuAbierto && <MenuTakeover onClose={() => setMenuAbierto(false)} />}
-        <Navbar onToggleMenu={() => setMenuAbierto(!menuAbierto)} variant="solid" />
+        {/* Transparente sobre el video; pasa a blanco cuando el hero (100vh) sale de pantalla. */}
+        <Navbar onToggleMenu={() => setMenuAbierto(!menuAbierto)} />
 
         <main>
-          {/* 1. Portada (el pt suma los 80 px del navbar fijo) */}
-          <section className={`${MARCO} pt-[144px] pb-[72px]`} style={{ background: BEIGE }}>
-            <div className={`${COL} grid grid-cols-[1.1fr_.9fr] gap-12 items-center max-[820px]:grid-cols-1`}>
-              <div className="flex flex-col gap-[22px] min-w-0">
-                <span style={etiqueta}>Para emprendimientos y comercios</span>
-                <h1 className="text-[clamp(36px,6vw,60px)] leading-[1.05]" style={titulo}>
-                  Tu negocio, en el mapa de Bahía Blanca
-                </h1>
-                <p style={bajada}>
-                  Sumarte es gratis. Cobrás con Mercado Pago, aparecés en el mapa y en tu barrio, y te encuentran vecinos que todavía no te conocían.
-                </p>
-                <div className="flex gap-5 items-center flex-wrap">
-                  <Boton href={destino}>{textoBoton('Sumá tu tienda gratis')}</Boton>
-                  <a href="#costos" className={`underline underline-offset-[3px] ${FOCO}`} style={{ fontFamily: UI, fontSize: '14px', fontWeight: 500 }}>
-                    Ver cuánto cuesta
-                  </a>
-                </div>
-              </div>
-              <div className="w-full max-w-full aspect-[5/4] max-[820px]:aspect-[16/10] rounded-2xl overflow-hidden" style={{ background: CELESTE_BAHIA }}>
-                <MapaVendedores
-                  vendedores={tiendas}
-                  piel="claro"
-                  selectorPiel={false}
-                  cooperativo
-                  vista={VISTA_HOME}
-                  fondoError={CELESTE_BAHIA}
-                />
+          {/* 1. Portada: video a pantalla completa, desde arriba (debajo del navbar), con todo centrado */}
+          <HeroVideo
+            src="/images/hero-vender.mp4"
+            srcCelu="/images/hero-vender-celu.mp4"
+            poster="/images/hero-vender-poster.jpg"
+            posterCelu="/images/hero-vender-poster-celu.jpg"
+            overlay={OSCURECIDO}
+          >
+            <div className="h-full flex flex-col justify-center items-center text-center mx-auto max-w-[480px] md:max-w-[620px] pt-28 pb-14 px-5 md:px-12">
+              <span
+                style={{ fontFamily: UI, fontWeight: 600, fontSize: '11px', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#fff', marginBottom: '14px' }}
+              >
+                Para emprendimientos y comercios
+              </span>
+              <h1
+                className="text-[28px] md:text-[42px]"
+                style={{ fontFamily: DISPLAY, fontWeight: 500, lineHeight: 1.12, letterSpacing: '-0.02em', color: '#fff', textWrap: 'balance', margin: '0 0 16px' }}
+              >
+                Tu negocio, en el mapa de Bahía Blanca
+              </h1>
+              <p
+                className="text-[13px] md:text-[15px]"
+                style={{ fontFamily: TEXTO, fontWeight: 300, lineHeight: 1.6, color: 'rgba(255,255,255,0.9)', maxWidth: '520px', textWrap: 'balance', margin: '0 0 28px' }}
+              >
+                Sumarte es gratis. Cobrás con Mercado Pago, aparecés en el mapa y en tu barrio, y te encuentran vecinos que todavía no te conocían.
+              </p>
+              <div className="flex flex-col items-center gap-5">
+                <BotonHero href={destino}>{textoBoton('Sumá tu tienda gratis')}</BotonHero>
+                <a
+                  href="#costos"
+                  className="text-[12px] md:text-[13px] underline underline-offset-[3px] focus-visible:outline-2 focus-visible:outline-offset-[3px]"
+                  style={{ fontFamily: UI, fontWeight: 400, color: 'rgba(255,255,255,0.85)', outlineColor: AZUL }}
+                >
+                  Ver cuánto cuesta
+                </a>
               </div>
             </div>
-          </section>
+          </HeroVideo>
 
           {/* 2. Cómo funciona */}
           <section className={`${MARCO} py-[72px]`}>

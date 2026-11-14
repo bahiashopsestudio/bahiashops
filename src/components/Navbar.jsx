@@ -225,8 +225,21 @@ export default function Navbar({ onToggleMenu, variant = 'transparent' }) {
 
           {/* Zona 3: Secciones */}
           <div className="flex items-center gap-4 xl:gap-5 ml-auto mr-6">
-            {/* Para todos: quien ya tiene tienda ve en /vender «Ir a Mi negocio». */}
-            <Link href="/vender" className="text-[13px] font-light whitespace-nowrap transition-colors" style={{ color: linkColor }}>
+            {/* Para todos: quien ya tiene tienda ve en /vender «Ir a Mi negocio».
+                En /vender se marca: negro pleno con el navbar blanco (como los
+                otros links activos) y subrayado sobre el video, donde todos
+                los links son blancos. */}
+            <Link
+              href="/vender"
+              aria-current={enSeccion('/vender') ? 'page' : undefined}
+              className="text-[13px] font-light whitespace-nowrap transition-colors"
+              style={{
+                color: colorDe('/vender'),
+                ...(enSeccion('/vender') && !showDark
+                  ? { textDecoration: 'underline', textUnderlineOffset: '6px', textDecorationThickness: '1px' }
+                  : {}),
+              }}
+            >
               Vendé en Bahía Shops
             </Link>
             <Link href="/sobre-nosotros" className="text-[13px] font-light whitespace-nowrap transition-colors" style={{ color: linkColor }}>

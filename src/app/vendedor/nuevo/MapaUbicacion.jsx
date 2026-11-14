@@ -6,8 +6,8 @@
 // nombres de calles y sin polígonos de barrio.
 //
 // Dos modos:
-//   'exacto': la casita, arrastrable; la punta de la cola marca el lugar. Tocar
-//     el mapa la mueve ahí. El barrio sale del punto.
+//   'exacto': el punto verde, arrastrable; su centro marca el lugar. Tocar el
+//     mapa lo mueve ahí. El barrio sale del punto.
 //   'zona': el aro de RADIO_ZONA_M metros, arrastrable. Al soltarlo, o al tocar
 //     el mapa, se desliza (200 ms, ease-out) hasta el centro de su celda de la
 //     grilla, y recién ahí se avisa al formulario: lo que se guarda es
@@ -32,7 +32,7 @@ import maplibregl from 'maplibre-gl'
 import { createClient } from '@/lib/supabase/client'
 import { RADIO_ZONA_M, redondearPunto } from '@/lib/zonaVendedor'
 import {
-  CASA, CASA_VIEWBOX, CLASE_ALTO_MAPA_UBICACION, MENSAJES_GESTOS, PIELES, PLAZA, estiloUbicacion, soportaWebGL,
+  DIAMETRO_PUNTO, CLASE_ALTO_MAPA_UBICACION, MENSAJES_GESTOS, PIELES, PLAZA, estiloUbicacion, soportaWebGL,
 } from '@/lib/mapaEstilo'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
@@ -44,7 +44,9 @@ const ZOOM_MAXIMO = 18
 // Por debajo de este diámetro, con 4 px de borde, el aro se ve como un punto.
 const DIAMETRO_MINIMO_ARO_PX = 24
 
-const AYUDA_CASITA = 'Arrastrá la casita o tocá el mapa para moverla'
+const AYUDA_PUNTO = 'Arrastrá el punto o tocá el mapa para moverlo'
+// Lo que se agarra del punto, invisible: el tamaño mínimo cómodo para el dedo.
+const AREA_TOQUE_PUNTO = 44
 const AYUDA_ARO = 'Arrastrá el aro o tocá el mapa: se acomoda solo a su casillero'
 
 function reducirMovimiento() {
@@ -57,7 +59,7 @@ export default function MapaUbicacion({ posicionBuscada, onUbicacionChange, modo
   const supabase = createClient()
   const contenedorRef = useRef(null)
   const mapaRef = useRef(null)
-  const casaRef = useRef(null)
+  const marcadorPuntoRef = useRef(null)
   const aroRef = useRef(null)
   const [errorFondo, setErrorFondo] = useState(() => !soportaWebGL())
 
@@ -111,8 +113,8 @@ export default function MapaUbicacion({ posicionBuscada, onUbicacionChange, modo
     const mapa = mapaRef.current
     if (!mapa) return
     const zona = modoRef.current === 'zona'
-    const usar = zona ? aroRef.current : casaRef.current
-    const sacar = zona ? casaRef.current : aroRef.current
+    const usar = zona ? aroRef.current : marcadorPuntoRef.current
+    const sacar = zona ? marcadorPuntoRef.current : aroRef.current
     sacar.remove()
     usar.setLngLat([lng, lat]).addTo(mapa)
     if (zona) medirAro()
@@ -188,25 +190,25 @@ export default function MapaUbicacion({ posicionBuscada, onUbicacionChange, modo
       if (!mapa.loaded() && /fetch|network|failed/i.test(String(e.error?.message || e.error || ''))) setErrorFondo(true)
     })
 
-    const elCasa = document.createElement('div')
-    elCasa.className = 'ubicacion-casa'
-    elCasa.setAttribute('aria-label', 'Tu dirección en el mapa')
-    elCasa.innerHTML = `<svg viewBox="${CASA_VIEWBOX}" aria-hidden="true"><path d="${CASA}" fill="${VERDE}"/></svg>`
-    // La punta de la casita es la esquina de abajo a la izquierda del dibujo.
-    const casa = new maplibregl.Marker({ element: elCasa, anchor: 'bottom-left', draggable: true })
+    const elPunto = document.createElement('div')
+    elPunto.className = 'ubicacion-punto'
+    elPunto.setAttribute('aria-label', 'Tu dirección en el mapa')
+    elPunto.innerHTML = '<span class="punto" aria-hidden="true"></span>'
+    // El centro del punto marca el lugar.
+    const marcadorPunto = new maplibregl.Marker({ element: elPunto, anchor: 'center', draggable: true })
 
     const elAro = document.createElement('div')
     elAro.className = 'ubicacion-aro'
     elAro.setAttribute('aria-label', 'Tu zona en el mapa')
     const aro = new maplibregl.Marker({ element: elAro, anchor: 'center', draggable: true })
 
-    casaRef.current = casa
+    marcadorPuntoRef.current = marcadorPunto
     aroRef.current = aro
 
-    casa.on('dragstart', () => elCasa.classList.add('arrastrando'))
-    casa.on('dragend', () => {
-      elCasa.classList.remove('arrastrando')
-      const { lat, lng } = casa.getLngLat()
+    marcadorPunto.on('dragstart', () => elPunto.classList.add('arrastrando'))
+    marcadorPunto.on('dragend', () => {
+      elPunto.classList.remove('arrastrando')
+      const { lat, lng } = marcadorPunto.getLngLat()
       procesarPosicion(lat, lng)
     })
     aro.on('dragstart', () => {
@@ -220,8 +222,8 @@ export default function MapaUbicacion({ posicionBuscada, onUbicacionChange, modo
     })
 
     mapa.on('click', (e) => {
-      // Tocar la casita no la mueve: saltaría unos píxeles cada vez.
-      if (e.originalEvent.target?.closest?.('.ubicacion-casa')) return
+      // Tocar el punto no lo mueve: saltaría unos píxeles cada vez.
+      if (e.originalEvent.target?.closest?.('.ubicacion-punto')) return
       const { lat, lng } = e.lngLat
       if (modoRef.current === 'zona') deslizarA(redondearPunto(lat, lng))
       else procesarPosicion(lat, lng)
@@ -230,11 +232,11 @@ export default function MapaUbicacion({ posicionBuscada, onUbicacionChange, modo
 
     return () => {
       cancelAnimationFrame(cuadro.current)
-      casa.remove()
+      marcadorPunto.remove()
       aro.remove()
       mapa.remove()
       mapaRef.current = null
-      casaRef.current = null
+      marcadorPuntoRef.current = null
       aroRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -274,18 +276,21 @@ export default function MapaUbicacion({ posicionBuscada, onUbicacionChange, modo
       </div>
 
       {!errorFondo && (
-        <p className="ubicacion-ayuda">{modo === 'zona' ? AYUDA_ARO : AYUDA_CASITA}</p>
+        <p className="ubicacion-ayuda">{modo === 'zona' ? AYUDA_ARO : AYUDA_PUNTO}</p>
       )}
 
       <style>{`
         .mapa-ubicacion .maplibregl-map { font-family: var(--font-inter), 'Inter', sans-serif; }
-        .mapa-ubicacion .ubicacion-casa { width: 29px; height: 42.4px; cursor: grab; touch-action: none; }
-        .mapa-ubicacion .ubicacion-casa svg {
-          display: block; width: 100%; height: 100%;
-          transition: transform .15s ease; transform-origin: 0 100%;
+        .mapa-ubicacion .ubicacion-punto {
+          width: ${AREA_TOQUE_PUNTO}px; height: ${AREA_TOQUE_PUNTO}px; border-radius: 50%;
+          display: grid; place-items: center; cursor: grab; touch-action: none;
         }
-        .mapa-ubicacion .ubicacion-casa:hover svg,
-        .mapa-ubicacion .ubicacion-casa.arrastrando svg { transform: scale(1.18); }
+        .mapa-ubicacion .ubicacion-punto .punto {
+          display: block; width: ${DIAMETRO_PUNTO}px; height: ${DIAMETRO_PUNTO}px; border-radius: 50%;
+          background: ${VERDE}; transition: transform .15s ease;
+        }
+        .mapa-ubicacion .ubicacion-punto:hover .punto,
+        .mapa-ubicacion .ubicacion-punto.arrastrando .punto { transform: scale(1.18); }
         .mapa-ubicacion .ubicacion-aro {
           box-sizing: border-box; border-radius: 50%; border: 4px solid ${VERDE}; background: rgba(1,84,68,.08);
           cursor: grab; touch-action: none; transition: border-width .15s ease;
@@ -302,7 +307,7 @@ export default function MapaUbicacion({ posicionBuscada, onUbicacionChange, modo
           padding: 24px; font-size: 13px; color: rgba(10,10,10,.55); background: #faf9f7;
         }
         @media (prefers-reduced-motion: reduce) {
-          .mapa-ubicacion .ubicacion-casa svg, .mapa-ubicacion .ubicacion-aro { transition: none; }
+          .mapa-ubicacion .ubicacion-punto .punto, .mapa-ubicacion .ubicacion-aro { transition: none; }
         }
       `}</style>
     </div>

@@ -1,5 +1,5 @@
 // El estilo de los mapas: el público (MapaVendedores), con sus dos pieles, las
-// capas del fondo, la casita de los pines y las reglas de los nombres de
+// capas del fondo, el punto de las tiendas y las reglas de los nombres de
 // barrio; y el de ubicar un punto (MapaUbicacion), siempre Claro y con nombres
 // de calles.
 //
@@ -31,9 +31,11 @@ export const PIELES = {
 
 export const PIEL_INICIAL = 'claro'
 
-// La casita: la punta de la cola (abajo a la izquierda) marca el punto exacto.
-export const CASA = 'M9.7 0 19.1 6.8V20H9.1L0 27.9V6.8Z'
-export const CASA_VIEWBOX = '0 0 19.1 27.9'
+// El punto de una tienda con dirección exacta, en los dos mapas: un círculo
+// relleno del color pin de la piel, centrado en la ubicación (el centro marca
+// el lugar). Reemplazó a la casita el 12/11/2026; los mockups de docs/ todavía
+// muestran la casita en ese detalle.
+export const DIAMETRO_PUNTO = 16
 
 // El centro de la vista y la Plaza Rivadavia.
 export const CENTRO_MAPA = [-62.266, -38.715]
@@ -161,7 +163,7 @@ export function buildStyle(piel, zonas = ZONAS_VACIAS) {
 // El mapa para ubicar un punto (docs/mapa-ubicacion-mockup.html): la piel Claro
 // con los nombres de las calles, para que la persona encuentre su dirección, y
 // los de ciudades y pueblos, para orientarse fuera de Bahía. Sin polígonos de
-// barrio. La casita y el aro son marcadores, no capas.
+// barrio. El punto y el aro son marcadores, no capas.
 const TEXTO_CALLE = '#16233a'
 export function estiloUbicacion() {
   const s = PIELES.claro

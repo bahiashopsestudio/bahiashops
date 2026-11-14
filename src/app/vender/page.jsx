@@ -1,6 +1,5 @@
 import VenderContent from './VenderContent'
 import { leerPlanesPublicos } from '@/lib/leerPlanesPublicos'
-import { leerTiendasDelMapa } from '@/lib/leerTiendasDelMapa'
 import { planesParaLaVenta } from '@/lib/planes'
 import { COMISION_BASE_BP, COMISION_LINK_BP, textoPorcentaje } from '@/lib/comision'
 
@@ -11,9 +10,6 @@ import { COMISION_BASE_BP, COMISION_LINK_BP, textoPorcentaje } from '@/lib/comis
 // falla, la sección de planes sale sin números (nunca un valor inventado) y el
 // resto de la página igual. Los porcentajes de la comisión son los mismos que
 // usa el cobro (src/lib/comision.js).
-//
-// La portada lleva el mapa de la home con las tiendas reales (leídas acá, con
-// el mismo revalidate). Si esa lectura falla, el mapa sale sin casitas.
 //
 // La imagen para compartir es opengraph-image.png, en esta misma carpeta.
 export const revalidate = 300
@@ -33,12 +29,11 @@ export const metadata = {
 }
 
 export default async function VenderPage() {
-  const [{ planes }, tiendas] = await Promise.all([leerPlanesPublicos(), leerTiendasDelMapa()])
+  const { planes } = await leerPlanesPublicos()
 
   return (
     <VenderContent
       planes={planesParaLaVenta(planes)}
-      tiendas={tiendas}
       comision={{
         base: textoPorcentaje(COMISION_BASE_BP),
         link: textoPorcentaje(COMISION_LINK_BP),

@@ -1,12 +1,12 @@
 'use client'
 
 // La leyenda del mapa público (home y /mapa). Cada muestra va en un
-// cuadradito con el color de tierra de la piel elegida, con la casita o el
+// cuadradito con el color de tierra de la piel elegida, con el punto o el
 // aro encima tal como se ven en el mapa: sobre el fondo de cada sección
 // (oliva en la home, blanco en /mapa) los colores de las pieles solos no se
 // distinguen.
 
-import { PIELES, PIEL_INICIAL, CASA, CASA_VIEWBOX } from '@/lib/mapaEstilo'
+import { PIELES, PIEL_INICIAL } from '@/lib/mapaEstilo'
 
 function Muestra({ fondo, children }) {
   return (
@@ -30,10 +30,8 @@ export default function LeyendaMapa({ piel = PIEL_INICIAL, textoExacta, textoZon
     <div className={className}>
       <div className="flex items-center gap-2">
         <Muestra fondo={s.land}>
-          {/* La casita ocupa el cuadradito con la punta hacia abajo a la izquierda, como en el mapa */}
-          <svg viewBox={CASA_VIEWBOX} style={{ width: '10px', height: '14.6px', display: 'block', marginLeft: '-1px', marginTop: '1px' }}>
-            <path d={CASA} fill={s.pin} />
-          </svg>
+          {/* El punto de una dirección exacta, relleno, como en el mapa */}
+          <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: s.pin }} />
         </Muestra>
         <span className={claseTexto} style={estiloTexto}>{textoExacta}</span>
       </div>

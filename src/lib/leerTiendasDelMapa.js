@@ -5,7 +5,7 @@ import { soloVendedoresPublicados } from '@/lib/vendedoresPublicos'
 // mapa de la home (los mismos campos que (home)/page.js), leídas como
 // visitante anónimo y sin sesión, así la página sigue siendo fija.
 //
-// Devuelve la lista, o [] si la lectura falla: el mapa sale igual, sin casitas.
+// Devuelve la lista, o [] si la lectura falla: el mapa sale igual, sin puntos.
 // Nunca lanza.
 export async function leerTiendasDelMapa() {
   try {
